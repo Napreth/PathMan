@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Pathman.Core/Pathman.Core.csproj" />
+    <Project Path="src/Pathman.Service/Pathman.Service.csproj" />
+    <Project Path="src/Pathman.Cli/Pathman.Cli.csproj" />
+    <Project Path="src/Pathman.Gui/Pathman.Gui.csproj" />
+  </Folder>
+  <Folder Name="/native/">
+    <File Path="src/Pathman.Shim/CMakeLists.txt" />
+    <File Path="src/Pathman.Shim/main.cpp" />
+  </Folder>
+</Solution>
