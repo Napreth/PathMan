@@ -1,6 +1,5 @@
 namespace Pathman.Core.Models;
 
-public enum VariableCategory { Path, System, Tool, Other }
 public enum VariableScope { User, Machine }
 
 public sealed record VariableVersion(string Name, string Value);
@@ -8,7 +7,7 @@ public sealed record VariableVersion(string Name, string Value);
 public sealed record ManagedVariable(
     string Name,
     string Value,
-    VariableCategory Category,
+    string GroupId,
     VariableScope Scope,
     string? Alias = null,
     string? ActiveVersion = null,

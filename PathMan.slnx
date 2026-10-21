@@ -9,4 +9,7 @@
     <File Path="src/Pathman.Shim/CMakeLists.txt" />
     <File Path="src/Pathman.Shim/main.cpp" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Pathman.Core.Tests/Pathman.Core.Tests.csproj" />
+  </Folder>
 </Solution>

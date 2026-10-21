@@ -35,6 +35,9 @@ function Reset-PublishDirectory([string]$Path) {
 }
 
 Invoke-Checked 'dotnet' @('build', (Join-Path $projectRoot 'PathMan.slnx'), '-c', $Configuration, "-p:Version=$Version")
+if ($Test) {
+    Invoke-Checked 'dotnet' @('run', '--project', (Join-Path $projectRoot 'tests/Pathman.Core.Tests'), '-c', $Configuration, '--no-build')
+}
 foreach ($cpu in $Arch) {
     $runtime = "win-$cpu"
     $nativeBuild = Join-Path $projectRoot "artifacts/native-$runtime"

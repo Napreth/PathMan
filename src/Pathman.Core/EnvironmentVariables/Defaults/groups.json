@@ -1,0 +1,8 @@
+{
+  "groups": [
+    { "id": "paths", "name": "路径变量", "rule": "paths" },
+    { "id": "system", "name": "系统变量", "rule": "builtin", "collapsed": true },
+    { "id": "other", "name": "其他变量", "rule": "fallback" },
+    { "id": "external", "name": "外部变量", "rule": "external", "requiresMonitoring": true }
+  ]
+}

@@ -37,11 +37,14 @@ public sealed class BackgroundProcess(PathmanLayout layout)
         using var ready = new EventWaitHandle(false, EventResetMode.ManualReset, ReadyEventName);
         // Shell activation detaches the background process from redirected CLI pipes.
         // Otherwise `pathman background start | ...` can wait until the background exits.
-        using var process = Process.Start(new ProcessStartInfo(layout.BackgroundExecutable)
+        var start = new ProcessStartInfo(layout.BackgroundExecutable)
         {
             UseShellExecute = true,
             WindowStyle = ProcessWindowStyle.Hidden
-        });
+        };
+        start.ArgumentList.Add("--data-root");
+        start.ArgumentList.Add(layout.DataDirectory);
+        using var process = Process.Start(start);
         if (process is null || !ready.WaitOne(TimeSpan.FromSeconds(10)))
             throw new IOException("后台程序未能在 10 秒内启动。");
     }
