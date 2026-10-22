@@ -83,8 +83,14 @@ public static class WindowsEnvironmentVariableEditor
         {
             var newKey = EnvironmentWorkspace.Key(mutation.Scope, mutation.NewName!);
             if (state.Assignments.Remove(oldKey, out var group)) state.Assignments[newKey] = group;
+            var pin = state.PinnedVariables.FindIndex(item => item.Equals(oldKey, StringComparison.OrdinalIgnoreCase));
+            if (pin >= 0) state.PinnedVariables[pin] = newKey;
         }
-        else if (mutation.Action == "delete") state.Assignments.Remove(oldKey);
+        else if (mutation.Action == "delete")
+        {
+            state.Assignments.Remove(oldKey);
+            state.PinVariable(mutation.Scope, mutation.Name, false);
+        }
         if (mutation.Action != "delete")
         {
             var name = mutation.Action == "rename" ? mutation.NewName! : mutation.Name;

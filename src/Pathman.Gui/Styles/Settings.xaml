@@ -138,7 +138,6 @@
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger SourceName="Row" Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
-                        <DataTrigger Binding="{Binding IsGroup}" Value="False"><Setter TargetName="PART_Header" Property="Margin" Value="16,0,8,0"/></DataTrigger>
                         <Trigger Property="IsExpanded" Value="True"><Setter TargetName="ItemsHost" Property="Visibility" Value="Visible"/></Trigger>
                         <Trigger Property="HasItems" Value="False"><Setter TargetName="Expander" Property="Visibility" Value="Hidden"/></Trigger>
                         <Trigger Property="IsSelected" Value="True">

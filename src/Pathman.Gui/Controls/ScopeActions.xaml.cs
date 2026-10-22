@@ -5,7 +5,7 @@ using Pathman.Core.Models;
 
 namespace Pathman.Gui.Controls;
 
-public enum ScopeAction { Delete, Rename, NewGroup, NewVariable }
+public enum ScopeAction { NewGroup, NewVariable }
 public sealed class ScopeActionEventArgs(VariableScope scope, ScopeAction action) : EventArgs
 {
     public VariableScope Scope { get; } = scope;
@@ -25,16 +25,7 @@ public partial class ScopeActions : UserControl
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && NewMenu.IsOpen) { NewMenu.IsOpen = false; e.Handled = true; } };
     }
 
-    public void UpdateSelection(bool canRename, bool canDelete, string deleteTip)
-    {
-        RenameButton.IsEnabled = canRename;
-        DeleteButton.IsEnabled = canDelete;
-        DeleteButton.ToolTip = deleteTip;
-    }
-
     private void Raise(ScopeAction action) { NewMenu.IsOpen = false; ActionRequested?.Invoke(this, new(Scope, action)); }
-    private void Delete(object sender, RoutedEventArgs e) => Raise(ScopeAction.Delete);
-    private void Rename(object sender, RoutedEventArgs e) => Raise(ScopeAction.Rename);
     private void NewGroup(object sender, RoutedEventArgs e) => Raise(ScopeAction.NewGroup);
     private void NewVariable(object sender, RoutedEventArgs e) => Raise(ScopeAction.NewVariable);
     private void OpenMenu(object sender, RoutedEventArgs e) => NewMenu.IsOpen = true;

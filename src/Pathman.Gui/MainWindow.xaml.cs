@@ -16,7 +16,7 @@ public partial class MainWindow : Window
     private readonly AboutView about;
     private readonly DispatcherTimer changes=new() {Interval=TimeSpan.FromSeconds(1)};
     private DateTime lastWrite;
-    private bool navigating,checking;
+    private bool navigating,checking,closingApproved;
     private ListBoxItem? previousNavigation;
     public MainWindow()
     {
@@ -26,12 +26,16 @@ public partial class MainWindow : Window
         changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
         Closed+=(_,_)=>changes.Stop();
     }
-    private void Navigate(object sender,SelectionChangedEventArgs e)
+    private async void Navigate(object sender,SelectionChangedEventArgs e)
     {
         if(PageHost is null || variables is null || navigating || Navigation.SelectedItem is not ListBoxItem item) return;
-        if(PageHost.Content==variables && !variables.ConfirmLeave()) { navigating=true; Navigation.SelectedItem=previousNavigation; navigating=false; return; }
+        navigating=true;
+        var canLeave=PageHost.Content!=variables || await variables.ConfirmLeaveAsync();
+        if(!canLeave) { Navigation.SelectedItem=previousNavigation; navigating=false; return; }
+        Navigation.SelectedItem=item;
         previousNavigation=item;
         PageHost.Content=(item.Tag as string) switch { "aliases"=>aliases,"monitor"=>monitor,"about"=>about,_=>variables };
+        navigating=false;
     }
     private async void CheckWorkspace(object? sender,EventArgs e)
     {
@@ -51,5 +55,14 @@ public partial class MainWindow : Window
         catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
         finally { checking=false; }
     }
-    private void OnClosing(object? sender,CancelEventArgs e) { if(!variables.ConfirmLeave()) e.Cancel=true; }
+    private async void OnClosing(object? sender,CancelEventArgs e)
+    {
+        if(closingApproved) return;
+        if(variables.HasInlineEditor)
+        {
+            e.Cancel=true;
+            if(await variables.ConfirmLeaveAsync()) { closingApproved=true; Close(); }
+        }
+        else if(!variables.ConfirmLeave()) e.Cancel=true;
+    }
 }

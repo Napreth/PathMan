@@ -5,6 +5,7 @@ ManifestSupportedOS all
 !include LogicLib.nsh
 !include FileFunc.nsh
 !include x64.nsh
+!include WordFunc.nsh
 !define APPKEY "Software\PathMan"
 !define UNINSTALLKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\PathMan"
 
@@ -49,6 +50,8 @@ Var Helper
 Var UserLocalData
 Var OldDirectory
 Var CommandDirectory
+Var SetupMutex
+Var RestartBackground
 
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_PRE ScopePre
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_SHOW ScopeShow
@@ -94,6 +97,20 @@ LangString LegacyInstaller ${LANG_ENGLISH} "Uninstall the previous MSI version o
 LangString LegacyInstaller ${LANG_SIMPCHINESE} "请先卸载旧的 MSI 版 PathMan，再安装此版本。别名数据会保留。"
 LangString MaintenanceFailed ${LANG_ENGLISH} "PathMan setup could not complete a maintenance operation (Windows error $0). Close PathMan and try again."
 LangString MaintenanceFailed ${LANG_SIMPCHINESE} "安装程序未能完成维护操作（Windows 错误 $0）。请关闭 PathMan 后重试。"
+LangString AlreadyInstalling ${LANG_ENGLISH} "Another PathMan setup is running. Close it and try again."
+LangString AlreadyInstalling ${LANG_SIMPCHINESE} "另一个 PathMan 安装程序正在运行。请关闭后重试。"
+LangString CloseApplications ${LANG_ENGLISH} "PathMan or its background/alias commands are running. Save your work, then click OK to close PathMan and continue. Running alias commands must be closed manually."
+LangString CloseApplications ${LANG_SIMPCHINESE} "PathMan、后台程序或别名命令正在运行。请保存工作，单击“确定”关闭 PathMan 后继续。正在运行的别名命令需手动关闭。"
+LangString ApplicationsStillRunning ${LANG_ENGLISH} "PathMan is still running. Finish or cancel any unsaved edits, close running CLI/alias commands, then click Retry. No files have been replaced."
+LangString ApplicationsStillRunning ${LANG_SIMPCHINESE} "PathMan 仍在运行。请处理未保存的更改，关闭 CLI/别名命令后重试。程序文件尚未替换。"
+LangString DowngradeBlocked ${LANG_ENGLISH} "A newer version of PathMan ($1) is installed. Uninstall it before installing ${VERSION}. Your user data will be preserved."
+LangString DowngradeBlocked ${LANG_SIMPCHINESE} "已安装更高版本的 PathMan（$1）。请先卸载，再安装 ${VERSION}。用户数据会保留。"
+LangString UpgradeInstall ${LANG_ENGLISH} "Upgrade PathMan from $1 to ${VERSION}? Settings, groups, aliases and the installation folder will be preserved."
+LangString UpgradeInstall ${LANG_SIMPCHINESE} "将 PathMan 从 $1 升级到 ${VERSION}？设置、分组、别名及安装目录会保留。"
+LangString OverwriteInstall ${LANG_ENGLISH} "PathMan ${VERSION} is already installed. Reinstall it using this package (${ARCH}, ${PACKAGE_TYPE})? User data will be preserved."
+LangString OverwriteInstall ${LANG_SIMPCHINESE} "已安装 PathMan ${VERSION}。是否用此安装包（${ARCH}，${PACKAGE_TYPE}）覆盖安装？用户数据会保留。"
+LangString UnownedDirectory ${LANG_ENGLISH} "This folder contains an unregistered PathMan installation. Choose another folder or uninstall the previous copy first."
+LangString UnownedDirectory ${LANG_SIMPCHINESE} "此目录包含未登记的 PathMan 程序。请选择其他目录，或先卸载原有副本。"
 
 Function GetScope
   StrCpy $Machine 0
@@ -266,6 +283,13 @@ Function DirectoryLeave
   ${EndIf}
   ; An upgrade keeps its directory so old PATH entries/shortcuts stay owned.
   ReadRegStr $OldDirectory SHCTX "${APPKEY}" "InstallDirectory"
+  ${If} $OldDirectory == ""
+    ${If} ${FileExists} "$INSTDIR\PathMan.exe"
+      MessageBox MB_OK|MB_ICONSTOP "$(UnownedDirectory)" /SD IDOK
+      SetErrorLevel 1638
+      Abort
+    ${EndIf}
+  ${EndIf}
   ${If} $OldDirectory != ""
   ${AndIf} $OldDirectory != $INSTDIR
     StrCpy $INSTDIR $OldDirectory
@@ -281,15 +305,90 @@ Function DirectoryLeave
   ${EndIf}
 FunctionEnd
 
-Section "PathMan" Main
-  SectionIn RO
-  Call DirectoryLeave
-  System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
-  ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
-    SetErrorLevel 1603
+Function ConfirmMaintenance
+  ReadRegStr $OldDirectory SHCTX "${APPKEY}" "InstallDirectory"
+  ${If} $OldDirectory == ""
+    Return
+  ${EndIf}
+  ReadRegStr $1 SHCTX "${UNINSTALLKEY}" "DisplayVersion"
+  ${If} $1 == ""
+    StrCpy $1 "0.0.0"
+  ${EndIf}
+  ${VersionCompare} "$1" "${VERSION}" $0
+  ${If} $0 == 1
+    MessageBox MB_OK|MB_ICONSTOP "$(DowngradeBlocked)" /SD IDOK
+    SetErrorLevel 1638
+    Abort
+  ${ElseIf} $0 == 0
+    MessageBox MB_OKCANCEL|MB_ICONQUESTION "$(OverwriteInstall)" /SD IDOK IDOK MaintenanceConfirmed
+  ${Else}
+    MessageBox MB_OKCANCEL|MB_ICONQUESTION "$(UpgradeInstall)" /SD IDOK IDOK MaintenanceConfirmed
+  ${EndIf}
+  SetErrorLevel 1602
+  Abort
+  MaintenanceConfirmed:
+FunctionEnd
+
+!macro EnsureApplicationsClosed Prefix
+Function ${Prefix}AcquireSetupLock
+  ${If} $SetupMutex != ""
+    Return
+  ${EndIf}
+  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Local\PathMan.Setup") p.s ?e'
+  Pop $0
+  Pop $SetupMutex
+  ${If} $0 == 183
+  ${OrIf} $SetupMutex == 0
+    System::Call 'kernel32::CloseHandle(p $SetupMutex)'
+    StrCpy $SetupMutex ""
+    MessageBox MB_OK|MB_ICONSTOP "$(AlreadyInstalling)" /SD IDOK
+    SetErrorLevel 1618
     Abort
   ${EndIf}
+FunctionEnd
+Function ${Prefix}EnsureApplicationsClosed
+  System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
+  ${If} $0 == 0
+    Return
+  ${EndIf}
+  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(CloseApplications)" /SD IDCANCEL IDOK CloseApplicationsTry
+  SetErrorLevel 1602
+  Abort
+  CloseApplicationsTry:
+  System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
+  ${If} $0 == 0
+    Return
+  ${EndIf}
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(ApplicationsStillRunning)" /SD IDCANCEL IDRETRY CloseApplicationsTry
+  SetErrorLevel 1602
+  Abort
+FunctionEnd
+Function ${Prefix}RestoreBackground
+  ${If} $RestartBackground == 1
+    ; Explorer uses the desktop user's token even when setup was elevated.
+    ExecShell "open" "$WINDIR\explorer.exe" '$\"$INSTDIR\internal\PathMan.Service.exe$\"'
+    StrCpy $RestartBackground 0
+  ${EndIf}
+FunctionEnd
+!macroend
+!insertmacro EnsureApplicationsClosed ""
+!insertmacro EnsureApplicationsClosed "un."
+
+Function .onInstFailed
+  Call RestoreBackground
+FunctionEnd
+Function un.onUninstFailed
+  Call un.RestoreBackground
+FunctionEnd
+
+Section "PathMan" Main
+  SectionIn RO
+  Call AcquireSetupLock
+  Call DirectoryLeave
+  Call ConfirmMaintenance
+  System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
+  StrCpy $RestartBackground $0
+  Call EnsureApplicationsClosed
   SetOutPath "$INSTDIR"
   File /r "${PUBLISH_DIR}\*"
   SetOutPath "$INSTDIR\internal"
@@ -332,6 +431,7 @@ Section "PathMan" Main
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONEXCLAMATION "$(MaintenanceFailed)" /SD IDOK
   ${EndIf}
+  Call RestoreBackground
   SetErrorLevel 0
 SectionEnd
 
@@ -385,12 +485,10 @@ FunctionEnd
 !macroend
 
 Section "Uninstall"
-  System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
-  ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
-    SetErrorLevel 1603
-    Abort
-  ${EndIf}
+  Call un.AcquireSetupLock
+  System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
+  StrCpy $RestartBackground $0
+  Call un.EnsureApplicationsClosed
   System::Call '$Helper::CleanupInstall(w "$INSTDIR", i $Machine, w "$DESKTOP") i.r0'
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK

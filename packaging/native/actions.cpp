@@ -12,6 +12,8 @@
 #pragma comment(linker, "/EXPORT:ValidateDirectory=_ValidateDirectory@8")
 #pragma comment(linker, "/EXPORT:HasDesktopRuntime=_HasDesktopRuntime@4")
 #pragma comment(linker, "/EXPORT:StopApplications=_StopApplications@4")
+#pragma comment(linker, "/EXPORT:RunningApplications=_RunningApplications@4")
+#pragma comment(linker, "/EXPORT:BackgroundRunning=_BackgroundRunning@4")
 #pragma comment(linker, "/EXPORT:ConfigureInstall=_ConfigureInstall@8")
 #pragma comment(linker, "/EXPORT:CleanupInstall=_CleanupInstall@12")
 #pragma comment(linker, "/EXPORT:RefreshShims=_RefreshShims@8")
@@ -155,6 +157,45 @@ bool runtime_component(const std::filesystem::path& root, const wchar_t* categor
     FindClose(handle);
     return present;
 }
+bool same_file(const std::filesystem::path& left, const std::filesystem::path& right) {
+    const auto a = CreateFileW(left.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+    const auto b = CreateFileW(right.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+    BY_HANDLE_FILE_INFORMATION x{}, y{};
+    const bool equal = a != INVALID_HANDLE_VALUE && b != INVALID_HANDLE_VALUE && GetFileInformationByHandle(a, &x) && GetFileInformationByHandle(b, &y) &&
+        x.dwVolumeSerialNumber == y.dwVolumeSerialNumber && x.nFileIndexHigh == y.nFileIndexHigh && x.nFileIndexLow == y.nFileIndexLow;
+    if (a != INVALID_HANDLE_VALUE) CloseHandle(a);
+    if (b != INVALID_HANDLE_VALUE) CloseHandle(b);
+    return equal;
+}
+struct running_app { DWORD id; bool gui; bool background; };
+DWORD applications(const std::filesystem::path& root, std::vector<running_app>& result) {
+    const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return GetLastError();
+    PROCESSENTRY32W entry{sizeof(entry)};
+    if (Process32FirstW(snapshot, &entry)) do {
+        if (entry.th32ProcessID == GetCurrentProcessId()) continue;
+        const auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ProcessID);
+        if (!process) continue;
+        wchar_t path[32768]{}; DWORD length = 32768;
+        if (QueryFullProcessImageNameW(process, 0, path, &length)) {
+            const bool gui = _wcsicmp(path, (root / L"PathMan.exe").c_str()) == 0;
+            const bool background = _wcsicmp(path, (root / L"internal" / L"PathMan.Service.exe").c_str()) == 0;
+            const bool cli = _wcsicmp(path, (root / L"bin" / L"pathman.exe").c_str()) == 0;
+            // An alias can run under any filename. Compare file identities so hard links are included.
+            if (gui || background || cli || same_file(path, root / L"internal" / L"PathMan.Shim.exe")) result.push_back({entry.th32ProcessID, gui, background});
+        }
+        CloseHandle(process);
+    } while (Process32NextW(snapshot, &entry));
+    CloseHandle(snapshot);
+    return ERROR_SUCCESS;
+}
+BOOL CALLBACK close_window(HWND window, LPARAM parameter) {
+    DWORD id = 0; GetWindowThreadProcessId(window, &id);
+    // WPF can give its visible main window a hidden owner HWND. Do not filter by GW_OWNER.
+    wchar_t title[256]{}; GetWindowTextW(window, title, 256);
+    if (id == static_cast<DWORD>(parameter) && IsWindowVisible(window) && _wcsicmp(title, L"PathMan") == 0) PostMessageW(window, WM_CLOSE, 0, 0);
+    return TRUE;
+}
 }
 extern "C" __declspec(dllexport) DWORD __stdcall ValidateDirectory(const wchar_t* directory, const wchar_t* localData) {
     try {
@@ -192,29 +233,44 @@ extern "C" __declspec(dllexport) BOOL __stdcall HasDesktopRuntime(const wchar_t*
     return FALSE;
 }
 extern "C" __declspec(dllexport) DWORD __stdcall StopApplications(const wchar_t* directory) {
-    const std::filesystem::path root(directory);
-    const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return GetLastError();
-    PROCESSENTRY32W entry{sizeof(entry)};
-    DWORD result = ERROR_SUCCESS;
-    if (Process32FirstW(snapshot, &entry)) do {
-        const bool gui = _wcsicmp(entry.szExeFile, L"PathMan.exe") == 0;
-        if (!gui && _wcsicmp(entry.szExeFile, L"PathMan.Service.exe") != 0) continue;
-        const auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ProcessID);
-        if (!process) continue;
-        wchar_t path[32768]{}; DWORD length = 32768;
-        const auto expected = gui ? root / L"PathMan.exe" : root / L"internal" / L"PathMan.Service.exe";
-        if (QueryFullProcessImageNameW(process, 0, path, &length) && _wcsicmp(path, expected.c_str()) == 0) {
-            const auto terminable = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, entry.th32ProcessID);
-            if (!terminable) result = GetLastError();
-            else {
-                if (!TerminateProcess(terminable, 0) || WaitForSingleObject(terminable, 5000) != WAIT_OBJECT_0) result = ERROR_BUSY;
-                CloseHandle(terminable);
-            }
+    try {
+        const std::filesystem::path root(directory);
+        std::vector<running_app> running;
+        auto error = applications(root, running);
+        if (error || running.empty()) return error;
+        for (const auto& app : running) if (app.gui) EnumWindows(close_window, static_cast<LPARAM>(app.id));
+        // The CLI signals the normal background stop event, retaining its per-user/per-install identity.
+        auto command = L"\"" + (root / L"bin" / L"pathman.exe").wstring() + L"\" background stop";
+        STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
+        if (CreateProcessW((root / L"bin" / L"pathman.exe").c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, root.c_str(), &start, &process)) {
+            WaitForSingleObject(process.hProcess, 6000); CloseHandle(process.hThread); CloseHandle(process.hProcess);
         }
-        CloseHandle(process);
-    } while (Process32NextW(snapshot, &entry));
-    CloseHandle(snapshot); return result;
+        // Never discard unsaved edits or kill alias child commands. A refused WM_CLOSE stays retryable.
+        for (int retry = 0; retry < 50; ++retry) {
+            running.clear(); error = applications(root, running);
+            if (error || running.empty()) return error;
+            Sleep(100);
+        }
+        return ERROR_BUSY;
+    } catch (...) { return ERROR_INSTALL_FAILURE; }
+}
+extern "C" __declspec(dllexport) int __stdcall RunningApplications(const wchar_t* directory) {
+    try {
+        std::vector<running_app> running;
+        return applications(std::filesystem::path(directory), running) == ERROR_SUCCESS ? static_cast<int>(running.size()) : -1;
+    } catch (...) { return -1; }
+}
+extern "C" __declspec(dllexport) BOOL __stdcall BackgroundRunning(const wchar_t* directory) {
+    try {
+        std::vector<running_app> running;
+        if (applications(std::filesystem::path(directory), running) != ERROR_SUCCESS) return FALSE;
+        DWORD session = 0; ProcessIdToSessionId(GetCurrentProcessId(), &session);
+        for (const auto& app : running) {
+            DWORD other = 0;
+            if (app.background && ProcessIdToSessionId(app.id, &other) && session == other) return TRUE;
+        }
+    } catch (...) {}
+    return FALSE;
 }
 extern "C" __declspec(dllexport) DWORD __stdcall ConfigureInstall(const wchar_t* directory, BOOL machine) {
     try {

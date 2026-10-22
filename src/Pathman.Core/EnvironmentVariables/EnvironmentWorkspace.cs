@@ -23,14 +23,77 @@ public sealed class EnvironmentWorkspace
 {
     public List<VariableGroupDefinition> Groups { get; set; } = [];
     public Dictionary<string, string> Assignments { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<VariableScope, List<string>> GroupOrder { get; set; } = [];
+    public Dictionary<VariableScope, List<string>> PinnedGroups { get; set; } = [];
+    public List<string> PinnedVariables { get; set; } = [];
     public bool MonitoringEnabled { get; set; }
     public List<VariableSnapshot> Snapshot { get; set; } = [];
     public HashSet<string> ExternalVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<VariableChange> Changes { get; set; } = [];
     public string Revision { get; set; } = "";
     public static string Key(VariableScope scope, string name) => $"{scope}:{name}";
-    public IEnumerable<VariableGroupDefinition> VisibleGroups(VariableScope scope) => Groups.Where(group =>
-        (group.Scope is null || group.Scope == scope) && (!group.RequiresMonitoring || MonitoringEnabled));
+    public IEnumerable<VariableGroupDefinition> VisibleGroups(VariableScope scope)
+    {
+        var pins = PinnedGroups.GetValueOrDefault(scope) ?? [];
+        var order = GroupOrder.GetValueOrDefault(scope) ?? [];
+        return Groups.Where(group => (group.Scope is null || group.Scope == scope) && (!group.RequiresMonitoring || MonitoringEnabled))
+            .OrderBy(group => IsGroupPinned(scope, group.Id) ? 0 : 1)
+            .ThenBy(group => Position(IsGroupPinned(scope, group.Id) ? pins : order, group.Id));
+    }
+    private static int Position(List<string> items, string key)
+    { var index = items.FindIndex(item => item.Equals(key, StringComparison.OrdinalIgnoreCase)); return index < 0 ? int.MaxValue : index; }
+    public bool IsGroupPinned(VariableScope scope, string id) => PinnedGroups.GetValueOrDefault(scope)?.Contains(id, StringComparer.OrdinalIgnoreCase) == true;
+    public bool IsVariablePinned(VariableScope scope, string name) => PinnedVariables.Contains(Key(scope, name), StringComparer.OrdinalIgnoreCase);
+    public IEnumerable<EnvironmentVariableInfo> OrderVariables(IEnumerable<EnvironmentVariableInfo> variables) => variables
+        .OrderBy(variable => IsVariablePinned(variable.Scope, variable.Name) ? 0 : 1)
+        .ThenBy(variable => Position(PinnedVariables, Key(variable.Scope, variable.Name)))
+        .ThenBy(variable => variable.Name, StringComparer.OrdinalIgnoreCase);
+    public void PinGroup(VariableScope scope, string id, bool pinned)
+    {
+        if (!VisibleGroups(scope).Any(group => group.Id == id)) throw new ArgumentException("找不到分组。");
+        if (!PinnedGroups.TryGetValue(scope, out var pins)) PinnedGroups[scope] = pins = [];
+        pins.RemoveAll(item => item.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (pinned) pins.Add(id);
+    }
+    public void PinVariable(VariableScope scope, string name, bool pinned)
+    {
+        var key = Key(scope, name);
+        PinnedVariables.RemoveAll(item => item.Equals(key, StringComparison.OrdinalIgnoreCase));
+        if (pinned) PinnedVariables.Add(key);
+    }
+    public void MoveGroup(VariableScope scope, string id, string? beforeId)
+    {
+        var groups = VisibleGroups(scope).ToList();
+        var source = groups.Find(group => group.Id == id) ?? throw new ArgumentException("找不到分组。");
+        if (beforeId == id) return;
+        var pinned = IsGroupPinned(scope, id);
+        var remaining = groups.Where(group => group != source).ToList();
+        var index = beforeId is null ? remaining.Count : remaining.FindIndex(group => group.Id == beforeId);
+        if (index < 0 || (index > 0 && !pinned && IsGroupPinned(scope, remaining[index - 1].Id) &&
+                index < remaining.Count && IsGroupPinned(scope, remaining[index].Id)) ||
+            (!pinned && index == 0 && remaining.Count > 0 && IsGroupPinned(scope, remaining[0].Id)) ||
+            (pinned && index > 0 && !IsGroupPinned(scope, remaining[index - 1].Id)))
+            throw new ArgumentException("置顶分组与普通分组只能在各自区域内排序。");
+        remaining.Insert(index, source);
+        var hiddenOrder = (GroupOrder.GetValueOrDefault(scope) ?? []).Where(id => groups.All(group => group.Id != id));
+        var hiddenPins = (PinnedGroups.GetValueOrDefault(scope) ?? []).Where(id => groups.All(group => group.Id != id));
+        GroupOrder[scope] = remaining.Select(group => group.Id).Concat(hiddenOrder).ToList();
+        PinnedGroups[scope] = remaining.Where(group => IsGroupPinned(scope, group.Id)).Select(group => group.Id).Concat(hiddenPins).ToList();
+    }
+    public void MoveVariable(VariableScope scope, string name, string sourceGroupId, string targetGroupId, string? beforePinnedName = null)
+    {
+        if (!VisibleGroups(scope).Any(group => group.Id == targetGroupId)) throw new ArgumentException("找不到目标分组。");
+        var pinned = IsVariablePinned(scope, name);
+        if (sourceGroupId == targetGroupId && !pinned) throw new ArgumentException("普通变量按名称排序，只能拖到其他分组。");
+        if (beforePinnedName is not null && (!pinned || !IsVariablePinned(scope, beforePinnedName))) throw new ArgumentException("只能调整置顶变量之间的顺序。");
+        Assignments[Key(scope, name)] = targetGroupId;
+        if (!pinned) return;
+        var key = Key(scope, name);
+        if (beforePinnedName?.Equals(name, StringComparison.OrdinalIgnoreCase) == true) return;
+        PinnedVariables.RemoveAll(item => item.Equals(key, StringComparison.OrdinalIgnoreCase));
+        var index = beforePinnedName is null ? PinnedVariables.Count : Position(PinnedVariables, Key(scope, beforePinnedName));
+        PinnedVariables.Insert(Math.Min(index, PinnedVariables.Count), key);
+    }
 }
 
 public sealed class EnvironmentWorkspaceStore

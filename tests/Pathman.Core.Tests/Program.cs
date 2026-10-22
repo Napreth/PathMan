@@ -4,6 +4,7 @@ using Pathman.Core.Models;
 
 static void Assert(bool condition,string message) { if(!condition) throw new InvalidOperationException(message); }
 static void Reject(Action action,string message) { try { action(); } catch(IOException) { return; } throw new InvalidOperationException(message); }
+static void RejectMove(Action action,string message) { try { action(); } catch(ArgumentException) { return; } throw new InvalidOperationException(message); }
 var cases=new (string Name,string Raw,bool List,string[] Entries)[]
 {
     ("Path",@"%SystemRoot%\System32; C:\工具 ;C:\工具;;",true,[@"%SystemRoot%\System32",@" C:\工具 ",@"C:\工具","",""]),
@@ -49,11 +50,40 @@ try
     Assert(Category(V("JAVA_HOME",@"C:\Java"))=="custom-6","Manual assignments to arbitrary groups must persist");
     store.Update(settings=>settings.Groups.First(group=>group.Id=="custom-6").Name="我的工具");
     Assert(store.Read().Groups.Last().Name=="我的工具","Group renames must survive reload");
+    store.Update(settings=>
+    {
+        settings.PinGroup(VariableScope.User,"other",true);
+        settings.PinGroup(VariableScope.User,"paths",true);
+        settings.MoveGroup(VariableScope.User,"paths","other");
+        settings.MoveGroup(VariableScope.User,"custom-6","system");
+        settings.PinVariable(VariableScope.User,"Z_PIN",true);
+        settings.PinVariable(VariableScope.User,"A_PIN",true);
+        settings.MoveVariable(VariableScope.User,"A_PIN","other","other","Z_PIN");
+        settings.MoveVariable(VariableScope.User,"FOOPATH","paths","custom-6");
+    });
+    state=store.Read();
+    Assert(state.VisibleGroups(VariableScope.User).Take(3).Select(group=>group.Id).SequenceEqual(["paths","other","custom-6"]),"Pinned and ordinary groups must retain separate drag orders after reload");
+    Assert(state.VisibleGroups(VariableScope.Machine).First().Id=="paths" && !state.IsGroupPinned(VariableScope.Machine,"other"),"Group pinning/order must be independent between user and machine scopes");
+    Assert(state.OrderVariables([V("B","b"),V("Z_PIN","z"),V("A_PIN","a"),V("A","a")]).Select(item=>item.Name).SequenceEqual(["A_PIN","Z_PIN","A","B"]),"Pinned variables must precede alphabetical ordinary variables and retain drag order");
+    Assert(Category(V("FOOPATH",@"C:\one;D:\two"))=="custom-6","Dragging to a manual group must override automatic path classification");
+    RejectMove(()=>state.MoveGroup(VariableScope.User,"system","other"),"Ordinary groups must not enter the pinned group region");
+    RejectMove(()=>state.MoveGroup(VariableScope.User,"paths",null),"Pinned groups must not leave the pinned region");
+    RejectMove(()=>state.MoveVariable(VariableScope.User,"B","other","other"),"Ordinary variables cannot be reordered within a group");
+    RejectMove(()=>state.MoveVariable(VariableScope.User,"B","other","custom-6","Z_PIN"),"Ordinary variables cannot acquire a pinned position by dragging");
+    RejectMove(()=>state.MoveVariable(VariableScope.User,"B","other","missing"),"Dropping outside a real group must be rejected");
+    state.PinVariable(VariableScope.User,"A_PIN",false);
+    Assert(state.OrderVariables([V("A_PIN","a"),V("Z_PIN","z")]).First().Name=="Z_PIN","Unpinning must return a variable to ordinary order");
+    state.MonitoringEnabled=true; state.PinGroup(VariableScope.User,"external",true); state.MonitoringEnabled=false;
+    state.MoveGroup(VariableScope.User,"system",null); state.MonitoringEnabled=true;
+    Assert(state.IsGroupPinned(VariableScope.User,"external"),"Reordering visible groups must preserve hidden monitored-group pinning");
     state.MonitoringEnabled=true;
     state.Snapshot=[new(VariableScope.User,"OLD","before",(int)RegistryValueKind.String),new(VariableScope.Machine,"REMOVED","gone",(int)RegistryValueKind.String)];
     Assert(EnvironmentMonitor.Compare(state,[V("OLD","after"),V("NEW","added")]),"Monitor must detect changes");
     Assert(state.Changes.Count==3 && state.ExternalVariables.Contains("User:NEW"),"Monitor must record additions, edits and removals");
     Assert(Category(V("NEW","added"))=="external","External changes must use the configured external group");
+    state.Assignments[EnvironmentWorkspace.Key(VariableScope.User,"NEW")]="custom-6";
+    Assert(Category(V("NEW","added"))=="custom-6","User grouping must have higher priority than external-change classification");
+    state.Assignments.Remove(EnvironmentWorkspace.Key(VariableScope.User,"NEW"));
     Assert(!EnvironmentMonitor.Compare(state,[V("OLD","after"),V("NEW","added")]),"Unchanged snapshot must not emit repeated events");
     state.MonitoringEnabled=false;
     Assert(Category(V("NEW","added"))=="other","External group must disappear while monitoring is disabled");
@@ -87,4 +117,4 @@ finally
     if(!target.StartsWith(allowed,StringComparison.OrdinalIgnoreCase)) throw new IOException("Invalid test cleanup path");
     Directory.Delete(target,true);
 }
-Console.WriteLine("PASS: lossless semicolon values; content/reference-based classification; configurable groups; external change tracking; registry create/edit/rename/delete, conflict and stale-write protection. No real Environment keys were modified.");
+Console.WriteLine("PASS: lossless semicolon values; classification and manual precedence; configurable groups; persisted scope-specific pins and drag ordering; invalid-drop protection; external tracking; registry edits, conflicts and stale-write protection. No real Environment keys were modified.");

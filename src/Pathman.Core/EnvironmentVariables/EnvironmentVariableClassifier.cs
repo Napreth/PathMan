@@ -43,7 +43,7 @@ public static partial class EnvironmentVariableClassifier
         if (state.Assignments.TryGetValue(key, out var assigned) && groups.Any(group => group.Id == assigned)) return assigned;
         var external = groups.FirstOrDefault(group => group.Rule == "external" && state.MonitoringEnabled && state.ExternalVariables.Contains(key));
         if (external is not null) return external.Id;
-        foreach (var group in groups)
+        foreach (var group in state.Groups.Where(group => groups.Contains(group)))
         {
             if (group.Rule == "paths" && IsPathVariable(variable, all, runtime) || group.Rule == "builtin" && BuiltIns.Contains(variable.Name)) return group.Id;
         }

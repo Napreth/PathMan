@@ -1,0 +1,29 @@
+<UserControl x:Class="Pathman.Gui.Controls.EditableRow"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root" Focusable="False" MouseDoubleClick="DoubleClick" PreviewKeyDown="RowKeyDown">
+    <Grid Height="24" Background="Transparent">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Grid Margin="0,0,4,0">
+            <Grid x:Name="Label"><Grid.ColumnDefinitions><ColumnDefinition x:Name="NameColumn" Width="3*"/><ColumnDefinition x:Name="DetailColumn" Width="2*"/></Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Text, ElementName=Root}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, ElementName=Root}"/>
+                <TextBlock Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail, ElementName=Root}"/>
+            </Grid>
+            <TextBox x:Name="Input" Visibility="Collapsed" Padding="2,0" MinHeight="0" Height="23" FontSize="13"
+                     VerticalContentAlignment="Center" BorderThickness="1" AutomationProperties.Name="行内编辑"
+                     PreviewKeyDown="InputKeyDown" LostKeyboardFocus="InputLostFocus"/>
+        </Grid>
+        <StackPanel x:Name="Actions" Grid.Column="1" Orientation="Horizontal">
+            <Button x:Name="PinButton" Content="&#xE718;" ToolTip="置顶" AutomationProperties.Name="置顶" Click="Pin"/>
+            <Button Content="&#xE70F;" ToolTip="重命名" AutomationProperties.Name="编辑" Click="Edit"/>
+            <Button Content="&#xE74D;" ToolTip="删除" AutomationProperties.Name="删除" Click="Delete" IsEnabled="{Binding CanDelete, ElementName=Root}"/>
+        </StackPanel>
+    </Grid>
+    <UserControl.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource SettingsIconButton}">
+            <Setter Property="Width" Value="23"/><Setter Property="Height" Value="22"/><Setter Property="Margin" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{Binding Foreground, ElementName=Root}"/>
+        </Style>
+    </UserControl.Resources>
+</UserControl>

@@ -23,8 +23,10 @@ public partial class VariablesView : UserControl
     private EnvironmentTreeNode? selected;
     private bool updating, dirty, busy, listMode;
     private string? preferredKey;
-    public bool HasUnsavedChanges => dirty;
-    public bool IsBusy => busy;
+    private EditableRow? activeEditor;
+    public bool HasUnsavedChanges => dirty || activeEditor?.IsEditing == true;
+    public bool HasInlineEditor => activeEditor?.IsEditing == true;
+    public bool IsBusy => busy || dragging || activeEditor?.IsEditing == true;
     public string LoadedRevision { get; private set; } = "";
     public VariablesView(PathmanLayout layout, EnvironmentWorkspaceStore store)
     {
@@ -39,7 +41,7 @@ public partial class VariablesView : UserControl
         .Where(item => item.Key is string && item.Value is string).ToDictionary(item => (string)item.Key,item => (string)item.Value!,StringComparer.OrdinalIgnoreCase);
     public async Task ReloadAsync(bool external = false)
     {
-        if (busy || external && dirty) return;
+        if (busy || external && (HasUnsavedChanges || dragging)) return;
         busy=true; RefreshButton.IsEnabled=false; UserVariablesTree.IsEnabled=false; SystemVariablesTree.IsEnabled=false;
         var key=preferredKey ?? selected?.Key; preferredKey=null;
         var oldGroups=userGroups.Concat(systemGroups).ToArray();
@@ -72,19 +74,27 @@ public partial class VariablesView : UserControl
     }
     public bool ConfirmLeave()
     {
+        if (activeEditor?.IsEditing == true) { _ = activeEditor.CommitAsync(); return false; }
         if (!dirty) return true;
         if(new ConfirmDialog(OwnerWindow,"未保存的更改","有未保存的更改，是否放弃？","放弃").ShowDialog()!=true) return false;
         ShowSelection(selected); return true;
     }
-    private async void Refresh(object sender,RoutedEventArgs e) { if (ConfirmLeave()) await ReloadAsync(); }
-    private void SelectVariable(object sender,RoutedPropertyChangedEventArgs<object> e)
+    public async Task<bool> ConfirmLeaveAsync()
+    {
+        if(activeEditor?.IsEditing==true && !await activeEditor.CommitAsync()) return false;
+        return ConfirmLeave();
+    }
+    private async void Refresh(object sender,RoutedEventArgs e) { if (await ConfirmLeaveAsync()) await ReloadAsync(); }
+    private async void SelectVariable(object sender,RoutedPropertyChangedEventArgs<object> e)
     {
         if (updating || e.NewValue is not EnvironmentTreeNode node || node==selected) return;
-        if (!ConfirmLeave())
+        var key=node.Key;
+        if (!await ConfirmLeaveAsync())
         {
             updating=true; node.IsSelected=false; if (selected is not null) selected.IsSelected=true; updating=false; return;
         }
-        ShowSelection(node);
+        var current=userGroups.Concat(systemGroups).SelectMany(group=>new[]{group}.Concat(group.Children)).FirstOrDefault(item=>item.Key==key);
+        ShowSelection(current ?? node);
     }
     private void ShowSelection(EnvironmentTreeNode? node)
     {
@@ -95,7 +105,9 @@ public partial class VariablesView : UserControl
         var variable=node?.Variable;
         entries.Clear(); ScalarValueBox.Clear();
         listMode=variable?.IsList==true;
-        EmptySelection.Visibility=variable is null ? Visibility.Visible : Visibility.Collapsed;
+        EmptySelection.Visibility=node is null ? Visibility.Visible : Visibility.Collapsed;
+        GroupVariablesList.ItemsSource=node?.IsGroup == true ? node.Children : null;
+        GroupVariablesList.Visibility=node?.IsGroup == true ? Visibility.Visible : Visibility.Collapsed;
         ValueActions.Visibility=variable is null ? Visibility.Collapsed : Visibility.Visible;
         ValuesList.Visibility=variable is not null && listMode ? Visibility.Visible : Visibility.Collapsed;
         ScalarValueBox.Visibility=variable is not null && !listMode ? Visibility.Visible : Visibility.Collapsed;
@@ -110,16 +122,11 @@ public partial class VariablesView : UserControl
     {
         if (SaveButton is null) return;
         SaveButton.IsEnabled=dirty && !busy; RevertButton.IsEnabled=dirty && !busy;
-        EditEntryButton.IsEnabled=DeleteEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
         MoveUpButton.IsEnabled=ValuesList.SelectedIndex>0 && !busy;
         MoveDownButton.IsEnabled=ValuesList.SelectedIndex>=0 && ValuesList.SelectedIndex<entries.Count-1 && !busy;
         foreach (var toolbar in new[] { UserActions, SystemActions })
         {
             toolbar.IsEnabled = !busy;
-            var ownSelection = selected?.Scope == toolbar.Scope;
-            var fallback = ownSelection && selected is { IsGroup: true } && selected.Group.Rule == "fallback";
-            toolbar.UpdateSelection(ownSelection, ownSelection && !fallback,
-                fallback ? "保留默认分组以容纳未分类变量" : "删除");
         }
     }
     private string CurrentValue => listMode ? string.Join(';',entries.Select(entry=>entry.Value)) : ScalarValueBox.Text;
@@ -147,13 +154,10 @@ public partial class VariablesView : UserControl
     private static string? GroupNameError(string value) => string.IsNullOrWhiteSpace(value) || value.Length>80 ? "分组名不能为空，最长 80 个字符。" : null;
     private void AddEntry(object sender,RoutedEventArgs e)
     {
-        var value=Prompt("新建条目"); if(value is null) return; var index=ValuesList.SelectedIndex<0 ? entries.Count : ValuesList.SelectedIndex+1;
-        entries.Insert(index,new(value)); ValuesList.SelectedIndex=index;
-    }
-    private void EditEntry(object sender,RoutedEventArgs e)
-    {
-        var index=ValuesList.SelectedIndex; if(index<0 || selected?.Variable is null) return;
-        var value=Prompt("编辑条目",entries[index].Value); if(value is not null) { entries[index]=new(value); ValuesList.SelectedIndex=index; }
+        var index=ValuesList.SelectedIndex<0 ? entries.Count : ValuesList.SelectedIndex+1;
+        var entry=new EnvironmentEntry(""); entries.Insert(index,entry); ValuesList.SelectedIndex=index;
+        ValuesList.ScrollIntoView(entry); ValuesList.UpdateLayout();
+        if (ValuesList.ItemContainerGenerator.ContainerFromItem(entry) is ListBoxItem item) FindVisual<EditableRow>(item)?.BeginEdit();
     }
     private void BrowseEntry(object sender,RoutedEventArgs e)
     {
@@ -162,8 +166,6 @@ public partial class VariablesView : UserControl
         var index=ValuesList.SelectedIndex;
         if(index>=0) entries[index]=new(dialog.FolderName); else { entries.Add(new(dialog.FolderName)); ValuesList.SelectedIndex=entries.Count-1; }
     }
-    private void RemoveEntry(object sender,RoutedEventArgs e)
-    { var index=ValuesList.SelectedIndex; if(index<0) return; entries.RemoveAt(index); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1); }
     private void MoveUp(object sender,RoutedEventArgs e) { var index=ValuesList.SelectedIndex; if(index>0) { entries.Move(index,index-1); ValuesList.SelectedIndex=index-1; } }
     private void MoveDown(object sender,RoutedEventArgs e) { var index=ValuesList.SelectedIndex; if(index>=0 && index<entries.Count-1) { entries.Move(index,index+1); ValuesList.SelectedIndex=index+1; } }
     private void EditText(object sender,RoutedEventArgs e)
@@ -189,13 +191,11 @@ public partial class VariablesView : UserControl
         {
             case ScopeAction.NewGroup: await NewGroup(e.Scope); break;
             case ScopeAction.NewVariable: await NewVariable(e.Scope); break;
-            case ScopeAction.Rename when selected?.Scope == e.Scope: await RenameSelection(); break;
-            case ScopeAction.Delete when selected?.Scope == e.Scope: await DeleteSelection(); break;
         }
     }
     private async Task NewGroup(VariableScope scope)
     {
-        if(!ConfirmLeave()) return;
+        if(!await ConfirmLeaveAsync()) return;
         var name=Prompt("新建分组",validator:GroupNameError); if(name is null) return;
         var group=new VariableGroupDefinition { Name=name,Scope=scope };
         try { store.Update(state=>state.Groups.Add(group)); preferredKey=$"group:{scope}:{group.Id}"; dirty=false; await ReloadAsync(); }
@@ -203,7 +203,7 @@ public partial class VariablesView : UserControl
     }
     private async Task NewVariable(VariableScope scope)
     {
-        if(!ConfirmLeave()) return;
+        if(!await ConfirmLeaveAsync()) return;
         var group=selected?.Scope == scope ? selected.Group : null;
         var dialog=new VariableDialog(OwnerWindow,scope);
         if(dialog.ShowDialog()!=true) return;
@@ -216,31 +216,74 @@ public partial class VariablesView : UserControl
             } catch(Exception error) when(Expected(error)) { Error(error); }
         }
     }
-    private async Task RenameSelection()
+    private void RowEditingChanged(object? sender, EventArgs e)
     {
-        if(selected is null || !ConfirmLeave()) return;
-        var node=selected;
-        var name=Prompt(node.IsGroup ? "重命名分组" : "重命名环境变量",node.Title,validator:node.IsGroup ? GroupNameError : value=>
-        { try { WindowsEnvironmentVariableEditor.ValidateName(value); return null; } catch(ArgumentException error) { return error.Message; } });
-        if(name is null || name==node.Title) return;
-        if(!node.IsGroup && name.Equals(node.Title,StringComparison.OrdinalIgnoreCase)) { StatusText.Text="变量名不区分大小写，名称未变更。"; return; }
+        if (sender is not EditableRow row) return;
+        if (row.IsEditing) activeEditor = row;
+        else if (activeEditor == row) activeEditor = null;
+    }
+    private void RowEditRequested(object? sender, InlineEditEventArgs e)
+    { if (sender is EditableRow { DataContext: EnvironmentTreeNode node }) e.Completion=RenameNode(node,e.Value); }
+    private void EntryEditRequested(object? sender, InlineEditEventArgs e)
+    {
+        if (sender is not EditableRow { DataContext: EnvironmentEntry entry } || selected?.Variable is null) return;
+        if (e.Value.Contains(';') || e.Value.Contains('\0') || e.Value.Contains('\r') || e.Value.Contains('\n'))
+        { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请使用编辑文本。"); return; }
+        var index=entries.IndexOf(entry);
+        if(index>=0 && entry.Value!=e.Value) entries[index]=new(e.Value);
+    }
+    private void EntryDeleteRequested(object? sender, EventArgs e)
+    {
+        if (sender is not EditableRow { DataContext: EnvironmentEntry entry }) return;
+        var index=entries.IndexOf(entry); if(index<0) return;
+        entries.RemoveAt(index); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1);
+    }
+    private async void RowDeleteRequested(object? sender, EventArgs e)
+    { if(sender is EditableRow { DataContext: EnvironmentTreeNode node } && node.CanDelete) await DeleteNode(node); }
+    private async void RowPinRequested(object? sender, EventArgs e)
+    {
+        if (busy || sender is not EditableRow { DataContext: EnvironmentTreeNode node } || !await ConfirmLeaveAsync()) return;
         try
         {
+            store.Update(state => { if(node.IsGroup) state.PinGroup(node.Scope,node.Group.Id,!node.IsPinned); else state.PinVariable(node.Scope,node.Title,!node.IsPinned); });
+            await ReloadAsync();
+        }
+        catch(Exception error) when(Expected(error)) { Error(error); }
+    }
+    private async Task<string?> RenameNode(EnvironmentTreeNode node, string name)
+    {
+        if(busy) return "请稍后重试。";
+        if(name==node.Title) return null;
+        if(node.IsGroup && GroupNameError(name) is {} groupError) return groupError;
+        try
+        {
+            if(!node.IsGroup) WindowsEnvironmentVariableEditor.ValidateName(name);
+            if(!node.IsGroup && name.Equals(node.Title,StringComparison.OrdinalIgnoreCase)) return null;
             if(node.IsGroup) store.Update(state=>state.Groups.First(group=>group.Id==node.Group.Id).Name=name);
             else
             {
                 var variable=node.Variable!;
-                if(!await ApplyAsync(new("rename",variable.Scope,variable.Name,NewName:name,ExpectedValue:variable.RawValue,ExpectedKind:variable.Kind))) return;
-                preferredKey=$"variable:{variable.Scope}:{name}";
+                // Keep a staged value edit with the renamed variable rather than losing it on reload.
+                busy=true; IsEnabled=false;
+                try { await EnvironmentEditHost.ApplyAsync(new("rename",variable.Scope,variable.Name,NewName:name,ExpectedValue:variable.RawValue,ExpectedKind:variable.Kind),store,layout.DataDirectory); }
+                finally { busy=false; IsEnabled=true; }
+                if(selected==node) preferredKey=$"variable:{variable.Scope}:{name}";
             }
-            dirty=false; await ReloadAsync();
+            var staged=dirty ? CurrentValue : null;
+            await ReloadAsync();
+            if(staged is not null && selected?.Variable is not null)
+            {
+                updating=true; entries.Clear();
+                if(listMode) foreach(var entry in staged.Split(';',StringSplitOptions.None)) entries.Add(new(entry)); else ScalarValueBox.Text=staged;
+                updating=false; SetDirty();
+            }
+            return null;
         }
-        catch(Exception error) when(Expected(error)) { Error(error); }
+        catch(Exception error) when(Expected(error) || error is OperationCanceledException) { StatusText.Text=error.Message; return error.Message; }
     }
-    private async Task DeleteSelection()
+    private async Task DeleteNode(EnvironmentTreeNode node)
     {
-        if(selected is null || !ConfirmLeave()) return;
-        var node=selected;
+        if(busy || !node.CanDelete || !await ConfirmLeaveAsync()) return;
         var message=node.IsGroup ? $"删除分组“{node.Title}”？组内环境变量将移到默认分组。" : $"删除环境变量“{node.Title}”？";
         if(new ConfirmDialog(OwnerWindow,"删除",message,"删除").ShowDialog()!=true) return;
         try
@@ -251,6 +294,7 @@ public partial class VariablesView : UserControl
                 foreach(var child in node.Children) state.Assignments[EnvironmentWorkspace.Key(node.Scope,child.Title)]=fallback;
                 foreach(var key in state.Assignments.Where(item=>item.Value==node.Group.Id).Select(item=>item.Key).ToArray()) state.Assignments[key]=fallback;
                 state.Groups.RemoveAll(group=>group.Id==node.Group.Id);
+                foreach(var order in state.GroupOrder.Values.Concat(state.PinnedGroups.Values)) order.RemoveAll(id=>id==node.Group.Id);
             });
             else
             {

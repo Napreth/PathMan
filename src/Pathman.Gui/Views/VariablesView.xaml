@@ -8,10 +8,12 @@
         <Style TargetType="TreeView" BasedOn="{StaticResource DefaultTreeViewStyle}">
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="4"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="False"/>
         </Style>
         <HierarchicalDataTemplate DataType="{x:Type local:EnvironmentTreeNode}" ItemsSource="{Binding Children}">
-            <TextBlock x:Name="NodeText" Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
-            <HierarchicalDataTemplate.Triggers><DataTrigger Binding="{Binding IsGroup}" Value="True"><Setter TargetName="NodeText" Property="FontFamily" Value="{StaticResource SettingsChineseFont}"/></DataTrigger></HierarchicalDataTemplate.Triggers>
+            <controls:EditableRow x:Name="NodeRow" Text="{Binding Title}" CanDelete="{Binding CanDelete}" IsPinned="{Binding IsPinned}"
+                                  EditRequested="RowEditRequested" DeleteRequested="RowDeleteRequested" PinRequested="RowPinRequested" EditingChanged="RowEditingChanged"/>
+            <HierarchicalDataTemplate.Triggers><DataTrigger Binding="{Binding IsGroup}" Value="True"><Setter TargetName="NodeRow" Property="FontFamily" Value="{StaticResource SettingsChineseFont}"/></DataTrigger></HierarchicalDataTemplate.Triggers>
         </HierarchicalDataTemplate>
         <Style x:Key="Action" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
             <Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="Margin" Value="0,0,0,6"/><Setter Property="Padding" Value="10,5"/><Setter Property="FontSize" Value="13"/>
@@ -24,16 +26,24 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="260"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*" MinWidth="260"/><ColumnDefinition Width="12"/><ColumnDefinition Width="96"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="*" MinHeight="140"/><RowDefinition Height="16"/><RowDefinition Height="36"/><RowDefinition Height="1.5*" MinHeight="170"/></Grid.RowDefinitions>
             <Grid Margin="0,0,0,6"><TextBlock x:Name="UserTitle" Text="用户变量" Style="{StaticResource SectionTitle}"/><controls:ScopeActions x:Name="UserActions" Scope="User" HorizontalAlignment="Right" VerticalAlignment="Center" ActionRequested="ScopeActionRequested" AutomationProperties.Name="用户变量操作"/></Grid>
-            <Border Grid.Row="1" Style="{StaticResource Surface}"><TreeView x:Name="UserVariablesTree" SelectedItemChanged="SelectVariable" AutomationProperties.Name="用户变量"/></Border>
+            <Border Grid.Row="1" Style="{StaticResource Surface}"><TreeView x:Name="UserVariablesTree" SelectedItemChanged="SelectVariable" AutomationProperties.Name="用户变量"
+                PreviewMouseLeftButtonDown="TreeMouseDown" PreviewMouseMove="TreeMouseMove" PreviewMouseLeftButtonUp="TreeMouseUp" PreviewKeyDown="TreeKeyDown"/></Border>
             <Grid Grid.Row="3" Margin="0,0,0,6"><TextBlock x:Name="SystemTitle" Text="系统变量" Style="{StaticResource SectionTitle}"/><controls:ScopeActions x:Name="SystemActions" Scope="Machine" HorizontalAlignment="Right" VerticalAlignment="Center" ActionRequested="ScopeActionRequested" AutomationProperties.Name="系统变量操作"/></Grid>
-            <Border Grid.Row="4" Style="{StaticResource Surface}"><TreeView x:Name="SystemVariablesTree" SelectedItemChanged="SelectVariable" AutomationProperties.Name="系统变量"/></Border>
+            <Border Grid.Row="4" Style="{StaticResource Surface}"><TreeView x:Name="SystemVariablesTree" SelectedItemChanged="SelectVariable" AutomationProperties.Name="系统变量"
+                PreviewMouseLeftButtonDown="TreeMouseDown" PreviewMouseMove="TreeMouseMove" PreviewMouseLeftButtonUp="TreeMouseUp" PreviewKeyDown="TreeKeyDown"/></Border>
             <TextBlock x:Name="VariableTitle" Grid.Column="2" Text="环境变量" TextTrimming="CharacterEllipsis" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
             <Border x:Name="ValueSurface" Grid.Row="1" Grid.RowSpan="4" Grid.Column="2" Style="{StaticResource Surface}">
                 <Grid>
                     <TextBlock x:Name="EmptySelection" Text="选择环境变量" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <ListBox x:Name="ValuesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" MouseDoubleClick="EditEntry" ScrollViewer.HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="变量条目">
+                    <ListBox x:Name="ValuesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="变量条目">
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/></Style></ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Value}"/></DataTemplate></ListBox.ItemTemplate>
+                        <ListBox.ItemTemplate><DataTemplate><controls:EditableRow Text="{Binding Value}" ShowPin="False" EditRequested="EntryEditRequested" DeleteRequested="EntryDeleteRequested" EditingChanged="RowEditingChanged"/></DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                    <ListBox x:Name="GroupVariablesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="分组变量">
+                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding Title}"/></Style></ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate><DataTemplate>
+                            <controls:EditableRow Text="{Binding Title}" Detail="{Binding Variable.RawValue}" CanDelete="{Binding CanDelete}" IsPinned="{Binding IsPinned}" EditRequested="RowEditRequested" DeleteRequested="RowDeleteRequested" PinRequested="RowPinRequested" EditingChanged="RowEditingChanged"/>
+                        </DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
                     <TextBox x:Name="ScalarValueBox" Style="{StaticResource ValueTextBox}" Visibility="Collapsed" TextChanged="ValueTextChanged" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="变量值"/>
                 </Grid>
@@ -43,9 +53,7 @@
                 <StackPanel>
                     <StackPanel x:Name="ListButtons">
                         <Button Content="新建" Style="{StaticResource Action}" Click="AddEntry" AutomationProperties.Name="新建条目"/>
-                        <Button x:Name="EditEntryButton" Content="编辑" Style="{StaticResource Action}" Click="EditEntry"/>
                         <Button Content="浏览…" Style="{StaticResource Action}" Click="BrowseEntry"/>
-                        <Button x:Name="DeleteEntryButton" Content="删除" Style="{StaticResource Action}" Click="RemoveEntry" AutomationProperties.Name="删除条目"/>
                         <Button x:Name="MoveUpButton" Content="上移" Style="{StaticResource Action}" Click="MoveUp" Margin="0,16,0,8"/>
                         <Button x:Name="MoveDownButton" Content="下移" Style="{StaticResource Action}" Click="MoveDown"/>
                     </StackPanel>
