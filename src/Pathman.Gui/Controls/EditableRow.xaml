@@ -6,8 +6,8 @@
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <Grid Margin="0,0,4,0">
             <Grid x:Name="Label"><Grid.ColumnDefinitions><ColumnDefinition x:Name="NameColumn" Width="3*"/><ColumnDefinition x:Name="DetailColumn" Width="2*"/></Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Text, ElementName=Root}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, ElementName=Root}"/>
-                <TextBlock Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail, ElementName=Root}"/>
+                <TextBlock Text="{Binding Text, ElementName=Root}" LineHeight="24" LineStackingStrategy="BlockLineHeight" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, ElementName=Root}"/>
+                <TextBlock Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" LineHeight="24" LineStackingStrategy="BlockLineHeight" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail, ElementName=Root}"/>
             </Grid>
             <TextBox x:Name="Input" Visibility="Collapsed" Padding="2,0" MinHeight="0" Height="23" FontSize="13"
                      VerticalContentAlignment="Center" BorderThickness="1" AutomationProperties.Name="行内编辑"

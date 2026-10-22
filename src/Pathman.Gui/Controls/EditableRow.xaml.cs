@@ -18,17 +18,20 @@ public partial class EditableRow : UserControl
     public static readonly DependencyProperty CanDeleteProperty = DependencyProperty.Register(nameof(CanDelete), typeof(bool), typeof(EditableRow), new PropertyMetadata(true));
     public static readonly DependencyProperty ShowPinProperty = DependencyProperty.Register(nameof(ShowPin), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdatePin));
     public static readonly DependencyProperty IsPinnedProperty = DependencyProperty.Register(nameof(IsPinned), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdatePin));
+    public static readonly DependencyProperty EditOnDoubleClickProperty = DependencyProperty.Register(nameof(EditOnDoubleClick), typeof(bool), typeof(EditableRow), new PropertyMetadata(true));
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public string Detail { get => (string)GetValue(DetailProperty); set => SetValue(DetailProperty, value); }
     public bool CanDelete { get => (bool)GetValue(CanDeleteProperty); set => SetValue(CanDeleteProperty, value); }
     public bool ShowPin { get => (bool)GetValue(ShowPinProperty); set => SetValue(ShowPinProperty, value); }
     public bool IsPinned { get => (bool)GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
+    public bool EditOnDoubleClick { get => (bool)GetValue(EditOnDoubleClickProperty); set => SetValue(EditOnDoubleClickProperty, value); }
     public bool IsEditing { get; private set; }
     private Task<bool>? pending;
     public event EventHandler<InlineEditEventArgs>? EditRequested;
     public event EventHandler? DeleteRequested;
     public event EventHandler? PinRequested;
     public event EventHandler? EditingChanged;
+    public event EventHandler? Activated;
     public EditableRow() { InitializeComponent(); Loaded += (_, _) => { RefreshPin(); RefreshDetail(); }; }
     private static void UpdateDetail(DependencyObject target, DependencyPropertyChangedEventArgs e) => ((EditableRow)target).RefreshDetail();
     private void RefreshDetail()
@@ -96,7 +99,8 @@ public partial class EditableRow : UserControl
     private void DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing) return;
-        e.Handled = true; BeginEdit();
+        e.Handled = true;
+        if (EditOnDoubleClick) BeginEdit(); else Activated?.Invoke(this, EventArgs.Empty);
     }
     private void RowKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.F2 && !IsEditing) { e.Handled = true; BeginEdit(); } }
     private async void InputKeyDown(object sender, KeyEventArgs e)

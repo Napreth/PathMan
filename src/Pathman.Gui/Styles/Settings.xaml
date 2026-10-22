@@ -137,6 +137,7 @@
                         <ItemsPresenter x:Name="ItemsHost" Visibility="Collapsed"/>
                     </StackPanel>
                     <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsGroup}" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/></DataTrigger>
                         <Trigger SourceName="Row" Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
                         <Trigger Property="IsExpanded" Value="True"><Setter TargetName="ItemsHost" Property="Visibility" Value="Visible"/></Trigger>
                         <Trigger Property="HasItems" Value="False"><Setter TargetName="Expander" Property="Visibility" Value="Hidden"/></Trigger>
@@ -151,13 +152,18 @@
     </Style>
     <Style x:Key="ValueTextBox" TargetType="TextBox">
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <!-- TextBoxView adds 2 DIP for its bidi caret; match the list's 4 + 8 DIP inset. -->
+        <Setter Property="Margin" Value="10,4,12,4"/>
+        <Setter Property="TextBlock.LineHeight" Value="24"/>
+        <Setter Property="TextBlock.LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
         <Setter Property="SelectionBrush" Value="{StaticResource ListSelectionBrush}"/>
         <Setter Property="SelectionTextBrush" Value="{StaticResource ListSelectionTextBrush}"/>
         <Setter Property="SelectionOpacity" Value="1"/>
-        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ScrollViewer x:Name="PART_ContentHost" Focusable="False"/></Border></ControlTemplate></Setter.Value></Setter>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border Background="{TemplateBinding Background}"><ScrollViewer x:Name="PART_ContentHost" Focusable="False"/></Border></ControlTemplate></Setter.Value></Setter>
     </Style>
 </ResourceDictionary>

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Pathman.Core.Models;
 
@@ -20,6 +21,9 @@ public partial class ScopeActions : UserControl
     public ScopeActions()
     {
         InitializeComponent();
+        NewMenu.CustomPopupPlacementCallback=(popup,target,_)=>[
+            new(new Point(target.Width-popup.Width,target.Height),PopupPrimaryAxis.Horizontal),
+            new(new Point(target.Width-popup.Width,-popup.Height),PopupPrimaryAxis.Horizontal)];
         Unloaded += (_, _) => NewMenu.IsOpen = false;
         IsEnabledChanged += (_, _) => { if (!IsEnabled) NewMenu.IsOpen = false; };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && NewMenu.IsOpen) { NewMenu.IsOpen = false; e.Handled = true; } };
@@ -28,11 +32,9 @@ public partial class ScopeActions : UserControl
     private void Raise(ScopeAction action) { NewMenu.IsOpen = false; ActionRequested?.Invoke(this, new(Scope, action)); }
     private void NewGroup(object sender, RoutedEventArgs e) => Raise(ScopeAction.NewGroup);
     private void NewVariable(object sender, RoutedEventArgs e) => Raise(ScopeAction.NewVariable);
-    private void OpenMenu(object sender, RoutedEventArgs e) => NewMenu.IsOpen = true;
-    private void ShowMenu(object sender, MouseEventArgs e) { if (IsEnabled) NewMenu.IsOpen = true; }
-    private async void CloseMenu(object sender, MouseEventArgs e)
+    private void OpenMenu(object sender, RoutedEventArgs e)
     {
-        await Task.Delay(180);
-        if (!NewButton.IsMouseOver && !(NewMenu.Child is FrameworkElement child && child.IsMouseOver)) NewMenu.IsOpen = false;
+        NewMenu.PlacementTarget=NewButton;
+        NewMenu.IsOpen=true;
     }
 }

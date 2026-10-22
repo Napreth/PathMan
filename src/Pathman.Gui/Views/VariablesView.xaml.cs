@@ -118,6 +118,15 @@ public partial class VariablesView : UserControl
     private void SetDirty() { dirty=true; UpdateActions(); }
     private void ValueTextChanged(object sender,TextChangedEventArgs e) { if(!updating && selected?.Variable is not null) SetDirty(); }
     private void EntrySelected(object sender,SelectionChangedEventArgs e) => UpdateActions();
+    private async void OpenGroupVariable(object? sender, EventArgs e)
+    {
+        if (busy || sender is not EditableRow { DataContext: EnvironmentTreeNode node } || node.IsGroup || !await ConfirmLeaveAsync()) return;
+        var groups=node.Scope==VariableScope.User ? userGroups : systemGroups;
+        foreach(var group in groups.Where(group=>group.Children.Contains(node))) group.IsExpanded=true;
+        ShowSelection(node);
+        var tree=node.Scope==VariableScope.User ? UserVariablesTree : SystemVariablesTree;
+        await Dispatcher.InvokeAsync(()=> { tree.UpdateLayout(); Container(tree,node)?.BringIntoView(); },DispatcherPriority.Loaded);
+    }
     private void UpdateActions()
     {
         if (SaveButton is null) return;

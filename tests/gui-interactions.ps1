@@ -6,15 +6,17 @@ if($PrepareFixture) {
     $testExe='C:\PathManTestApp\PathMan.exe'
     Get-Process PathMan -ErrorAction SilentlyContinue | Where-Object Path -eq $testExe | Stop-Process -Force
     [Environment]::SetEnvironmentVariable('PATHMAN_RENAMED',$null,'User')
+    [Environment]::SetEnvironmentVariable('PATHMAN_FOCUS_TEST',$null,'User')
     [Environment]::SetEnvironmentVariable('PATHMAN_DRAG_A','alpha','User')
     [Environment]::SetEnvironmentVariable('PATHMAN_DRAG_B','beta','User')
     [Environment]::SetEnvironmentVariable('PATHMAN_DRAG_C','gamma','User')
     [Environment]::SetEnvironmentVariable('PATHMAN_LIST','one;;two;  spaced  ;','User')
+    [Environment]::SetEnvironmentVariable('PATHMAN_SCALAR_ORIGIN','one','User')
     $fixture=@{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'},@{id='external';name='外部变量';rule='external';requiresMonitoring=$true},@{id='work';name='工作';rule='manual';scope='User'});assignments=@{'User:PATHMAN_DRAG_A'='work';'User:PATHMAN_DRAG_B'='work';'User:PATHMAN_LIST'='work';'User:PATHMAN_DRAG_C'='other'};pinnedVariables=@('User:PATHMAN_DRAG_B','User:PATHMAN_DRAG_A');revision=[guid]::NewGuid().ToString('N')}
     $fixture|ConvertTo-Json -Depth 8|Set-Content (Join-Path $env:LOCALAPPDATA 'PathMan\environment.json') -Encoding UTF8
     Start-Process $testExe; Start-Sleep -Seconds 2
 }
-Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
+Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,System.Drawing
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -28,7 +30,7 @@ public static class InteractionInput {
 $checks=[Collections.Generic.List[string]]::new()
 $data=Join-Path $env:LOCALAPPDATA 'PathMan\environment.json'
 function State { Get-Content -LiteralPath $data -Raw | ConvertFrom-Json }
-function Assert($condition,[string]$message) { if(!$condition) { throw $message }; $script:checks.Add($message); $message | Set-Content ($ResultPath+'.progress') }
+function Assert($condition,[string]$message) { if(!$condition) { throw $message }; $script:checks.Add($message); try { $message | Set-Content ($ResultPath+'.progress') } catch [IO.IOException] { } }
 function WaitFor([scriptblock]$condition,[string]$message) { for($i=0;$i -lt 100;$i++) { if(& $condition) { return }; Start-Sleep -Milliseconds 100 }; throw $message }
 function Find($root,[string]$value,$property=[Windows.Automation.AutomationElement]::NameProperty,$type=$null) {
     $condition=[Windows.Automation.PropertyCondition]::new($property,$value)
@@ -60,6 +62,28 @@ function Drag($source,$x,$y) {
     MovePointer ($r.Left+12) ($r.Top+$r.Height/2); Down; MovePointer ($r.Left+24) ($r.Top+$r.Height/2+5); MovePointer $x $y; Start-Sleep -Milliseconds 180; Up; Start-Sleep -Milliseconds 500
 }
 function Pin([string]$name) { Invoke (Find (Node $name) '置顶' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Button)) }
+function OpenMenuRoot {
+    $roots=[Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty,$script:window.Current.ProcessId))
+    foreach($root in $roots) { if($null -ne (Find $root '新建分组' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::MenuItem))) { return $root } }
+}
+function TextOrigin($element) {
+    # Compare the same rendered text in both editors; TextBlock has no UIA TextPattern.
+    Start-Sleep -Milliseconds 250
+    $r=$element.Current.BoundingRectangle
+    $x=[int][Math]::Floor($r.Left); $y=[int][Math]::Floor($r.Top)
+    $bitmap=[Drawing.Bitmap]::new([int][Math]::Min(96,$r.Width),[int][Math]::Min(28,$r.Height))
+    $graphics=[Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CopyFromScreen($x,$y,0,0,$bitmap.Size)
+        $left=$bitmap.Width; $top=$bitmap.Height
+        for($py=0;$py -lt $bitmap.Height;$py++) { for($px=0;$px -lt $bitmap.Width;$px++) {
+            $color=$bitmap.GetPixel($px,$py)
+            if($color.R -lt 120 -and $color.G -lt 120 -and $color.B -lt 120) { $left=[Math]::Min($left,$px); $top=[Math]::Min($top,$py) }
+        } }
+        if($left -eq $bitmap.Width) { throw 'No visible text pixels were found' }
+        @{Left=$x+$left;Top=$y+$top}
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
 try {
     $window=$null
     WaitFor { $script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Window); $null -ne $script:window } 'PathMan window did not launch'
@@ -72,6 +96,27 @@ try {
     $row=(Text (Node 'PATHMAN_DRAG_B')).Current.BoundingRectangle
     $edit=Find (Node 'PATHMAN_DRAG_B') '编辑' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Button)
     Assert ($edit.Current.BoundingRectangle.Left -gt $row.Right) 'Row operations are positioned to the right of the variable name'
+    foreach($toolbar in @('UserActions','SystemActions')) {
+        $new=Id (Id $window $toolbar) 'NewButton'; $r=$new.Current.BoundingRectangle
+        MovePointer ($r.Left+$r.Width/2) ($r.Top+$r.Height/2); Start-Sleep -Milliseconds 650
+        Assert ($null -eq (OpenMenuRoot)) "$toolbar does not open its menu on hover"
+        Down; Up; Start-Sleep -Milliseconds 300
+        WaitFor { $null -ne (OpenMenuRoot) } 'Click did not open the standard menu'
+        $menu=OpenMenuRoot
+        Assert ($null -ne (Find $menu '新建分组' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::MenuItem)) -and $null -ne (Find $menu '新建环境变量' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::MenuItem))) "$toolbar opens a standard menu with both creation commands"
+        Key 27
+    }
+    $preview=Find (Id $window 'GroupVariablesList') 'PATHMAN_LIST' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Text)
+    DoubleClick $preview
+    Assert ((Id $window 'VariableTitle').Current.Name -eq 'PATHMAN_LIST' -and $null -eq (InlineInput)) 'Double-clicking a variable in the group preview opens its value editor'
+    $first=Find (Id $window 'ValuesList') 'one' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Text)
+    $listOrigin=TextOrigin $first
+    Expand '其他变量'; SelectNode (Node 'PATHMAN_SCALAR_ORIGIN')
+    $scalarOrigin=TextOrigin (Id $window 'ScalarValueBox')
+    @{List=$listOrigin;Scalar=$scalarOrigin}|ConvertTo-Json -Depth 4|Set-Content ($ResultPath+'.origins.json') -Encoding UTF8
+    Assert ([Math]::Abs($listOrigin.Left-$scalarOrigin.Left) -le 1 -and [Math]::Abs($listOrigin.Top-$scalarOrigin.Top) -le 1) 'Scalar and list editors put their first character at the same position'
+    Assert ([Math]::Abs((Id $window 'EditTextButton').Current.BoundingRectangle.Top-(Tree).Current.BoundingRectangle.Top) -le 1) 'The first scalar action button is aligned with the editor top'
+    SelectNode (Node '工作')
     DoubleClick (Text (Node '工作')); SetInline '工作重命名'; Key 13
     WaitFor { (State).groups.name -contains '工作重命名' } 'Group inline rename failed'
     Assert ($null -ne (Node '工作重命名')) 'Double-click renames a group without opening a dialog'

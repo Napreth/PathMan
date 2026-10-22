@@ -48,6 +48,11 @@ internal sealed class RowDragAdorner : Adorner
     protected override void OnRender(DrawingContext drawing)
     {
         if(target is {} bounds) drawing.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(45,0,120,212)),new Pen(Brushes.DodgerBlue,1.5),bounds,3,3);
-        if(insertionY is {} y) drawing.DrawLine(new Pen(Brushes.Black,2),new(insertionLeft,y),new(insertionLeft+insertionWidth,y));
+        if(insertionY is {} y)
+        {
+            var pixel=1/VisualTreeHelper.GetDpi(this).DpiScaleY;
+            var lineY=(Math.Round(y/pixel)+.5)*pixel;
+            drawing.DrawLine(new Pen(Brushes.Black,pixel),new(insertionLeft,lineY),new(insertionLeft+insertionWidth,lineY));
+        }
     }
 }
