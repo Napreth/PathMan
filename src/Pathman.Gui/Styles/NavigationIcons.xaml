@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DrawingImage x:Key="VariablesIcon"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#777F88" Geometry="M 8,14 L 12,14 12,17 15,17 15,19 5,19 5,17 8,17 Z"/>
+        <GeometryDrawing Geometry="M 2,2 L 18,2 Q 20,2 20,4 L 20,13 Q 20,15 18,15 L 2,15 Q 0,15 0,13 L 0,4 Q 0,2 2,2 Z"><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#43D8F0" Offset="0"/><GradientStop Color="#0078D4" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+        <GeometryDrawing Brush="#B9F4FF" Geometry="M 3,5 L 12,5 12,6 3,6 Z M 3,8 L 16,8 16,9 3,9 Z M 3,11 L 10,11 10,12 3,12 Z"/>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+    <DrawingImage x:Key="AliasesIcon"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Geometry="M 2,1 L 11,1 Q 13,1 13,3 L 13,13 Q 13,15 11,15 L 2,15 Q 0,15 0,13 L 0,3 Q 0,1 2,1 Z"><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#82C7FF" Offset="0"/><GradientStop Color="#2875E8" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+        <GeometryDrawing Geometry="M 9,6 L 18,6 Q 20,6 20,8 L 20,18 Q 20,20 18,20 L 9,20 Q 7,20 7,18 L 7,8 Q 7,6 9,6 Z"><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#A78BFA" Offset="0"/><GradientStop Color="#6651CA" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+        <GeometryDrawing Brush="White" Geometry="M 10,10 L 17,10 17,16 15,16 15,13 11,17 9.5,15.5 13.5,12 10,12 Z"/>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+    <DrawingImage x:Key="MonitorIcon"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Geometry="M 2,1 L 18,1 Q 20,1 20,3 L 20,17 Q 20,19 18,19 L 2,19 Q 0,19 0,17 L 0,3 Q 0,1 2,1 Z"><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#41D1B0" Offset="0"/><GradientStop Color="#008778" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+        <GeometryDrawing Geometry="M 3,12 L 6,12 9,6 12,14 15,9 18,9"><GeometryDrawing.Pen><Pen Brush="White" Thickness="1.5" StartLineCap="Round" EndLineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+    <DrawingImage x:Key="AboutIcon"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Geometry="M 10,0 A 10,10 0 1 1 9.999,0 Z"><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#4EB7FF" Offset="0"/><GradientStop Color="#0067C0" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+        <GeometryDrawing Brush="White" Geometry="M 9,8 L 11,8 11,15 9,15 Z M 9,4 L 11,4 11,6 9,6 Z"/>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+</ResourceDictionary>

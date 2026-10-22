@@ -10,6 +10,7 @@ using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
 using Pathman.Gui.Dialogs;
+using Pathman.Gui.Controls;
 
 namespace Pathman.Gui.Views;
 
@@ -91,7 +92,6 @@ public partial class VariablesView : UserControl
         if (selected!=node && selected is not null) selected.IsSelected=false;
         selected=node; if(node is not null) node.IsSelected=true;
         VariableTitle.Text=node?.Title ?? "环境变量";
-        SelectionActions.Visibility=node is null ? Visibility.Hidden : Visibility.Visible;
         var variable=node?.Variable;
         entries.Clear(); ScalarValueBox.Clear();
         listMode=variable?.IsList==true;
@@ -113,9 +113,14 @@ public partial class VariablesView : UserControl
         EditEntryButton.IsEnabled=DeleteEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
         MoveUpButton.IsEnabled=ValuesList.SelectedIndex>0 && !busy;
         MoveDownButton.IsEnabled=ValuesList.SelectedIndex>=0 && ValuesList.SelectedIndex<entries.Count-1 && !busy;
-        RenameVariableButton.IsEnabled=selected is not null && !busy;
-        DeleteVariableButton.IsEnabled=selected is not null && !busy && !(selected.IsGroup && selected.Group.Rule=="fallback");
-        DeleteVariableButton.ToolTip=selected is {IsGroup:true} && selected.Group.Rule=="fallback" ? "保留默认分组以容纳未分类变量" : "删除";
+        foreach (var toolbar in new[] { UserActions, SystemActions })
+        {
+            toolbar.IsEnabled = !busy;
+            var ownSelection = selected?.Scope == toolbar.Scope;
+            var fallback = ownSelection && selected is { IsGroup: true } && selected.Group.Rule == "fallback";
+            toolbar.UpdateSelection(ownSelection, ownSelection && !fallback,
+                fallback ? "保留默认分组以容纳未分类变量" : "删除");
+        }
     }
     private string CurrentValue => listMode ? string.Join(';',entries.Select(entry=>entry.Value)) : ScalarValueBox.Text;
     private async Task<bool> ApplyAsync(EnvironmentMutation change)
@@ -177,22 +182,30 @@ public partial class VariablesView : UserControl
         var value=listMode && ValuesList.SelectedIndex>=0 ? entries[ValuesList.SelectedIndex].Value : CurrentValue;
         try { Clipboard.SetDataObject(value,true); StatusText.Text="已复制。"; } catch(ExternalException) { StatusText.Text="剪贴板暂时不可用。"; }
     }
-    private void OpenNewMenu(object sender,RoutedEventArgs e) => NewMenuPopup.IsOpen=true;
-    private void ShowNewMenu(object sender,MouseEventArgs e) { if (IsEnabled) NewMenuPopup.IsOpen=true; }
-    private async void CloseNewMenu(object sender,MouseEventArgs e) { await Task.Delay(180); if(!NewButton.IsMouseOver && !(NewMenuPopup.Child is FrameworkElement child && child.IsMouseOver)) NewMenuPopup.IsOpen=false; }
-    private async void NewGroup(object sender,RoutedEventArgs e)
+    private async void ScopeActionRequested(object? sender, ScopeActionEventArgs e)
     {
-        NewMenuPopup.IsOpen=false; if(!ConfirmLeave()) return;
+        if (busy) return;
+        switch (e.Action)
+        {
+            case ScopeAction.NewGroup: await NewGroup(e.Scope); break;
+            case ScopeAction.NewVariable: await NewVariable(e.Scope); break;
+            case ScopeAction.Rename when selected?.Scope == e.Scope: await RenameSelection(); break;
+            case ScopeAction.Delete when selected?.Scope == e.Scope: await DeleteSelection(); break;
+        }
+    }
+    private async Task NewGroup(VariableScope scope)
+    {
+        if(!ConfirmLeave()) return;
         var name=Prompt("新建分组",validator:GroupNameError); if(name is null) return;
-        var scope=selected?.Scope ?? VariableScope.User;
         var group=new VariableGroupDefinition { Name=name,Scope=scope };
         try { store.Update(state=>state.Groups.Add(group)); preferredKey=$"group:{scope}:{group.Id}"; dirty=false; await ReloadAsync(); }
         catch(Exception error) when(Expected(error)) { Error(error); }
     }
-    private async void NewVariable(object sender,RoutedEventArgs e)
+    private async Task NewVariable(VariableScope scope)
     {
-        NewMenuPopup.IsOpen=false; if(!ConfirmLeave()) return;
-        var group=selected?.Group; var dialog=new VariableDialog(OwnerWindow,selected?.Scope ?? VariableScope.User);
+        if(!ConfirmLeave()) return;
+        var group=selected?.Scope == scope ? selected.Group : null;
+        var dialog=new VariableDialog(OwnerWindow,scope);
         if(dialog.ShowDialog()!=true) return;
         if(await ApplyAsync(new("create",dialog.Scope,dialog.VariableName,dialog.RawValue)))
         {
@@ -203,7 +216,7 @@ public partial class VariablesView : UserControl
             } catch(Exception error) when(Expected(error)) { Error(error); }
         }
     }
-    private async void RenameSelection(object sender,RoutedEventArgs e)
+    private async Task RenameSelection()
     {
         if(selected is null || !ConfirmLeave()) return;
         var node=selected;
@@ -224,7 +237,7 @@ public partial class VariablesView : UserControl
         }
         catch(Exception error) when(Expected(error)) { Error(error); }
     }
-    private async void DeleteSelection(object sender,RoutedEventArgs e)
+    private async Task DeleteSelection()
     {
         if(selected is null || !ConfirmLeave()) return;
         var node=selected;
