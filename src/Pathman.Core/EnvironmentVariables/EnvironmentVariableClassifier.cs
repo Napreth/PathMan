@@ -7,6 +7,7 @@ public static partial class EnvironmentVariableClassifier
 {
     private sealed class BuiltInNames { public string[] Names { get; set; } = []; }
     private static readonly HashSet<string> BuiltIns = new(EnvironmentWorkspaceStore.ReadDefault<BuiltInNames>("windows-variables").Names, StringComparer.OrdinalIgnoreCase);
+    internal static bool IsWindowsBuiltIn(string name) => BuiltIns.Contains(name);
     [GeneratedRegex(@"%([^%]+)%", RegexOptions.CultureInvariant)] private static partial Regex ReferencePattern();
     [GeneratedRegex(@"^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)", RegexOptions.CultureInvariant)] private static partial Regex AbsolutePathPattern();
 
@@ -28,11 +29,10 @@ public static partial class EnvironmentVariableClassifier
         var entries = variable.Entries.Where(entry => entry.Length > 0).ToArray();
         if (entries.Length == 0 || entries.Any(entry => !AbsolutePathPattern().IsMatch(Expand(entry, new(StringComparer.OrdinalIgnoreCase), 0)))) return false;
         if (entries.Length > 1) return true;
-        var reference = $"%{variable.Name}%";
         // A whole PATH entry must be the reference. %NAME%\bin and quoted/embedded references do not qualify.
         return all.Where(item => item.Name.Equals("PATH", StringComparison.OrdinalIgnoreCase) &&
                 (item.Scope == variable.Scope || variable.Scope == VariableScope.User))
-            .Any(path => path.Entries.Any(entry => entry.Equals(reference, StringComparison.OrdinalIgnoreCase)));
+            .Any(path => path.Entries.Any(entry => EnvironmentPathResolver.PureReference(entry)?.Equals(variable.Name, StringComparison.OrdinalIgnoreCase) == true));
     }
 
     public static string Classify(EnvironmentVariableInfo variable, IReadOnlyList<EnvironmentVariableInfo> all,

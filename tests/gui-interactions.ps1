@@ -115,7 +115,8 @@ try {
     $scalarOrigin=TextOrigin (Id $window 'ScalarValueBox')
     @{List=$listOrigin;Scalar=$scalarOrigin}|ConvertTo-Json -Depth 4|Set-Content ($ResultPath+'.origins.json') -Encoding UTF8
     Assert ([Math]::Abs($listOrigin.Left-$scalarOrigin.Left) -le 1 -and [Math]::Abs($listOrigin.Top-$scalarOrigin.Top) -le 1) 'Scalar and list editors put their first character at the same position'
-    Assert ([Math]::Abs((Id $window 'EditTextButton').Current.BoundingRectangle.Top-(Tree).Current.BoundingRectangle.Top) -le 1) 'The first scalar action button is aligned with the editor top'
+    $copy=Id $window 'CopyValueButton'
+    Assert ([Math]::Abs($copy.Current.BoundingRectangle.Top-(Tree).Current.BoundingRectangle.Top) -le 1) 'The first scalar action button is aligned with the editor top'
     SelectNode (Node '工作')
     DoubleClick (Text (Node '工作')); SetInline '工作重命名'; Key 13
     WaitFor { (State).groups.name -contains '工作重命名' } 'Group inline rename failed'
@@ -184,7 +185,7 @@ try {
     CollapseAll
     $scroll=(Tree).GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
     $scroll.SetScrollPercent(-1,0); Start-Sleep -Milliseconds 200
-    $treeRect=(Tree).Current.BoundingRectangle; $r=(Text (Node '系统变量')).Current.BoundingRectangle
+    $treeRect=(Tree).Current.BoundingRectangle; $r=(Text (Node '其他变量')).Current.BoundingRectangle
     Start-Sleep -Milliseconds 550; MovePointer ($r.Left+10) ($r.Top+8); Down; MovePointer ($r.Left+25) ($r.Top+12)
     MovePointer ($treeRect.Left+85) ($treeRect.Bottom+8); Start-Sleep -Milliseconds 300; $s1=$scroll.Current.VerticalScrollPercent
     Start-Sleep -Milliseconds 450; $s2=$scroll.Current.VerticalScrollPercent
@@ -195,7 +196,7 @@ try {
     MovePointer ($treeRect.Left+85) ($treeRect.Top-110); Start-Sleep -Milliseconds 450; $s3=$scroll.Current.VerticalScrollPercent
     Assert ($s2 -lt $s1 -and ($s2-$s3) -gt ($s1-$s2)) 'Dragging farther above the list increases upward scroll speed'
     Key 27; Up
-    Assert ($null -ne (Node '系统变量')) 'Escape cancels a scrolling drag and restores the source row'
+    Assert ($null -ne (Node '其他变量')) 'Escape cancels a scrolling drag and restores the source row'
     @{Passed=$true;Checks=$checks} | ConvertTo-Json -Depth 6 | Set-Content $ResultPath -Encoding UTF8
 } catch {
     Up

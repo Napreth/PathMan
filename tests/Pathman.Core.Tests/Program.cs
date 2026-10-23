@@ -18,6 +18,7 @@ foreach(var (name,raw,list,entries) in cases)
     Assert(variable.RawValue==raw && variable.IsList==list && variable.Entries.SequenceEqual(entries),$"Split preservation failed: {name}");
     Assert((list ? string.Join(';',variable.Entries) : variable.Entries.Single())==raw,$"Roundtrip failed: {name}");
 }
+PathCleanupTests.Run(Assert);
 var fixtureRoot=Path.Combine(Path.GetTempPath(),"PathMan.Core.Tests",Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(fixtureRoot);
 var registryFixture=@"Software\PathMan.Tests\"+Guid.NewGuid().ToString("N");
@@ -39,14 +40,16 @@ try
     Assert(Category(V("PSModulePath",@"C:\modules;D:\modules"))=="paths","PSModulePath follows actual path content");
     Assert(Category(V("PATHEXT",".COM;.EXE"))=="other","PATHEXT is a list, not a path variable");
     Assert(Category(V("JAVA_HOME",@"C:\Java"))=="other","Tool grouping was removed");
-    Assert(Category(V("SystemRoot",@"C:\Windows"))=="system","Windows-owned rarely edited names belong to system");
+    Assert(Category(V("SystemRoot",@"C:\Windows",VariableScope.Machine))=="system","Windows-owned machine names belong to system");
+    Assert(Category(V("SystemRoot",@"C:\custom"))=="other" && state.VisibleGroups(VariableScope.User).All(group=>group.Rule!="builtin"),"User scope must not contain a built-in system category");
+    Assert(Category(V("DEVELOP_PATH",@"C:\one"),V("Path",@"%DEVELOP_PATH%\;C:\two"))=="paths","A trailing separator must still count as a pure reference");
     Assert(Category(V("TEMP",@"C:\Temp"))=="other","Frequently edited TEMP should not be hidden among system built-ins");
     Assert(Category(V("PROCESSOR_CUSTOM","mine"))=="other","Prefix alone must not make a custom variable Windows-owned");
     Assert(Category(V("Path",@"%SystemRoot%\system32;\\server\share"))=="paths","Expanded Windows paths and UNC paths must qualify");
     Assert(Category(V("SDK_PATH",@"C:\sdk",VariableScope.Machine),V("Path","%SDK_PATH%",VariableScope.User))=="other","Machine variable must not use a user-only PATH reference");
     store.Update(settings=> { for(var i=0;i<7;i++) settings.Groups.Add(new() {Id=$"custom-{i}",Name=$"分组 {i}",Scope=VariableScope.User}); settings.Assignments[EnvironmentWorkspace.Key(VariableScope.User,"JAVA_HOME")]="custom-6"; });
     state=store.Read();
-    Assert(state.Groups.Count==11 && state.VisibleGroups(VariableScope.User).Count()==10,"Group count must come from data, with external hidden when disabled");
+    Assert(state.Groups.Count==11 && state.VisibleGroups(VariableScope.User).Count()==9,"Group count must come from data, with external and user builtin groups hidden");
     Assert(Category(V("JAVA_HOME",@"C:\Java"))=="custom-6","Manual assignments to arbitrary groups must persist");
     store.Update(settings=>settings.Groups.First(group=>group.Id=="custom-6").Name="我的工具");
     Assert(store.Read().Groups.Last().Name=="我的工具","Group renames must survive reload");
@@ -55,7 +58,7 @@ try
         settings.PinGroup(VariableScope.User,"other",true);
         settings.PinGroup(VariableScope.User,"paths",true);
         settings.MoveGroup(VariableScope.User,"paths","other");
-        settings.MoveGroup(VariableScope.User,"custom-6","system");
+        settings.MoveGroup(VariableScope.User,"custom-6","custom-0");
         settings.PinVariable(VariableScope.User,"Z_PIN",true);
         settings.PinVariable(VariableScope.User,"A_PIN",true);
         settings.MoveVariable(VariableScope.User,"A_PIN","other","other","Z_PIN");
@@ -66,7 +69,7 @@ try
     Assert(state.VisibleGroups(VariableScope.Machine).First().Id=="paths" && !state.IsGroupPinned(VariableScope.Machine,"other"),"Group pinning/order must be independent between user and machine scopes");
     Assert(state.OrderVariables([V("B","b"),V("Z_PIN","z"),V("A_PIN","a"),V("A","a")]).Select(item=>item.Name).SequenceEqual(["A_PIN","Z_PIN","A","B"]),"Pinned variables must precede alphabetical ordinary variables and retain drag order");
     Assert(Category(V("FOOPATH",@"C:\one;D:\two"))=="custom-6","Dragging to a manual group must override automatic path classification");
-    RejectMove(()=>state.MoveGroup(VariableScope.User,"system","other"),"Ordinary groups must not enter the pinned group region");
+    RejectMove(()=>state.MoveGroup(VariableScope.User,"custom-0","other"),"Ordinary groups must not enter the pinned group region");
     RejectMove(()=>state.MoveGroup(VariableScope.User,"paths",null),"Pinned groups must not leave the pinned region");
     RejectMove(()=>state.MoveVariable(VariableScope.User,"B","other","other"),"Ordinary variables cannot be reordered within a group");
     RejectMove(()=>state.MoveVariable(VariableScope.User,"B","other","custom-6","Z_PIN"),"Ordinary variables cannot acquire a pinned position by dragging");
@@ -74,7 +77,7 @@ try
     state.PinVariable(VariableScope.User,"A_PIN",false);
     Assert(state.OrderVariables([V("A_PIN","a"),V("Z_PIN","z")]).First().Name=="Z_PIN","Unpinning must return a variable to ordinary order");
     state.MonitoringEnabled=true; state.PinGroup(VariableScope.User,"external",true); state.MonitoringEnabled=false;
-    state.MoveGroup(VariableScope.User,"system",null); state.MonitoringEnabled=true;
+    state.MoveGroup(VariableScope.User,"custom-0",null); state.MonitoringEnabled=true;
     Assert(state.IsGroupPinned(VariableScope.User,"external"),"Reordering visible groups must preserve hidden monitored-group pinning");
     state.MonitoringEnabled=true;
     state.Snapshot=[new(VariableScope.User,"OLD","before",(int)RegistryValueKind.String),new(VariableScope.Machine,"REMOVED","gone",(int)RegistryValueKind.String)];
@@ -108,6 +111,20 @@ try
     Assert(key.GetValueKind("RENAMED_PATH")==RegistryValueKind.ExpandString,"Case-only rename must be a lossless no-op for case-insensitive names");
     WindowsEnvironmentVariableEditor.ApplyKey(key,new("delete",VariableScope.User,"RENAMED_PATH",ExpectedValue:@"%SystemRoot%\x;;"));
     Assert(!key.GetValueNames().Any(name=>name.Equals("RENAMED_PATH",StringComparison.OrdinalIgnoreCase)),"Delete must remove only the chosen variable");
+    var keys=new Dictionary<VariableScope,RegistryKey> { [VariableScope.User]=key };
+    var original=(string)key.GetValue("TEMP")!;
+    Reject(()=>WindowsEnvironmentVariableEditor.ApplyBatchKeys(keys,[new("create",VariableScope.User,"BATCH_NEW","one"),new("create",VariableScope.User,"TEMP","conflict")],[]),"Batch conflicts must be detected before the first write");
+    Assert(key.GetValue("BATCH_NEW")==null,"A rejected batch must not leave an orphan software variable");
+    Reject(()=>WindowsEnvironmentVariableEditor.ApplyBatchKeys(keys,[new("create",VariableScope.User,"BATCH_NEW","one")],[new(VariableScope.User,"TEMP","stale",(int)RegistryValueKind.String)]),"Changed referenced values must invalidate a cleanup preview");
+    var rollback=WindowsEnvironmentVariableEditor.ApplyBatchKeys(keys,[new("create",VariableScope.User,"BATCH_NEW","one"),new("set",VariableScope.User,"TEMP","two",ExpectedValue:original,ExpectedKind:RegistryValueKind.String)],[]);
+    Assert((string)key.GetValue("BATCH_NEW")! == "one" && (string)key.GetValue("TEMP")! == "two","A validated batch must apply every mutation");
+    rollback();
+    Assert(key.GetValue("BATCH_NEW")==null && (string)key.GetValue("TEMP")! == original,"Batch rollback must restore all original values");
+    using var readOnly=Registry.CurrentUser.OpenSubKey(registryFixture,false)!;
+    var failed=false;
+    try { WindowsEnvironmentVariableEditor.ApplyBatchKeys(new Dictionary<VariableScope,RegistryKey> { [VariableScope.User]=key,[VariableScope.Machine]=readOnly },[new("create",VariableScope.User,"BATCH_NEW","one"),new("set",VariableScope.Machine,"TEMP","unwritable",ExpectedValue:original)],[]); }
+    catch(UnauthorizedAccessException) { failed=true; }
+    Assert(failed && key.GetValue("BATCH_NEW")==null,"A failed registry write must roll back earlier batch writes");
 }
 finally
 {

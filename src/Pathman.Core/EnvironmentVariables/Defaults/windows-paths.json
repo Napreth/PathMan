@@ -1,0 +1,16 @@
+{
+  "sources": [
+    "https://learn.microsoft.com/en-us/windows/win32/procthread/environment-variables",
+    "https://learn.microsoft.com/en-us/windows/win32/wmisdk/wmi-start-page",
+    "https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell",
+    "https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration"
+  ],
+  "notes": "Conservative list of Windows component PATH locations. Match expanded, normalized paths. Keep only entries already present; never reconstruct PATH or treat arbitrary Windows subdirectories as built-ins.",
+  "paths": [
+    "%SystemRoot%\\System32",
+    "%SystemRoot%",
+    "%SystemRoot%\\System32\\Wbem",
+    "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0",
+    "%SystemRoot%\\System32\\OpenSSH"
+  ]
+}

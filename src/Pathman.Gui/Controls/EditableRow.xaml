@@ -15,8 +15,9 @@
         </Grid>
         <StackPanel x:Name="Actions" Grid.Column="1" Orientation="Horizontal">
             <Button x:Name="PinButton" Content="&#xE718;" ToolTip="置顶" AutomationProperties.Name="置顶" Click="Pin"/>
-            <Button Content="&#xE70F;" ToolTip="重命名" AutomationProperties.Name="编辑" Click="Edit"/>
-            <Button Content="&#xE74D;" ToolTip="删除" AutomationProperties.Name="删除" Click="Delete" IsEnabled="{Binding CanDelete, ElementName=Root}"/>
+            <Button x:Name="EditButton" Content="&#xE70F;" ToolTip="重命名" AutomationProperties.Name="编辑" Click="Edit"/>
+            <Button x:Name="DeleteButton" Content="&#xE74D;" ToolTip="删除" AutomationProperties.Name="删除" Click="Delete" IsEnabled="{Binding CanDelete, ElementName=Root}"/>
+            <Button x:Name="JumpButton" Content="&#xE8A7;" Visibility="Collapsed" ToolTip="{Binding JumpToolTip, ElementName=Root}" AutomationProperties.Name="转到引用变量" Click="Jump"/>
         </StackPanel>
     </Grid>
     <UserControl.Resources>

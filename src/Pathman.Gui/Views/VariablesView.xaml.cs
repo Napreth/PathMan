@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -20,6 +21,7 @@ public partial class VariablesView : UserControl
     private readonly EnvironmentWorkspaceStore store;
     private readonly ObservableCollection<EnvironmentEntry> entries = [];
     private IReadOnlyList<EnvironmentTreeNode> userGroups = [], systemGroups = [];
+    private IReadOnlyList<EnvironmentVariableInfo> allVariables = [];
     private EnvironmentTreeNode? selected;
     private bool updating, dirty, busy, listMode;
     private string? preferredKey;
@@ -31,7 +33,12 @@ public partial class VariablesView : UserControl
     public VariablesView(PathmanLayout layout, EnvironmentWorkspaceStore store)
     {
         this.layout=layout; this.store=store; InitializeComponent(); ValuesList.ItemsSource=entries;
-        entries.CollectionChanged += (_,_) => { if (!updating) SetDirty(); };
+        entries.CollectionChanged += (_, change) =>
+        {
+            var draftsOnly = change.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Remove &&
+                (change.NewItems ?? change.OldItems)?.Cast<EnvironmentEntry>().All(entry => entry.IsDraft) == true;
+            if (!updating && !draftsOnly) SetDirty();
+        };
         Loaded += async (_,_) => { if (userGroups.Count == 0) await ReloadAsync(); };
     }
     private Window OwnerWindow => Window.GetWindow(this);
@@ -42,7 +49,7 @@ public partial class VariablesView : UserControl
     public async Task ReloadAsync(bool external = false)
     {
         if (busy || external && (HasUnsavedChanges || dragging)) return;
-        busy=true; RefreshButton.IsEnabled=false; UserVariablesTree.IsEnabled=false; SystemVariablesTree.IsEnabled=false;
+        busy=true; RefreshButton.IsEnabled=CleanupButton.IsEnabled=false; UserVariablesTree.IsEnabled=false; SystemVariablesTree.IsEnabled=false;
         var key=preferredKey ?? selected?.Key; preferredKey=null;
         var oldGroups=userGroups.Concat(systemGroups).ToArray();
         var expanded=oldGroups.Where(group => group.IsExpanded).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +58,7 @@ public partial class VariablesView : UserControl
         {
             var result=await Task.Run(() => (Variables:EnvironmentMonitor.ReadAll(), State:store.Read()));
             var runtime=RuntimeValues();
+            allVariables=result.Variables;
             updating=true;
             if (selected is not null) selected.IsSelected=false;
             selected=null;
@@ -70,7 +78,7 @@ public partial class VariablesView : UserControl
             LoadedRevision=result.State.Revision;
         }
         catch(Exception error) when(Expected(error)) { Error(error); }
-        finally { updating=false; busy=false; RefreshButton.IsEnabled=true; UserVariablesTree.IsEnabled=true; SystemVariablesTree.IsEnabled=true; UpdateActions(); }
+        finally { updating=false; busy=false; RefreshButton.IsEnabled=CleanupButton.IsEnabled=true; UserVariablesTree.IsEnabled=true; SystemVariablesTree.IsEnabled=true; UpdateActions(); }
     }
     public bool ConfirmLeave()
     {
@@ -84,7 +92,8 @@ public partial class VariablesView : UserControl
         if(activeEditor?.IsEditing==true && !await activeEditor.CommitAsync()) return false;
         return ConfirmLeave();
     }
-    private async void Refresh(object sender,RoutedEventArgs e) { if (await ConfirmLeaveAsync()) await ReloadAsync(); }
+    private async void Refresh(object sender,RoutedEventArgs e)
+    { if (CleanupPanel.Visibility==Visibility.Visible) PreviewCleanup(sender,e); else if (await ConfirmLeaveAsync()) await ReloadAsync(); }
     private async void SelectVariable(object sender,RoutedPropertyChangedEventArgs<object> e)
     {
         if (updating || e.NewValue is not EnvironmentTreeNode node || node==selected) return;
@@ -104,19 +113,17 @@ public partial class VariablesView : UserControl
         VariableTitle.Text=node?.Title ?? "环境变量";
         var variable=node?.Variable;
         entries.Clear(); ScalarValueBox.Clear();
-        listMode=variable?.IsList==true;
+        listMode=variable is not null && (variable.IsList || EnvironmentVariableClassifier.IsPathVariable(variable,allVariables,RuntimeValues()));
         EmptySelection.Visibility=node is null ? Visibility.Visible : Visibility.Collapsed;
         GroupVariablesList.ItemsSource=node?.IsGroup == true ? node.Children : null;
         GroupVariablesList.Visibility=node?.IsGroup == true ? Visibility.Visible : Visibility.Collapsed;
         ValueActions.Visibility=variable is null ? Visibility.Collapsed : Visibility.Visible;
-        ValuesList.Visibility=variable is not null && listMode ? Visibility.Visible : Visibility.Collapsed;
-        ScalarValueBox.Visibility=variable is not null && !listMode ? Visibility.Visible : Visibility.Collapsed;
-        ListButtons.Visibility=listMode ? Visibility.Visible : Visibility.Collapsed;
-        if(variable is not null) { if(listMode) foreach(var entry in variable.Entries) entries.Add(new(entry)); else ScalarValueBox.Text=variable.RawValue; }
+        if(variable is not null) { if(listMode) { if(variable.RawValue.Length>0) foreach(var entry in variable.Entries) entries.Add(CreateEntry(entry)); } else ScalarValueBox.Text=variable.RawValue; }
+        UpdateValuePresentation();
         dirty=false; updating=false; UpdateActions();
     }
     private void SetDirty() { dirty=true; UpdateActions(); }
-    private void ValueTextChanged(object sender,TextChangedEventArgs e) { if(!updating && selected?.Variable is not null) SetDirty(); }
+    private void ValueTextChanged(object sender,TextChangedEventArgs e) { if(!updating && selected?.Variable is not null) { UpdateValuePresentation(); SetDirty(); } }
     private void EntrySelected(object sender,SelectionChangedEventArgs e) => UpdateActions();
     private async void OpenGroupVariable(object? sender, EventArgs e)
     {
@@ -130,7 +137,9 @@ public partial class VariablesView : UserControl
     private void UpdateActions()
     {
         if (SaveButton is null) return;
-        SaveButton.IsEnabled=dirty && !busy; RevertButton.IsEnabled=dirty && !busy;
+        SaveButton.IsEnabled=(dirty || HasInlineEditor) && !busy; RevertButton.IsEnabled=dirty && !busy;
+        EditEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
+        DeleteEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
         MoveUpButton.IsEnabled=ValuesList.SelectedIndex>0 && !busy;
         MoveDownButton.IsEnabled=ValuesList.SelectedIndex>=0 && ValuesList.SelectedIndex<entries.Count-1 && !busy;
         foreach (var toolbar in new[] { UserActions, SystemActions })
@@ -138,7 +147,25 @@ public partial class VariablesView : UserControl
             toolbar.IsEnabled = !busy;
         }
     }
-    private string CurrentValue => listMode ? string.Join(';',entries.Select(entry=>entry.Value)) : ScalarValueBox.Text;
+    private string CurrentValue => listMode ? string.Join(';',entries.Where(entry=>!entry.IsDraft).Select(entry=>entry.Value)) : ScalarValueBox.Text;
+    private EnvironmentEntry CreateEntry(string value, bool draft = false)
+    {
+        var variable = selected?.Variable;
+        var resolver = new EnvironmentPathResolver(allVariables);
+        var references = variable?.Name.EndsWith("PATH", StringComparison.OrdinalIgnoreCase) == true
+            ? EnvironmentPathResolver.ReferenceNames(value).Select(name => new EnvironmentReferenceLink(name, resolver.Find(name, variable.Scope)?.Scope)).ToArray() : [];
+        return new(value, draft, references);
+    }
+    private void UpdateValuePresentation()
+    {
+        var variable = selected?.Variable;
+        ValuesList.Visibility=variable is not null && listMode ? Visibility.Visible : Visibility.Collapsed;
+        ScalarValueBox.Visibility=variable is not null && !listMode ? Visibility.Visible : Visibility.Collapsed;
+        ListButtons.Visibility=DeleteEntryButton.Visibility=listMode ? Visibility.Visible : Visibility.Collapsed;
+        ToggleModeButton.Visibility=variable is not null ? Visibility.Visible : Visibility.Collapsed;
+        ToggleModeButton.Content=listMode ? "文本模式" : "多行模式";
+        ToggleModeButton.ToolTip=listMode ? "直接编辑以分号分隔的原始文本" : "按分号拆分为多行编辑";
+    }
     private async Task<bool> ApplyAsync(EnvironmentMutation change)
     {
         if (busy) return false;
@@ -150,6 +177,7 @@ public partial class VariablesView : UserControl
     }
     private async void SaveValue(object sender,RoutedEventArgs e)
     {
+        if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
         if(selected?.Variable is not {} variable) return;
         if(await ApplyAsync(new("set",variable.Scope,variable.Name,CurrentValue,ExpectedValue:variable.RawValue,ExpectedKind:variable.Kind)))
         { dirty=false; await ReloadAsync(); }
@@ -161,10 +189,20 @@ public partial class VariablesView : UserControl
         return dialog.ShowDialog()==true ? dialog.Value : null;
     }
     private static string? GroupNameError(string value) => string.IsNullOrWhiteSpace(value) || value.Length>80 ? "分组名不能为空，最长 80 个字符。" : null;
-    private void AddEntry(object sender,RoutedEventArgs e)
+    private async void AddEntry(object sender,RoutedEventArgs e)
     {
-        var index=ValuesList.SelectedIndex<0 ? entries.Count : ValuesList.SelectedIndex+1;
-        var entry=new EnvironmentEntry(""); entries.Insert(index,entry); ValuesList.SelectedIndex=index;
+        if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
+        var entry=CreateEntry("", true); entries.Add(entry); ValuesList.SelectedItem=entry;
+        ValuesList.ScrollIntoView(entry);
+        await Dispatcher.InvokeAsync(() =>
+        {
+            ValuesList.UpdateLayout();
+            if (ValuesList.ItemContainerGenerator.ContainerFromItem(entry) is ListBoxItem item) FindVisual<EditableRow>(item)?.BeginEdit();
+        }, DispatcherPriority.Loaded);
+    }
+    private void EditEntry(object sender,RoutedEventArgs e)
+    {
+        if(ValuesList.SelectedItem is not EnvironmentEntry entry) return;
         ValuesList.ScrollIntoView(entry); ValuesList.UpdateLayout();
         if (ValuesList.ItemContainerGenerator.ContainerFromItem(entry) is ListBoxItem item) FindVisual<EditableRow>(item)?.BeginEdit();
     }
@@ -173,20 +211,19 @@ public partial class VariablesView : UserControl
         var dialog=new Microsoft.Win32.OpenFolderDialog { Title="选择目录" };
         if(dialog.ShowDialog(OwnerWindow)!=true) return;
         var index=ValuesList.SelectedIndex;
-        if(index>=0) entries[index]=new(dialog.FolderName); else { entries.Add(new(dialog.FolderName)); ValuesList.SelectedIndex=entries.Count-1; }
+        if(index>=0) entries[index]=CreateEntry(dialog.FolderName); else { entries.Add(CreateEntry(dialog.FolderName)); ValuesList.SelectedIndex=entries.Count-1; }
     }
     private void MoveUp(object sender,RoutedEventArgs e) { var index=ValuesList.SelectedIndex; if(index>0) { entries.Move(index,index-1); ValuesList.SelectedIndex=index-1; } }
     private void MoveDown(object sender,RoutedEventArgs e) { var index=ValuesList.SelectedIndex; if(index>=0 && index<entries.Count-1) { entries.Move(index,index+1); ValuesList.SelectedIndex=index+1; } }
-    private void EditText(object sender,RoutedEventArgs e)
+    private async void ToggleValueMode(object sender,RoutedEventArgs e)
     {
+        if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
         if(selected?.Variable is null) return;
-        var value=Prompt("编辑文本",CurrentValue,true); if(value is null) return;
+        var value=CurrentValue;
         updating=true;
-        listMode=selected.Variable.IsList || value.Contains(';');
-        entries.Clear(); if(listMode) foreach(var item in value.Split(';',StringSplitOptions.None)) entries.Add(new(item)); else ScalarValueBox.Text=value;
-        ValuesList.Visibility=ListButtons.Visibility=listMode ? Visibility.Visible : Visibility.Collapsed;
-        ScalarValueBox.Visibility=listMode ? Visibility.Collapsed : Visibility.Visible;
-        updating=false; SetDirty();
+        listMode=!listMode;
+        entries.Clear(); if(listMode) { if(value.Length>0) foreach(var item in value.Split(';',StringSplitOptions.None)) entries.Add(CreateEntry(item)); } else ScalarValueBox.Text=value;
+        UpdateValuePresentation(); updating=false; UpdateActions();
     }
     private void CopyValue(object sender,RoutedEventArgs e)
     {
@@ -230,6 +267,7 @@ public partial class VariablesView : UserControl
         if (sender is not EditableRow row) return;
         if (row.IsEditing) activeEditor = row;
         else if (activeEditor == row) activeEditor = null;
+        UpdateActions();
     }
     private void RowEditRequested(object? sender, InlineEditEventArgs e)
     { if (sender is EditableRow { DataContext: EnvironmentTreeNode node }) e.Completion=RenameNode(node,e.Value); }
@@ -237,13 +275,19 @@ public partial class VariablesView : UserControl
     {
         if (sender is not EditableRow { DataContext: EnvironmentEntry entry } || selected?.Variable is null) return;
         if (e.Value.Contains(';') || e.Value.Contains('\0') || e.Value.Contains('\r') || e.Value.Contains('\n'))
-        { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请使用编辑文本。"); return; }
+        { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。"); return; }
         var index=entries.IndexOf(entry);
-        if(index>=0 && entry.Value!=e.Value) entries[index]=new(e.Value);
+        if (index < 0) return;
+        if (e.Value.Length == 0) { entries.RemoveAt(index); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1); }
+        else if(entry.IsDraft || entry.Value!=e.Value) { entries[index]=CreateEntry(e.Value); ValuesList.SelectedIndex=index; }
     }
-    private void EntryDeleteRequested(object? sender, EventArgs e)
+    private void EntryEditCanceled(object? sender, EventArgs e)
     {
-        if (sender is not EditableRow { DataContext: EnvironmentEntry entry }) return;
+        if (sender is EditableRow { DataContext: EnvironmentEntry { IsDraft: true } entry }) entries.Remove(entry);
+    }
+    private void DeleteEntry(object sender, RoutedEventArgs e)
+    {
+        if (ValuesList.SelectedItem is not EnvironmentEntry entry) return;
         var index=entries.IndexOf(entry); if(index<0) return;
         entries.RemoveAt(index); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1);
     }
@@ -283,7 +327,7 @@ public partial class VariablesView : UserControl
             if(staged is not null && selected?.Variable is not null)
             {
                 updating=true; entries.Clear();
-                if(listMode) foreach(var entry in staged.Split(';',StringSplitOptions.None)) entries.Add(new(entry)); else ScalarValueBox.Text=staged;
+                if(listMode) { if(staged.Length>0) foreach(var entry in staged.Split(';',StringSplitOptions.None)) entries.Add(CreateEntry(entry)); } else ScalarValueBox.Text=staged;
                 updating=false; SetDirty();
             }
             return null;

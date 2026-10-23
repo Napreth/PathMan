@@ -9,6 +9,14 @@ function Install([int]$expected=0,[string]$directory=$InstallDirectory) {
     $process=Start-Process -FilePath $Installer -ArgumentList "/S /CurrentUser /LANG=1033 /D=$directory" -PassThru -Wait -WindowStyle Hidden
     Assert ($process.ExitCode -eq $expected) "Installer exit $($process.ExitCode), expected $expected"
 }
+function HasShimPath {
+    $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+    try {
+        $path=[string]$key.GetValue('Path','',[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $shims=(Join-Path $env:LOCALAPPDATA 'PathMan\shims').TrimEnd('\')
+        return @($path.Split(';') | Where-Object { $_.TrimEnd('\').Equals($shims,[StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+    } finally { $key.Dispose() }
+}
 function CheckSetupMutex {
     $wizard=Start-Process -FilePath $Installer -ArgumentList '/CurrentUser /LANG=1033' -PassThru
     try {
@@ -28,8 +36,10 @@ function CheckSetupMutex {
     } finally { if(!$wizard.HasExited) { [void]$wizard.CloseMainWindow(); if(!$wizard.WaitForExit(10000)){$wizard.Kill();$wizard.WaitForExit()} }; $wizard.Dispose() }
 }
 try {
+    $aliasesEnabled=HasShimPath
     CheckSetupMutex
     Install
+    Assert ((HasShimPath) -eq $aliasesEnabled) 'Installation preserves alias enablement instead of automatically enabling shim PATH lookup'
     CheckSetupMutex
     $exe=Join-Path $InstallDirectory 'PathMan.exe'
     $hash=(Get-FileHash -LiteralPath $exe).Hash

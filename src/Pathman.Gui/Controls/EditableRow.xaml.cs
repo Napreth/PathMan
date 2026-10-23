@@ -19,12 +19,20 @@ public partial class EditableRow : UserControl
     public static readonly DependencyProperty ShowPinProperty = DependencyProperty.Register(nameof(ShowPin), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdatePin));
     public static readonly DependencyProperty IsPinnedProperty = DependencyProperty.Register(nameof(IsPinned), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdatePin));
     public static readonly DependencyProperty EditOnDoubleClickProperty = DependencyProperty.Register(nameof(EditOnDoubleClick), typeof(bool), typeof(EditableRow), new PropertyMetadata(true));
+    public static readonly DependencyProperty ShowEditProperty = DependencyProperty.Register(nameof(ShowEdit), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdateActions));
+    public static readonly DependencyProperty ShowDeleteProperty = DependencyProperty.Register(nameof(ShowDelete), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdateActions));
+    public static readonly DependencyProperty ShowJumpProperty = DependencyProperty.Register(nameof(ShowJump), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdateActions));
+    public static readonly DependencyProperty JumpToolTipProperty = DependencyProperty.Register(nameof(JumpToolTip), typeof(string), typeof(EditableRow), new PropertyMetadata("转到引用变量"));
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public string Detail { get => (string)GetValue(DetailProperty); set => SetValue(DetailProperty, value); }
     public bool CanDelete { get => (bool)GetValue(CanDeleteProperty); set => SetValue(CanDeleteProperty, value); }
     public bool ShowPin { get => (bool)GetValue(ShowPinProperty); set => SetValue(ShowPinProperty, value); }
     public bool IsPinned { get => (bool)GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
     public bool EditOnDoubleClick { get => (bool)GetValue(EditOnDoubleClickProperty); set => SetValue(EditOnDoubleClickProperty, value); }
+    public bool ShowEdit { get => (bool)GetValue(ShowEditProperty); set => SetValue(ShowEditProperty, value); }
+    public bool ShowDelete { get => (bool)GetValue(ShowDeleteProperty); set => SetValue(ShowDeleteProperty, value); }
+    public bool ShowJump { get => (bool)GetValue(ShowJumpProperty); set => SetValue(ShowJumpProperty, value); }
+    public string JumpToolTip { get => (string)GetValue(JumpToolTipProperty); set => SetValue(JumpToolTipProperty, value); }
     public bool IsEditing { get; private set; }
     private Task<bool>? pending;
     public event EventHandler<InlineEditEventArgs>? EditRequested;
@@ -32,7 +40,17 @@ public partial class EditableRow : UserControl
     public event EventHandler? PinRequested;
     public event EventHandler? EditingChanged;
     public event EventHandler? Activated;
-    public EditableRow() { InitializeComponent(); Loaded += (_, _) => { RefreshPin(); RefreshDetail(); }; }
+    public event EventHandler? EditingCanceled;
+    public event EventHandler? JumpRequested;
+    public EditableRow() { InitializeComponent(); Loaded += (_, _) => { RefreshPin(); RefreshDetail(); RefreshActions(); }; }
+    private static void UpdateActions(DependencyObject target, DependencyPropertyChangedEventArgs e) => ((EditableRow)target).RefreshActions();
+    private void RefreshActions()
+    {
+        if (EditButton is null) return;
+        EditButton.Visibility = ShowEdit ? Visibility.Visible : Visibility.Collapsed;
+        DeleteButton.Visibility = ShowDelete ? Visibility.Visible : Visibility.Collapsed;
+        JumpButton.Visibility = ShowJump ? Visibility.Visible : Visibility.Collapsed;
+    }
     private static void UpdateDetail(DependencyObject target, DependencyPropertyChangedEventArgs e) => ((EditableRow)target).RefreshDetail();
     private void RefreshDetail()
     {
@@ -96,6 +114,7 @@ public partial class EditableRow : UserControl
     private void Edit(object sender, RoutedEventArgs e) { e.Handled = true; BeginEdit(); }
     private void Pin(object sender, RoutedEventArgs e) { e.Handled = true; PinRequested?.Invoke(this, EventArgs.Empty); }
     private void Delete(object sender, RoutedEventArgs e) { e.Handled = true; DeleteRequested?.Invoke(this, EventArgs.Empty); }
+    private void Jump(object sender, RoutedEventArgs e) { e.Handled = true; JumpRequested?.Invoke(this, EventArgs.Empty); }
     private void DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing) return;
@@ -106,7 +125,7 @@ public partial class EditableRow : UserControl
     private async void InputKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter) { e.Handled = true; await CommitAsync(); }
-        else if (e.Key == Key.Escape && pending is null) { e.Handled = true; EndEdit(); Focus(); }
+        else if (e.Key == Key.Escape && pending is null) { e.Handled = true; EndEdit(); EditingCanceled?.Invoke(this, EventArgs.Empty); Focus(); }
     }
     private async void InputLostFocus(object sender, KeyboardFocusChangedEventArgs e)
     { if (IsEditing && pending is null) await CommitAsync(); }

@@ -36,7 +36,8 @@ public sealed class EnvironmentWorkspace
     {
         var pins = PinnedGroups.GetValueOrDefault(scope) ?? [];
         var order = GroupOrder.GetValueOrDefault(scope) ?? [];
-        return Groups.Where(group => (group.Scope is null || group.Scope == scope) && (!group.RequiresMonitoring || MonitoringEnabled))
+        return Groups.Where(group => (group.Scope is null || group.Scope == scope) &&
+                (scope != VariableScope.User || group.Rule != "builtin") && (!group.RequiresMonitoring || MonitoringEnabled))
             .OrderBy(group => IsGroupPinned(scope, group.Id) ? 0 : 1)
             .ThenBy(group => Position(IsGroupPinned(scope, group.Id) ? pins : order, group.Id));
     }

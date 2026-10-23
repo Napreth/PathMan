@@ -298,7 +298,6 @@ extern "C" __declspec(dllexport) DWORD __stdcall ConfigureInstall(const wchar_t*
         const std::filesystem::path root(directory);
         auto error = machine ? allow_links(root / L"internal" / L"PathMan.Shim.exe") : ERROR_SUCCESS;
         if (!error) error = change_path((root / L"bin").wstring(), machine != FALSE, true, L"BinPathOwned");
-        if (!error && !machine) error = change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, true, L"ShimsPathOwned");
         return error;
     } catch (...) { return ERROR_INSTALL_FAILURE; }
 }
@@ -324,7 +323,7 @@ extern "C" __declspec(dllexport) DWORD __stdcall CleanupUserInstall(const wchar_
             if (!RegOpenKeyExW(HKEY_CURRENT_USER, run, 0, KEY_SET_VALUE, &opened)) { RegDeleteValueW(opened, L"PathMan"); RegCloseKey(opened); }
         }
         remove_shortcut(std::filesystem::path(desktop) / L"PathMan.lnk", root / L"PathMan.exe");
-        return ERROR_SUCCESS;
+        return change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, false, L"ShimsPathOwned");
     } catch (...) { return ERROR_INSTALL_FAILURE; }
 }
 extern "C" __declspec(dllexport) DWORD __stdcall RefreshShims(const wchar_t* directory, const wchar_t* localData) {

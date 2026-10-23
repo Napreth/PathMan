@@ -21,7 +21,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent(); store=new(layout.DataDirectory);
-        variables=new(layout,store); aliases=new(layout); monitor=new(layout,store); about=new(layout);
+        variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(layout);
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
         Closed+=(_,_)=>changes.Stop();

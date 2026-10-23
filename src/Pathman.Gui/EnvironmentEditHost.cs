@@ -8,21 +8,27 @@ using Pathman.Core.Models;
 
 namespace Pathman.Gui;
 
-internal sealed record ElevatedEnvironmentRequest(EnvironmentMutation Mutation, string DataDirectory);
+internal sealed record ElevatedEnvironmentRequest(EnvironmentMutation[] Mutations, VariableSnapshot[] Preconditions, string DataDirectory);
 internal sealed record ElevatedEnvironmentResult(string? Error);
 internal static class EnvironmentEditHost
 {
-    public static async Task ApplyAsync(EnvironmentMutation mutation, EnvironmentWorkspaceStore store, string dataDirectory)
+    public static Task ApplyAsync(EnvironmentMutation mutation, EnvironmentWorkspaceStore store, string dataDirectory) =>
+        ApplyBatchAsync([mutation], [], store, dataDirectory);
+    public static async Task ApplyBatchAsync(IReadOnlyList<EnvironmentMutation> mutations, IReadOnlyList<VariableSnapshot> preconditions,
+        EnvironmentWorkspaceStore store, string dataDirectory)
     {
+        if (mutations.Count == 0) return;
+        var scope = mutations[0].Scope;
+        if (mutations.Any(item => item.Scope != scope)) throw new ArgumentException("一次保存只支持一种作用域。");
         using var identity = WindowsIdentity.GetCurrent();
         var administrator = new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
-        if (mutation.Scope != VariableScope.Machine || administrator)
-        { await Task.Run(() => WindowsEnvironmentVariableEditor.Apply(mutation, store)); return; }
+        if (scope != VariableScope.Machine || administrator)
+        { await Task.Run(() => Apply(mutations, preconditions, store)); return; }
         var requests = Path.Combine(dataDirectory, "requests"); Directory.CreateDirectory(requests);
         var request = Path.Combine(requests, Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            File.WriteAllText(request, JsonSerializer.Serialize(new ElevatedEnvironmentRequest(mutation, dataDirectory), EnvironmentWorkspaceStore.JsonOptions));
+            File.WriteAllText(request, JsonSerializer.Serialize(new ElevatedEnvironmentRequest(mutations.ToArray(), preconditions.ToArray(), dataDirectory), EnvironmentWorkspaceStore.JsonOptions));
             var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute=true, Verb="runas", WindowStyle=ProcessWindowStyle.Hidden };
             start.ArgumentList.Add("--apply-environment"); start.ArgumentList.Add(request);
             using var helper = Process.Start(start) ?? throw new IOException("无法启动管理员操作。");
@@ -42,11 +48,17 @@ internal static class EnvironmentEditHost
         {
             if (new FileInfo(file).Length > 1024*1024) throw new InvalidDataException("操作请求过大。");
             var request = JsonSerializer.Deserialize<ElevatedEnvironmentRequest>(File.ReadAllText(file), EnvironmentWorkspaceStore.JsonOptions)!;
-            if (request.Mutation.Scope != VariableScope.Machine) throw new InvalidDataException("管理员操作仅支持系统变量。");
-            WindowsEnvironmentVariableEditor.Apply(request.Mutation, new EnvironmentWorkspaceStore(request.DataDirectory));
+            if (request.Mutations.Length == 0 || request.Mutations.Any(item => item.Scope != VariableScope.Machine) || request.Preconditions.Any(item => item.Scope != VariableScope.Machine))
+                throw new InvalidDataException("管理员操作仅支持系统变量。");
+            Apply(request.Mutations, request.Preconditions, new EnvironmentWorkspaceStore(request.DataDirectory));
         }
         catch (Exception exception) { error = exception.Message; }
         File.WriteAllText(file + ".result", JsonSerializer.Serialize(new ElevatedEnvironmentResult(error), EnvironmentWorkspaceStore.JsonOptions));
         return error is null ? 0 : 1;
+    }
+    private static void Apply(IReadOnlyList<EnvironmentMutation> mutations, IReadOnlyList<VariableSnapshot> preconditions, EnvironmentWorkspaceStore store)
+    {
+        if (mutations.Count == 1 && preconditions.Count == 0) WindowsEnvironmentVariableEditor.Apply(mutations[0], store);
+        else WindowsEnvironmentVariableEditor.ApplyBatch(mutations, preconditions, store);
     }
 }
