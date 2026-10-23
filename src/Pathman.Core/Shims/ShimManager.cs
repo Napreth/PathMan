@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Pathman.Core.Shims;
@@ -20,7 +21,9 @@ public sealed class ShimManager(PathmanLayout layout)
             .ToArray();
     }
 
-    public ShimAlias Add(string name, string target)
+    public ShimAlias Add(string name, string target) => WithLock(() => AddAlias(name, target));
+
+    private ShimAlias AddAlias(string name, string target)
     {
         name = ValidateName(name);
         target = Path.GetFullPath(target);
@@ -31,7 +34,8 @@ public sealed class ShimManager(PathmanLayout layout)
             throw new FileNotFoundException("找不到垫片本体，请先构建发布目录。", layout.ShimExecutable);
         if (target.StartsWith(Path.TrimEndingDirectorySeparator(layout.ShimsDirectory) + Path.DirectorySeparatorChar,
                 StringComparison.OrdinalIgnoreCase) ||
-            target.Equals(layout.ShimExecutable, StringComparison.OrdinalIgnoreCase))
+            target.Equals(layout.ShimExecutable, StringComparison.OrdinalIgnoreCase) ||
+            target.Equals(layout.CachedShimExecutable, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("别名目标不能是 PathMan 垫片，避免循环启动。");
 
         Directory.CreateDirectory(layout.ShimsDirectory);
@@ -40,7 +44,7 @@ public sealed class ShimManager(PathmanLayout layout)
         if (Path.Exists(executable) || Path.Exists(manifest))
             throw new IOException($"别名或同名文件已存在：{name}");
 
-        // Create the link first: a cross-volume failure leaves no manifest behind.
+        // Create the executable before its manifest, so failures do not publish a broken alias.
         CreateLink(executable);
 
         try
@@ -58,16 +62,17 @@ public sealed class ShimManager(PathmanLayout layout)
         return new ShimAlias(name, target);
     }
 
-    public void Remove(string name)
+    public void Remove(string name) => WithLock(() =>
     {
         name = ValidateName(name);
         var manifest = Path.Combine(layout.ShimsDirectory, name + ".shim");
         _ = ReadAlias(manifest);
         File.Delete(Path.Combine(layout.ShimsDirectory, name + ".exe"));
         File.Delete(manifest);
-    }
+        return true;
+    });
 
-    public int Refresh()
+    public int Refresh() => WithLock(() =>
     {
         var aliases = List();
         foreach (var alias in aliases)
@@ -80,6 +85,14 @@ public sealed class ShimManager(PathmanLayout layout)
         }
         if (aliases.Count > 0) EnsureUserShimsPath();
         return aliases.Count;
+    });
+
+    private T WithLock<T>(Func<T> action)
+    {
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(layout.DataDirectory.ToUpperInvariant())));
+        using var mutex = new Mutex(false, @"Global\PathMan.Shims." + key);
+        try { mutex.WaitOne(); } catch (AbandonedMutexException) { }
+        try { return action(); } finally { mutex.ReleaseMutex(); }
     }
 
     private void EnsureUserShimsPath()
@@ -101,8 +114,27 @@ public sealed class ShimManager(PathmanLayout layout)
     {
         if (CreateHardLink(executable, layout.ShimExecutable, IntPtr.Zero)) return;
         var error = Marshal.GetLastWin32Error();
-        if (error == 17)
-            throw new IOException("硬链接不能跨卷：程序目录和 LocalAppData\\PathMan\\shims 必须位于同一卷。", new Win32Exception(error));
+        if (error == 17) // ERROR_NOT_SAME_DEVICE: copy one template onto the user's volume.
+        {
+            var cached = layout.CachedShimExecutable;
+            Directory.CreateDirectory(Path.GetDirectoryName(cached)!);
+            using var source = File.OpenRead(layout.ShimExecutable);
+            var current = false;
+            if (File.Exists(cached))
+            {
+                using var existing = File.OpenRead(cached);
+                current = SHA256.HashData(source).AsSpan().SequenceEqual(SHA256.HashData(existing));
+            }
+            if (!current)
+            {
+                // Replace the cache atomically; running aliases may still use the old file.
+                var temporary = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try { File.Copy(layout.ShimExecutable, temporary); File.Move(temporary, cached, overwrite: true); }
+                finally { File.Delete(temporary); }
+            }
+            if (CreateHardLink(executable, cached, IntPtr.Zero)) return;
+            error = Marshal.GetLastWin32Error();
+        }
         throw new Win32Exception(error, $"无法创建硬链接：{executable}");
     }
 

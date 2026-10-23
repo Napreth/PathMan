@@ -11,7 +11,6 @@ ManifestSupportedOS all
 
 !define MULTIUSER_EXECUTIONLEVEL Highest
 !define MULTIUSER_MUI
-!define MULTIUSER_INSTALLMODE_COMMANDLINE
 !define MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER
 !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_KEY "${APPKEY}"
 !define MULTIUSER_INSTALLMODE_DEFAULT_REGISTRY_VALUENAME "InstallDirectory"
@@ -23,8 +22,8 @@ ManifestSupportedOS all
   !define MULTIUSER_USE_PROGRAMFILES64
 !endif
 !include MultiUser.nsh
-; Start unelevated. Only the AllUsers choice relaunches with runas. Keep the
-; framework's MultiUser page and account-name control rather than drawing a page.
+; Keep one unelevated standard wizard. Machine-wide writes use a silent,
+; authorized elevated child; language and scope changes never replace the UI.
 RequestExecutionLevel user
 
 Name "PathMan"
@@ -37,9 +36,6 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "PathMan contributors"
 SetCompressor /SOLID zlib
 ShowInstDetails nevershow
 ShowUninstDetails nevershow
-!define MUI_ABORTWARNING
-!define MUI_LANGDLL_ALWAYSSHOW
-!define MUI_LANGDLL_WINDOWTITLE "PathMan"
 
 Var StartMenuFolder
 Var Parameters
@@ -48,10 +44,13 @@ Var Elevated
 Var Machine
 Var Helper
 Var UserLocalData
+Var OriginalDesktop
 Var OldDirectory
 Var CommandDirectory
 Var SetupMutex
 Var RestartBackground
+Var Worker
+Var WorkerConfig
 
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_PRE ScopePre
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_SHOW ScopeShow
@@ -63,6 +62,7 @@ Var RestartBackground
 !define MUI_STARTMENUPAGE_REGISTRY_ROOT SHCTX
 !define MUI_STARTMENUPAGE_REGISTRY_KEY "${APPKEY}"
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "StartMenuFolder"
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW ReadyShow
 !insertmacro MUI_PAGE_STARTMENU Application $StartMenuFolder
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN
@@ -72,6 +72,7 @@ Var RestartBackground
 !define MUI_FINISHPAGE_SHOWREADME
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "$(OpenPathMan)"
 !define MUI_FINISHPAGE_SHOWREADME_FUNCTION LaunchPathMan
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishShow
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -83,8 +84,8 @@ LangString DesktopShortcut ${LANG_ENGLISH} "Create a &desktop shortcut"
 LangString DesktopShortcut ${LANG_SIMPCHINESE} "创建桌面快捷方式(&D)"
 LangString OpenPathMan ${LANG_ENGLISH} "&Open PathMan"
 LangString OpenPathMan ${LANG_SIMPCHINESE} "打开 PathMan(&O)"
-LangString InvalidDirectory ${LANG_ENGLISH} "Choose a valid installation folder on the same volume as LocalAppData. The volume must support hard links."
-LangString InvalidDirectory ${LANG_SIMPCHINESE} "请选择与 LocalAppData 位于同一卷的有效安装目录。该卷必须支持硬链接。"
+LangString InvalidDirectory ${LANG_ENGLISH} "Choose a valid installation folder. The LocalAppData volume must support hard links."
+LangString InvalidDirectory ${LANG_SIMPCHINESE} "请选择有效的安装目录。LocalAppData 所在卷必须支持硬链接。"
 LangString RuntimeRequired ${LANG_ENGLISH} "This package needs the ${ARCH} .NET 10 Desktop Runtime. Install it first, or use the -SelfContained installer."
 LangString RuntimeRequired ${LANG_SIMPCHINESE} "此安装包需要 ${ARCH} 架构的 .NET 10 Desktop Runtime。请先安装运行时，或使用 -SelfContained 安装包。"
 LangString WrongArchitecture ${LANG_ENGLISH} "This installer is for ${ARCH}. Choose a package that matches your Windows architecture."
@@ -101,8 +102,8 @@ LangString AlreadyInstalling ${LANG_ENGLISH} "Another PathMan setup is running. 
 LangString AlreadyInstalling ${LANG_SIMPCHINESE} "另一个 PathMan 安装程序正在运行。请关闭后重试。"
 LangString CloseApplications ${LANG_ENGLISH} "PathMan or its background/alias commands are running. Save your work, then click OK to close PathMan and continue. Running alias commands must be closed manually."
 LangString CloseApplications ${LANG_SIMPCHINESE} "PathMan、后台程序或别名命令正在运行。请保存工作，单击“确定”关闭 PathMan 后继续。正在运行的别名命令需手动关闭。"
-LangString ApplicationsStillRunning ${LANG_ENGLISH} "PathMan is still running. Finish or cancel any unsaved edits, close running CLI/alias commands, then click Retry. No files have been replaced."
-LangString ApplicationsStillRunning ${LANG_SIMPCHINESE} "PathMan 仍在运行。请处理未保存的更改，关闭 CLI/别名命令后重试。程序文件尚未替换。"
+LangString ApplicationsStillRunning ${LANG_ENGLISH} "PathMan is still running. Finish or cancel any unsaved edits, close running CLI/alias commands, then click OK to retry. No files have been replaced."
+LangString ApplicationsStillRunning ${LANG_SIMPCHINESE} "PathMan 仍在运行。请处理未保存的更改，关闭 CLI/别名命令，然后单击“确定”重试。程序文件尚未替换。"
 LangString DowngradeBlocked ${LANG_ENGLISH} "A newer version of PathMan ($1) is installed. Uninstall it before installing ${VERSION}. Your user data will be preserved."
 LangString DowngradeBlocked ${LANG_SIMPCHINESE} "已安装更高版本的 PathMan（$1）。请先卸载，再安装 ${VERSION}。用户数据会保留。"
 LangString UpgradeInstall ${LANG_ENGLISH} "Upgrade PathMan from $1 to ${VERSION}? Settings, groups, aliases and the installation folder will be preserved."
@@ -119,16 +120,64 @@ Function GetScope
   ${EndIf}
 FunctionEnd
 
-Function ElevateForAllUsers
-  ${If} $Elevated == 0
-    ClearErrors
-    ExecShell "runas" "$EXEPATH" '/AllUsers /LANG=$LANGUAGE $Parameters'
-    ${If} ${Errors}
-      Abort
+!macro SetupInitialization Prefix
+Function ${Prefix}InitializeSetup
+  SetRegView 32
+  ${GetParameters} $Parameters
+  System::Call 'kernel32::GetUserDefaultUILanguage() i.r0'
+  StrCpy $LANGUAGE ${LANG_ENGLISH}
+  ${If} $0 == ${LANG_SIMPCHINESE}
+    StrCpy $LANGUAGE ${LANG_SIMPCHINESE}
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $Parameters "/LANG=" $0
+  ${IfNot} ${Errors}
+    StrCpy $LANGUAGE $0
+  ${EndIf}
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=PathMan.SetupActions.dll "${HELPER_DLL}"
+  StrCpy $Helper "$PLUGINSDIR\PathMan.SetupActions.dll"
+  System::Call 'shell32::IsUserAnAdmin() i.r0'
+  StrCpy $Elevated $0
+  StrCpy $Worker 0
+  ClearErrors
+  ${GetOptions} $Parameters "/SetupWorker=" $0
+  ${IfNot} ${Errors}
+    System::Call '$Helper::JoinSetupWorker(w r0) p.r1'
+    StrCpy $SetupMutex $1
+    ${If} $SetupMutex != 0
+    ${AndIf} $Elevated != 0
+      IfSilent +2 0
+        Quit
+      StrCpy $Worker 1
+      ${GetOptions} $Parameters "/SetupConfig=" $WorkerConfig
+      ReadINIStr $LANGUAGE "$WorkerConfig" "Setup" "Language"
+      ReadINIStr $CommandDirectory "$WorkerConfig" "Setup" "Directory"
+      ReadINIStr $StartMenuFolder "$WorkerConfig" "Setup" "StartMenuFolder"
+    ${Else}
+      SetErrorLevel 1618
+      Quit
     ${EndIf}
-    Quit
+  ${Else}
+    System::Call '$Helper::BeginSetup() p.r0'
+    StrCpy $SetupMutex $0
+    ${If} $SetupMutex == 0
+      MessageBox MB_OK|MB_ICONSTOP "$(AlreadyInstalling)" /SD IDOK
+      SetErrorLevel 1618
+      Quit
+    ${EndIf}
   ${EndIf}
 FunctionEnd
+Function ${Prefix}WriteWorkerConfiguration
+  StrCpy $WorkerConfig "$PLUGINSDIR\worker.ini"
+  WriteINIStr "$WorkerConfig" "Setup" "Language" "$LANGUAGE"
+  WriteINIStr "$WorkerConfig" "Setup" "Directory" "$INSTDIR"
+  WriteINIStr "$WorkerConfig" "Setup" "StartMenuFolder" "$StartMenuFolder"
+FunctionEnd
+!macroend
+!insertmacro SetupInitialization ""
+!insertmacro SetupInitialization "un."
 
 Function CheckLegacyRegistration
   ReadRegStr $0 HKCU "${APPKEY}" "InstallDirectory"
@@ -154,15 +203,9 @@ Function .onInit
   SetRegView 32
   StrCpy $CommandDirectory $INSTDIR
   StrCpy $UserLocalData "$LOCALAPPDATA"
-  ${GetParameters} $Parameters
+  StrCpy $OriginalDesktop "$DESKTOP"
+  Call InitializeSetup
   StrCpy $ScopeArgument ""
-  ClearErrors
-  ${GetOptions} $Parameters "/LANG=" $0
-  ${IfNot} ${Errors}
-    StrCpy $LANGUAGE $0
-  ${Else}
-    !insertmacro MUI_LANGDLL_DISPLAY
-  ${EndIf}
   ${If} ${RunningX64}
     SetRegView 64
     Call CheckLegacyRegistration
@@ -193,15 +236,10 @@ Function .onInit
       StrCpy $ScopeArgument "/CurrentUser"
     ${EndIf}
   ${EndIf}
-  System::Call 'shell32::IsUserAnAdmin() i.r0'
-  StrCpy $Elevated $0
   ReadRegStr $0 HKLM "${APPKEY}" "InstallDirectory"
   ${If} $ScopeArgument == ""
   ${AndIf} $0 != ""
     StrCpy $ScopeArgument "/AllUsers"
-  ${EndIf}
-  ${If} $ScopeArgument == "/AllUsers"
-    Call ElevateForAllUsers
   ${EndIf}
   !insertmacro MULTIUSER_INIT
   ; MultiUser's stock page otherwise hides AllUsers for a standard account.
@@ -209,14 +247,12 @@ Function .onInit
   StrCpy $MultiUser.Privileges "Admin"
   ${If} $ScopeArgument == "/AllUsers"
     Call MultiUser.InstallMode.AllUsers
+  ${ElseIf} $ScopeArgument == "/CurrentUser"
+    Call MultiUser.InstallMode.CurrentUser
   ${EndIf}
   ${If} $CommandDirectory != ""
     StrCpy $INSTDIR $CommandDirectory
   ${EndIf}
-  InitPluginsDir
-  SetOutPath "$PLUGINSDIR"
-  File /oname=PathMan.SetupActions.dll "${HELPER_DLL}"
-  StrCpy $Helper "$PLUGINSDIR\PathMan.SetupActions.dll"
   ReadRegStr $0 SHCTX "${APPKEY}" "InstallDirectory"
   ${If} $0 != ""
     ReadRegStr $1 SHCTX "${APPKEY}" "InstallerKind"
@@ -243,9 +279,12 @@ Function ScopePre
 FunctionEnd
 
 Function UpdateScopeShield
-  SendMessage $MultiUser.InstallModePage.AllUsers ${BM_GETCHECK} 0 0 $0
   GetDlgItem $1 $HWNDPARENT 1
-  SendMessage $1 0x160C 0 $0 ; BCM_SETSHIELD
+  SendMessage $1 0x160C 0 0 ; No elevation until the Install button.
+FunctionEnd
+
+Function FinishShow
+  Call UpdateScopeShield
 FunctionEnd
 
 Function ScopeShow
@@ -260,13 +299,21 @@ Function ScopeRadioClicked
 FunctionEnd
 
 Function ScopeLeave
-  ${If} $MultiUser.InstallMode == "AllUsers"
-    Call ElevateForAllUsers
-  ${EndIf}
   ${If} $CommandDirectory != ""
     StrCpy $INSTDIR $CommandDirectory
   ${EndIf}
   Call UpdateScopeShield
+FunctionEnd
+
+Function ReadyShow
+  Call GetScope
+  GetDlgItem $1 $HWNDPARENT 1
+  ${If} $Machine == 1
+  ${AndIf} $Elevated == 0
+    SendMessage $1 0x160C 0 1
+  ${Else}
+    SendMessage $1 0x160C 0 0
+  ${EndIf}
 FunctionEnd
 
 Function DirectoryLeave
@@ -330,22 +377,6 @@ Function ConfirmMaintenance
 FunctionEnd
 
 !macro EnsureApplicationsClosed Prefix
-Function ${Prefix}AcquireSetupLock
-  ${If} $SetupMutex != ""
-    Return
-  ${EndIf}
-  System::Call 'kernel32::CreateMutexW(p 0, i 0, w "Local\PathMan.Setup") p.s ?e'
-  Pop $0
-  Pop $SetupMutex
-  ${If} $0 == 183
-  ${OrIf} $SetupMutex == 0
-    System::Call 'kernel32::CloseHandle(p $SetupMutex)'
-    StrCpy $SetupMutex ""
-    MessageBox MB_OK|MB_ICONSTOP "$(AlreadyInstalling)" /SD IDOK
-    SetErrorLevel 1618
-    Abort
-  ${EndIf}
-FunctionEnd
 Function ${Prefix}EnsureApplicationsClosed
   System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
   ${If} $0 == 0
@@ -359,7 +390,7 @@ Function ${Prefix}EnsureApplicationsClosed
   ${If} $0 == 0
     Return
   ${EndIf}
-  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(ApplicationsStillRunning)" /SD IDCANCEL IDRETRY CloseApplicationsTry
+  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(ApplicationsStillRunning)" /SD IDCANCEL IDOK CloseApplicationsTry
   SetErrorLevel 1602
   Abort
 FunctionEnd
@@ -383,12 +414,26 @@ FunctionEnd
 
 Section "PathMan" Main
   SectionIn RO
-  Call AcquireSetupLock
   Call DirectoryLeave
-  Call ConfirmMaintenance
-  System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
-  StrCpy $RestartBackground $0
+  ${If} $Worker == 0
+    Call ConfirmMaintenance
+    System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
+    StrCpy $RestartBackground $0
+  ${EndIf}
   Call EnsureApplicationsClosed
+  ${If} $Machine == 1
+  ${AndIf} $Elevated == 0
+    Call WriteWorkerConfiguration
+    System::Call '$Helper::RunElevatedSetup(p $HWNDPARENT, w "$EXEPATH", w "$WorkerConfig") i.r0'
+    ${If} $0 != 0
+      SetErrorLevel $0
+      ${If} $0 != 1602
+        MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+      ${EndIf}
+      Abort
+    ${EndIf}
+    Goto InstallUserFinalization
+  ${EndIf}
   SetOutPath "$INSTDIR"
   File /r "${PUBLISH_DIR}\*"
   SetOutPath "$INSTDIR\internal"
@@ -427,16 +472,19 @@ Section "PathMan" Main
     SetErrorLevel 1603
     Abort
   ${EndIf}
-  System::Call '$Helper::RefreshShims(w "$INSTDIR", w "$UserLocalData") i.r0'
-  ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "$(MaintenanceFailed)" /SD IDOK
+  InstallUserFinalization:
+  ${If} $Worker == 0
+    System::Call '$Helper::RefreshShims(w "$INSTDIR", w "$UserLocalData") i.r0'
+    ${If} $0 != 0
+      MessageBox MB_OK|MB_ICONEXCLAMATION "$(MaintenanceFailed)" /SD IDOK
+    ${EndIf}
+    Call RestoreBackground
   ${EndIf}
-  Call RestoreBackground
   SetErrorLevel 0
 SectionEnd
 
 Function CreateDesktopShortcut
-  CreateShortcut "$DESKTOP\PathMan.lnk" "$INSTDIR\PathMan.exe"
+  CreateShortcut "$OriginalDesktop\PathMan.lnk" "$INSTDIR\PathMan.exe"
 FunctionEnd
 Function LaunchPathMan
   ; Explorer launches the desktop app at the desktop user's integrity level.
@@ -445,6 +493,8 @@ FunctionEnd
 
 Function un.onInit
   SetRegView 32
+  StrCpy $OriginalDesktop "$DESKTOP"
+  Call un.InitializeSetup
   ; NSIS executes a temporary copy of the uninstaller. Its initial INSTDIR
   ; identifies the original uninstaller directory; EXEDIR points at TEMP.
   ${GetParent} "$INSTDIR" $INSTDIR
@@ -454,14 +504,8 @@ Function un.onInit
   ${If} $0 == $INSTDIR
     StrCpy $ScopeArgument "AllUsers"
   ${EndIf}
-  System::Call 'shell32::IsUserAnAdmin() i.r0'
-  ${If} $ScopeArgument == "AllUsers"
-  ${AndIf} $0 == 0
-    ${GetParameters} $Parameters
-    ExecShell "runas" "$INSTDIR\internal\Uninstall.exe" '/AllUsers $Parameters'
-    Quit
-  ${EndIf}
   !insertmacro MULTIUSER_UNINIT
+  StrCpy $MultiUser.Privileges "Admin"
   ${If} $ScopeArgument == "AllUsers"
     Call un.MultiUser.InstallMode.AllUsers
   ${Else}
@@ -473,10 +517,6 @@ Function un.onInit
     StrCpy $Machine 1
   ${EndIf}
   ReadRegDWORD $LANGUAGE SHCTX "${APPKEY}" "Language"
-  InitPluginsDir
-  SetOutPath "$PLUGINSDIR"
-  File /oname=PathMan.SetupActions.dll "${HELPER_DLL}"
-  StrCpy $Helper "$PLUGINSDIR\PathMan.SetupActions.dll"
 FunctionEnd
 
 !macro DeleteInstalledFile RelativePath
@@ -485,10 +525,26 @@ FunctionEnd
 !macroend
 
 Section "Uninstall"
-  Call un.AcquireSetupLock
-  System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
-  StrCpy $RestartBackground $0
+  ${If} $Worker == 0
+    System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
+    StrCpy $RestartBackground $0
+  ${EndIf}
   Call un.EnsureApplicationsClosed
+  ${If} $Machine == 1
+  ${AndIf} $Elevated == 0
+    Call un.WriteWorkerConfiguration
+    System::Call '$Helper::RunElevatedSetup(p $HWNDPARENT, w "$INSTDIR\internal\Uninstall.exe", w "$WorkerConfig") i.r0'
+    ${If} $0 != 0
+      SetErrorLevel $0
+      ${If} $0 != 1602
+        MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+      ${EndIf}
+      Abort
+    ${EndIf}
+    System::Call '$Helper::CleanupUserInstall(w "$INSTDIR", w "$OriginalDesktop") i.r0'
+    SetErrorLevel 0
+    Return
+  ${EndIf}
   System::Call '$Helper::CleanupInstall(w "$INSTDIR", i $Machine, w "$DESKTOP") i.r0'
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
@@ -525,6 +581,9 @@ Section "Uninstall"
   UninstallFilesRemoved:
   DeleteRegKey SHCTX "${UNINSTALLKEY}"
   DeleteRegKey SHCTX "${APPKEY}"
+  ${If} $Worker == 0
+    System::Call '$Helper::CleanupUserInstall(w "$INSTDIR", w "$OriginalDesktop") i.r0'
+  ${EndIf}
   RMDir "$INSTDIR\bin"
   RMDir "$INSTDIR\internal"
   RMDir "$INSTDIR"

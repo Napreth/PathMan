@@ -47,6 +47,27 @@ BOOL WINAPI handle_console_control(DWORD event) {
     return event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT;
 }
 
+std::wstring installed_shim() {
+    for (const auto hive : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE})
+    for (const auto view : {KEY_WOW64_32KEY, KEY_WOW64_64KEY}) {
+        HKEY key = nullptr;
+        if (RegOpenKeyExW(hive, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PathMan", 0, KEY_QUERY_VALUE | view, &key)) continue;
+        DWORD bytes = 0;
+        const auto flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ;
+        auto error = RegGetValueW(key, nullptr, L"InstallLocation", flags, nullptr, nullptr, &bytes);
+        if (error || bytes == 0 || bytes > 65536) { RegCloseKey(key); continue; }
+        std::vector<wchar_t> buffer(bytes / sizeof(wchar_t) + 1);
+        if (!error) error = RegGetValueW(key, nullptr, L"InstallLocation", flags, nullptr, buffer.data(), &bytes);
+        RegCloseKey(key);
+        if (error || buffer.empty()) continue;
+        const auto root = std::filesystem::path(buffer.data());
+        if (!root.is_absolute()) continue;
+        const auto shim = root / L"internal" / L"PathMan.Shim.exe";
+        if (GetFileAttributesW(shim.c_str()) != INVALID_FILE_ATTRIBUTES) return shim.wstring();
+    }
+    return {};
+}
+
 int fail(const wchar_t* message, DWORD code) {
     std::wcerr << L"PathMan.Shim: " << message << L" (" << code << L")\n";
     return code == 0 ? 1 : static_cast<int>(code);
@@ -69,8 +90,9 @@ int wmain() {
     const std::wstring target(buffer.data(), length);
     if (!std::filesystem::path(target).is_absolute())
         return fail(L"Target must be an absolute path", ERROR_BAD_PATHNAME);
-    if (same_file(executable, target))
-        return fail(L"Alias cannot launch another hard link to itself", ERROR_CIRCULAR_DEPENDENCY);
+    const auto original = installed_shim();
+    if (same_file(executable, target) || (!original.empty() && same_file(original, target)))
+        return fail(L"Alias cannot launch a PathMan shim", ERROR_CIRCULAR_DEPENDENCY);
 
     std::wstring command = L"\"" + target + L"\"" + argument_tail();
     STARTUPINFOW startup{};

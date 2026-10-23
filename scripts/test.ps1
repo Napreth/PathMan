@@ -109,10 +109,26 @@ try {
     if ([IO.Path]::GetPathRoot($testRoot) -ne [IO.Path]::GetPathRoot([IO.Path]::GetTempPath())) {
         $crossVolumeRoot = Join-Path ([IO.Path]::GetTempPath()) ('PathMan-test-' + [guid]::NewGuid().ToString('N'))
         $crossVolume = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'add', 'cross-volume', $pwsh)
-        Assert ($crossVolume.Code -eq 1 -and $crossVolume.Error.Contains('跨卷')) 'Cross-volume hard links must fail explicitly.'
-        Assert (@(Get-ChildItem -LiteralPath (Join-Path $crossVolumeRoot 'shims')).Count -eq 0) 'A failed hard link should leave no alias files.'
+        Assert ($crossVolume.Code -eq 0) "Cross-volume deployment failed: $($crossVolume.Error)"
+        $cached = Join-Path $crossVolumeRoot 'internal/PathMan.Shim.exe'
+        $crossAlias = Join-Path $crossVolumeRoot 'shims/cross-volume.exe'
+        $firstLinks = @(& fsutil hardlink list $crossAlias)
+        Assert (($firstLinks -join "`n").Contains('internal\PathMan.Shim.exe')) 'Cross-volume aliases must link to one local cached template.'
+        Assert ((Get-FileHash $cached).Hash -eq (Get-FileHash $template).Hash) 'The cached template must match the installation.'
+        $second = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'add', 'cross-volume-two', $pwsh)
+        Assert ($second.Code -eq 0) 'A second cross-volume alias must reuse the template.'
+        $links = @(& fsutil hardlink list $crossAlias)
+        Assert ($links.Count -eq 3 -and ($links -join "`n").Contains('cross-volume-two.exe')) 'Both aliases must share the same cached file.'
+        $result = Invoke-Program $crossAlias (@('-NoProfile', '-NonInteractive', '-File', $probe) + $samples) "stdin-data`n"
+        Assert ($result.Code -eq 37 -and (($result.Out|ConvertFrom-Json).Arguments|ConvertTo-Json -Compress) -ceq ($samples|ConvertTo-Json -Compress)) 'Copied shims must preserve arguments and exit codes.'
+        [IO.File]::AppendAllText($template, 'PathMan-test-update')
+        $refreshed = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'refresh')
+        Assert ($refreshed.Code -eq 0 -and (Get-FileHash $cached).Hash -eq (Get-FileHash $template).Hash) 'Refresh must update a changed cached template.'
+        Assert (@(& fsutil hardlink list $crossAlias).Count -eq 3) 'Refresh must relink both aliases to the updated copy.'
+        $result = Invoke-Program $crossAlias @('-NoProfile', '-NonInteractive', '-Command', 'exit 23')
+        Assert ($result.Code -eq 23) 'A refreshed copied shim must remain executable.'
     }
-    Write-Host 'PASS: layout, hard links, Unicode aliases, arguments, stdio, exit codes, validation, refresh, background lifecycle, cross-volume errors.'
+    Write-Host 'PASS: layout, hard links, Unicode aliases, arguments, stdio, exit codes, validation, refresh, background lifecycle, cross-volume cache reuse and updates.'
 }
 finally {
     if (Test-Path -LiteralPath $cli) { $null = Invoke-Program $cli @('background', 'stop') }

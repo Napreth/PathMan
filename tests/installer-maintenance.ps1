@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Installer, [string]$InstallDirectory='C:\PathManTestApp')
+param([Parameter(Mandatory)][string]$Installer, [string]$InstallDirectory='C:\PathManTestApp', [string]$OtherInstaller)
 # Run only in the disposable test VM: this installs into HKCU and tests ownership/version checks.
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine') { throw 'Run maintenance tests only in the disposable Windows VM.' }
@@ -9,8 +9,28 @@ function Install([int]$expected=0,[string]$directory=$InstallDirectory) {
     $process=Start-Process -FilePath $Installer -ArgumentList "/S /CurrentUser /LANG=1033 /D=$directory" -PassThru -Wait -WindowStyle Hidden
     Assert ($process.ExitCode -eq $expected) "Installer exit $($process.ExitCode), expected $expected"
 }
+function CheckSetupMutex {
+    $wizard=Start-Process -FilePath $Installer -ArgumentList '/CurrentUser /LANG=1033' -PassThru
+    try {
+        for($i=0;$i -lt 100;$i++) { $wizard.Refresh(); if($wizard.MainWindowHandle -ne 0 -or $wizard.HasExited){break}; Start-Sleep -Milliseconds 100 }
+        Assert (!$wizard.HasExited -and $wizard.MainWindowHandle -ne 0) 'The first installer reaches its wizard before copying files'
+        Install 1618
+        if($OtherInstaller) {
+            $second=Start-Process $OtherInstaller -ArgumentList '/S /CurrentUser /LANG=1033' -PassThru -Wait -WindowStyle Hidden
+            Assert ($second.ExitCode -eq 1618) 'Different package variants share the same setup mutex'
+        }
+        $uninstaller=Join-Path $InstallDirectory 'internal\Uninstall.exe'
+        if(Test-Path $uninstaller) {
+            # _?= prevents NSIS's temporary bootstrap from hiding the real exit code.
+            $second=Start-Process $uninstaller -ArgumentList "/S /CurrentUser _?=$InstallDirectory\internal" -PassThru -Wait -WindowStyle Hidden
+            Assert ($second.ExitCode -eq 1618) 'Install and uninstall are mutually exclusive from their first page'
+        }
+    } finally { if(!$wizard.HasExited) { [void]$wizard.CloseMainWindow(); if(!$wizard.WaitForExit(10000)){$wizard.Kill();$wizard.WaitForExit()} }; $wizard.Dispose() }
+}
 try {
+    CheckSetupMutex
     Install
+    CheckSetupMutex
     $exe=Join-Path $InstallDirectory 'PathMan.exe'
     $hash=(Get-FileHash -LiteralPath $exe).Hash
     $data=Join-Path $env:LOCALAPPDATA 'PathMan\environment.json'
@@ -33,6 +53,20 @@ try {
         Assert ((Get-FileHash $exe).Hash -eq $hash) 'Running-application cancellation leaves files unchanged'
     } finally { if(!$app.HasExited) { $app.Kill(); $app.WaitForExit() }; $app.Dispose() }
     $cli=Join-Path $InstallDirectory 'bin\pathman.exe'
+    $detached=Join-Path $env:TEMP 'PathMan-detached-cli'
+    New-Item -ItemType Directory -Path $detached -Force|Out-Null
+    Copy-Item $cli (Join-Path $detached 'pathman.exe') -Force
+    $layout=& (Join-Path $detached 'pathman.exe') layout
+    Assert ($LASTEXITCODE -eq 0 -and ($layout -join "`n").Contains($InstallDirectory)) 'A relocated CLI discovers InstallLocation from the uninstall registration'
+    & $cli shim add pm-registry-self $env:ComSpec | Out-Null
+    $manifest=Join-Path $env:LOCALAPPDATA 'PathMan\shims\pm-registry-self.shim'
+    $original=Join-Path $InstallDirectory 'internal\PathMan.Shim.exe'
+    [IO.File]::WriteAllText($manifest,"[PathMan.Shim]`r`nFormat=1`r`nTarget=$original`r`n",[Text.Encoding]::Unicode)
+    $start=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:LOCALAPPDATA 'PathMan\shims\pm-registry-self.exe'))
+    $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.RedirectStandardError=$true
+    $self=[Diagnostics.Process]::Start($start)
+    try { $null=$self.StandardError.ReadToEnd(); $self.WaitForExit(); Assert ($self.ExitCode -eq 1059) 'A copied shim resolves its original through uninstall information and rejects it as a target' }
+    finally { $self.Dispose(); & $cli shim remove pm-registry-self|Out-Null }
     & $cli background start | Out-Null
     try {
         Install 1602

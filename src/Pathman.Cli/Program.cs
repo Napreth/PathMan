@@ -85,5 +85,5 @@ static void PrintHelp() => Console.WriteLine("""
       pathman background <status|start|stop>
 
     可在命令前指定 --data-root <目录>，用于隔离配置或测试。
-    创建别名使用硬链接，程序与 shims 必须位于同一卷。
+    同卷直接创建硬链接；跨卷复制一份垫片后复用本地硬链接。
     """);

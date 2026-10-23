@@ -7,6 +7,7 @@ endif()
 
 
 add_executable(Pathman.Shim main.cpp)
+target_link_libraries(Pathman.Shim PRIVATE advapi32)
 set_target_properties(Pathman.Shim PROPERTIES
     OUTPUT_NAME "PathMan.Shim"
     CXX_STANDARD 20

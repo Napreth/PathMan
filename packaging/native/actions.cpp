@@ -1,8 +1,10 @@
 #include <windows.h>
+#include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <tlhelp32.h>
 #include <aclapi.h>
+#include <sddl.h>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -17,6 +19,10 @@
 #pragma comment(linker, "/EXPORT:ConfigureInstall=_ConfigureInstall@8")
 #pragma comment(linker, "/EXPORT:CleanupInstall=_CleanupInstall@12")
 #pragma comment(linker, "/EXPORT:RefreshShims=_RefreshShims@8")
+#pragma comment(linker, "/EXPORT:JoinSetupWorker=_JoinSetupWorker@4")
+#pragma comment(linker, "/EXPORT:RunElevatedSetup=_RunElevatedSetup@12")
+#pragma comment(linker, "/EXPORT:BeginSetup=_BeginSetup@0")
+#pragma comment(linker, "/EXPORT:CleanupUserInstall=_CleanupUserInstall@8")
 #endif
 
 namespace {
@@ -167,6 +173,20 @@ bool same_file(const std::filesystem::path& left, const std::filesystem::path& r
     if (b != INVALID_HANDLE_VALUE) CloseHandle(b);
     return equal;
 }
+bool copied_alias(const std::filesystem::path& executable, const std::filesystem::path& root) {
+    if (_wcsicmp(executable.parent_path().filename().c_str(), L"shims") != 0) return false;
+    auto manifest = executable; manifest.replace_extension(L".shim");
+    if (GetPrivateProfileIntW(L"PathMan.Shim", L"Format", 0, manifest.c_str()) != 1) return false;
+    for (const auto hive : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE})
+    for (const auto view : {KEY_WOW64_32KEY, KEY_WOW64_64KEY}) {
+        HKEY uninstall = nullptr;
+        if (RegOpenKeyExW(hive, L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PathMan", 0, KEY_QUERY_VALUE | view, &uninstall)) continue;
+        const auto location = read(uninstall, nullptr, L"InstallLocation");
+        RegCloseKey(uninstall);
+        if (normalized(location) == normalized(root.wstring())) return true;
+    }
+    return false;
+}
 struct running_app { DWORD id; bool gui; bool background; };
 DWORD applications(const std::filesystem::path& root, std::vector<running_app>& result) {
     const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -182,7 +202,7 @@ DWORD applications(const std::filesystem::path& root, std::vector<running_app>& 
             const bool background = _wcsicmp(path, (root / L"internal" / L"PathMan.Service.exe").c_str()) == 0;
             const bool cli = _wcsicmp(path, (root / L"bin" / L"pathman.exe").c_str()) == 0;
             // An alias can run under any filename. Compare file identities so hard links are included.
-            if (gui || background || cli || same_file(path, root / L"internal" / L"PathMan.Shim.exe")) result.push_back({entry.th32ProcessID, gui, background});
+            if (gui || background || cli || same_file(path, root / L"internal" / L"PathMan.Shim.exe") || copied_alias(path, root)) result.push_back({entry.th32ProcessID, gui, background});
         }
         CloseHandle(process);
     } while (Process32NextW(snapshot, &entry));
@@ -202,9 +222,10 @@ extern "C" __declspec(dllexport) DWORD __stdcall ValidateDirectory(const wchar_t
         const std::wstring path(directory);
         if (!std::filesystem::path(path).is_absolute() || path.find_first_of(L"\"<>|?*") != std::wstring::npos) return ERROR_BAD_PATHNAME;
         const auto target = volume(path);
-        if (target.empty() || target != volume(localData)) return ERROR_NOT_SAME_DEVICE;
+        if (target.empty()) return ERROR_BAD_PATHNAME;
+        const auto userVolume = volume(localData);
         DWORD flags = 0;
-        if (!GetVolumeInformationW(target.c_str(), nullptr, 0, nullptr, nullptr, &flags, nullptr, 0) || !(flags & FILE_SUPPORTS_HARD_LINKS)) return ERROR_NOT_SUPPORTED;
+        if (userVolume.empty() || !GetVolumeInformationW(userVolume.c_str(), nullptr, 0, nullptr, nullptr, &flags, nullptr, 0) || !(flags & FILE_SUPPORTS_HARD_LINKS)) return ERROR_NOT_SUPPORTED;
         return ERROR_SUCCESS;
     } catch (...) { return ERROR_BAD_PATHNAME; }
 }
@@ -289,6 +310,13 @@ extern "C" __declspec(dllexport) DWORD __stdcall CleanupInstall(const wchar_t* d
             const auto next = change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, false, L"ShimsPathOwned");
             if (!error) error = next;
         }
+        remove_shortcut(std::filesystem::path(desktop) / L"PathMan.lnk", root / L"PathMan.exe");
+        return error;
+    } catch (...) { return ERROR_INSTALL_FAILURE; }
+}
+extern "C" __declspec(dllexport) DWORD __stdcall CleanupUserInstall(const wchar_t* directory, const wchar_t* desktop) {
+    try {
+        const std::filesystem::path root(directory);
         constexpr auto run = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
         const auto expected = L"\"" + (root / L"internal" / L"PathMan.Service.exe").wstring() + L"\"";
         if (_wcsicmp(read(HKEY_CURRENT_USER, run, L"PathMan").c_str(), expected.c_str()) == 0) {
@@ -296,24 +324,85 @@ extern "C" __declspec(dllexport) DWORD __stdcall CleanupInstall(const wchar_t* d
             if (!RegOpenKeyExW(HKEY_CURRENT_USER, run, 0, KEY_SET_VALUE, &opened)) { RegDeleteValueW(opened, L"PathMan"); RegCloseKey(opened); }
         }
         remove_shortcut(std::filesystem::path(desktop) / L"PathMan.lnk", root / L"PathMan.exe");
-        return error;
+        return ERROR_SUCCESS;
     } catch (...) { return ERROR_INSTALL_FAILURE; }
 }
 extern "C" __declspec(dllexport) DWORD __stdcall RefreshShims(const wchar_t* directory, const wchar_t* localData) {
     try {
-        const auto source = std::filesystem::path(directory) / L"internal" / L"PathMan.Shim.exe";
-        const auto aliases = std::filesystem::path(localData) / L"PathMan" / L"shims";
-        if (!std::filesystem::exists(aliases)) return ERROR_SUCCESS;
-        for (const auto& entry : std::filesystem::directory_iterator(aliases)) {
-            if (entry.path().extension() != L".shim" || !entry.is_regular_file() || entry.is_symlink()) continue;
-            if (GetPrivateProfileIntW(L"PathMan.Shim", L"Format", 0, entry.path().c_str()) != 1) continue;
-            auto target = entry.path(); target.replace_extension(L".exe");
-            wchar_t temporary[32768]{};
-            if (!GetTempFileNameW(aliases.c_str(), L"pmi", 0, temporary)) return GetLastError();
-            DeleteFileW(temporary);
-            if (!CreateHardLinkW(temporary, source.c_str(), nullptr)) return GetLastError();
-            if (!MoveFileExW(temporary, target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) { const auto error = GetLastError(); DeleteFileW(temporary); return error; }
-        }
-        return ERROR_SUCCESS;
+        const auto data = std::filesystem::path(localData) / L"PathMan";
+        if (!std::filesystem::exists(data / L"shims")) return ERROR_SUCCESS;
+        const auto cli = std::filesystem::path(directory) / L"bin" / L"pathman.exe";
+        auto command = L"\"" + cli.wstring() + L"\" --data-root \"" + data.wstring() + L"\" shim refresh";
+        STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
+        if (!CreateProcessW(cli.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, directory, &start, &process)) return GetLastError();
+        WaitForSingleObject(process.hProcess, INFINITE);
+        DWORD exitCode = ERROR_INSTALL_FAILURE;
+        GetExitCodeProcess(process.hProcess, &exitCode);
+        CloseHandle(process.hThread); CloseHandle(process.hProcess);
+        return exitCode;
     } catch (...) { return ERROR_INSTALL_FAILURE; }
+}
+
+// A one-use event authorizes the silent elevated child. Both processes retain
+// the same global lock, including if the visible wizard exits unexpectedly.
+extern "C" __declspec(dllexport) HANDLE __stdcall BeginSetup() {
+    PSECURITY_DESCRIPTOR descriptor = nullptr;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;OW)(A;;0x00100000;;;AU)", SDDL_REVISION_1, &descriptor, nullptr)) return nullptr;
+    SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor, FALSE};
+    SetLastError(ERROR_SUCCESS);
+    const auto mutex = CreateMutexW(&attributes, FALSE, L"Global\\PathMan.Setup");
+    const auto error = GetLastError();
+    LocalFree(descriptor);
+    if (mutex && error == ERROR_ALREADY_EXISTS) { CloseHandle(mutex); return nullptr; }
+    return mutex;
+}
+extern "C" __declspec(dllexport) HANDLE __stdcall JoinSetupWorker(const wchar_t* ticket) {
+    GUID id{};
+    if (FAILED(CLSIDFromString(ticket, &id))) return nullptr;
+    const auto name = std::wstring(L"Local\\PathMan.Setup.Worker.") + ticket;
+    const auto event = OpenEventW(SYNCHRONIZE, FALSE, name.c_str());
+    if (!event) return nullptr;
+    const auto allowed = WaitForSingleObject(event, 0) == WAIT_OBJECT_0;
+    CloseHandle(event);
+    return allowed ? OpenMutexW(SYNCHRONIZE, FALSE, L"Global\\PathMan.Setup") : nullptr;
+}
+extern "C" __declspec(dllexport) DWORD __stdcall RunElevatedSetup(HWND owner, const wchar_t* executable, const wchar_t* configuration) {
+    GUID id{}; wchar_t ticket[40]{};
+    if (FAILED(CoCreateGuid(&id)) || !StringFromGUID2(id, ticket, 40)) return ERROR_INSTALL_FAILURE;
+    const auto name = std::wstring(L"Local\\PathMan.Setup.Worker.") + ticket;
+    PSECURITY_DESCRIPTOR descriptor = nullptr;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;OW)", SDDL_REVISION_1, &descriptor, nullptr)) return GetLastError();
+    SECURITY_ATTRIBUTES attributes{sizeof(attributes), descriptor, FALSE};
+    const auto event = CreateEventW(&attributes, FALSE, TRUE, name.c_str());
+    const auto createError = GetLastError();
+    LocalFree(descriptor);
+    if (!event) return createError;
+    auto parameters = std::wstring(L"/S /AllUsers /SetupWorker=") + ticket + L" /SetupConfig=\"" + configuration + L"\"";
+    auto worker = std::filesystem::path(executable);
+    const bool uninstall = _wcsicmp(worker.filename().c_str(), L"Uninstall.exe") == 0;
+    if (uninstall) {
+        // Avoid NSIS's asynchronous uninstaller bootstrap, and do not execute
+        // the installed file that the worker needs to remove.
+        const auto original = worker;
+        worker = std::filesystem::path(configuration).parent_path() / L"uninstall-worker.exe";
+        if (!CopyFileW(original.c_str(), worker.c_str(), FALSE)) { const auto error = GetLastError(); CloseHandle(event); return error; }
+        parameters += L" _?=" + original.parent_path().wstring();
+    }
+    SHELLEXECUTEINFOW execute{sizeof(execute)};
+    execute.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    execute.hwnd = owner;
+    execute.lpVerb = L"runas"; execute.lpFile = worker.c_str(); execute.lpParameters = parameters.c_str(); execute.nShow = SW_HIDE;
+    DWORD result = ERROR_INSTALL_FAILURE;
+    const auto initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (ShellExecuteExW(&execute)) {
+        if (execute.hProcess) {
+            WaitForSingleObject(execute.hProcess, INFINITE);
+            GetExitCodeProcess(execute.hProcess, &result);
+            CloseHandle(execute.hProcess);
+        }
+    } else { result = GetLastError(); if (result == ERROR_CANCELLED) result = ERROR_INSTALL_USEREXIT; }
+    if (SUCCEEDED(initialized)) CoUninitialize();
+    CloseHandle(event);
+    if (uninstall) DeleteFileW(worker.c_str());
+    return result;
 }
