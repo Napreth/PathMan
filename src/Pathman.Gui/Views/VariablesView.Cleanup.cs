@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
 
@@ -10,15 +11,37 @@ namespace Pathman.Gui.Views;
 public partial class VariablesView
 {
     private EnvironmentPathCleanupPlan? cleanupPlan;
-    private sealed record CleanupChangeDisplay(string Title, string Before, string After);
-    private sealed record CleanupWarningDisplay(PathCleanupWarning Warning)
+    private sealed record CleanupChangeDisplay(string Title,IReadOnlyList<DiffDisplayLine> Lines);
+    private sealed record DiffDisplayLine(string Text,int? OldLine,int? NewLine,string Prefix,ValueDiffKind? Kind)
     {
-        public string Title => $"{(Warning.Scope == VariableScope.User ? "用户" : "系统")} · {Warning.Name}";
-        public string Message => Warning.Message;
+        public string Title=>Prefix+Text;
+        public bool IsAdded=>Kind==ValueDiffKind.Added;
+        public bool IsRemoved=>Kind==ValueDiffKind.Removed;
+        public bool IsHunk=>Kind is null;
+    }
+    private static IReadOnlyList<DiffDisplayLine> DiffLines(string? before,string after)
+    {
+        var full=EnvironmentValueDiff.Create(before,after);
+        var visible=new bool[full.Count];
+        for(var i=0;i<full.Count;i++) if(full[i].Kind!=ValueDiffKind.Context)
+            for(var j=Math.Max(0,i-3);j<=Math.Min(full.Count-1,i+3);j++) visible[j]=true;
+        var result=new List<DiffDisplayLine>();
+        for(var index=0;index<full.Count;)
+        {
+            if(!visible[index]) {index++;continue;}
+            var end=index; while(end<full.Count && visible[end]) end++;
+            var hunk=full.Skip(index).Take(end-index).ToArray();
+            var oldLines=hunk.Where(line=>line.OldLine is not null).ToArray(); var newLines=hunk.Where(line=>line.NewLine is not null).ToArray();
+            result.Add(new($"@@ -{oldLines.FirstOrDefault()?.OldLine ?? 0},{oldLines.Length} +{newLines.FirstOrDefault()?.NewLine ?? 0},{newLines.Length} @@",null,null,"",null));
+            result.AddRange(hunk.Select(line=>new DiffDisplayLine(line.Text,line.OldLine,line.NewLine,line.Prefix,line.Kind)));
+            index=end;
+        }
+        return result;
     }
     private async void PreviewCleanup(object sender, RoutedEventArgs e)
     {
         if (busy || !await ConfirmLeaveAsync()) return;
+        StatusText.Text="";
         await ReloadAsync();
         cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables, RuntimeValues());
         ShowCleanupPlan(); CleanupStatus.Text="";
@@ -29,17 +52,16 @@ public partial class VariablesView
         if (cleanupPlan is null) return;
         CleanupChanges.ItemsSource=cleanupPlan.Scopes.SelectMany(scope=>scope.Mutations.Select(change=>new CleanupChangeDisplay(
             $"{(scope.Scope==VariableScope.User ? "用户" : "系统")} · {change.Name}{(change.Action=="create" ? "（新建）" : "")}",
-            change.Action=="create" ? "未定义" : (change.ExpectedValue ?? "").Replace(';','\n'), (change.Value ?? "").Replace(';','\n')))).ToArray();
-        CleanupWarnings.ItemsSource=cleanupPlan.Warnings.Select(warning=>new CleanupWarningDisplay(warning)).ToArray();
-        CleanupWarningsSurface.Visibility=cleanupPlan.Warnings.Count>0 ? Visibility.Visible : Visibility.Collapsed;
+            DiffLines(change.Action=="create" ? null : change.ExpectedValue,change.Value ?? "")))).ToArray();
         CleanupEmpty.Visibility=cleanupPlan.HasChanges ? Visibility.Collapsed : Visibility.Visible;
         ApplyCleanupButton.IsEnabled=cleanupPlan.HasChanges;
     }
     private void CloseCleanup(object sender, RoutedEventArgs e)
     { if (!busy) { CleanupPanel.Visibility=Visibility.Collapsed; EditorPanel.Visibility=Visibility.Visible; } }
-    private async void OpenCleanupWarning(object sender, RoutedEventArgs e)
+    private void ScrollCleanup(object sender,MouseWheelEventArgs e)
     {
-        if (sender is Button { DataContext: CleanupWarningDisplay display }) await OpenVariable(display.Warning.Scope, display.Warning.Name);
+        if(CleanupScroll.ScrollableHeight<=0) return;
+        CleanupScroll.ScrollToVerticalOffset(CleanupScroll.VerticalOffset-e.Delta*.5); e.Handled=true;
     }
     private async void ApplyCleanup(object sender, RoutedEventArgs e)
     {

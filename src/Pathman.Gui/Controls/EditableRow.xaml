@@ -1,15 +1,16 @@
 <UserControl x:Class="Pathman.Gui.Controls.EditableRow"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pathman.Gui.Controls"
              x:Name="Root" Focusable="False" MouseDoubleClick="DoubleClick" PreviewKeyDown="RowKeyDown">
     <Grid Height="24" Background="Transparent">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <Grid Margin="0,0,4,0">
             <Grid x:Name="Label"><Grid.ColumnDefinitions><ColumnDefinition x:Name="NameColumn" Width="3*"/><ColumnDefinition x:Name="DetailColumn" Width="2*"/></Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding Text, ElementName=Root}" LineHeight="24" LineStackingStrategy="BlockLineHeight" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, ElementName=Root}"/>
-                <TextBlock Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" LineHeight="24" LineStackingStrategy="BlockLineHeight" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail, ElementName=Root}"/>
+                <controls:ReferenceText Text="{Binding Text, ElementName=Root}" VerticalAlignment="Center" ToolTip="{Binding Text, ElementName=Root}"/>
+                <controls:ReferenceText Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" VerticalAlignment="Center" ToolTip="{Binding Detail, ElementName=Root}"/>
             </Grid>
-            <TextBox x:Name="Input" Visibility="Collapsed" Padding="2,0" MinHeight="0" Height="23" FontSize="13"
+            <controls:ReferenceTextBox x:Name="Input" Visibility="Collapsed" Padding="2,0" MinHeight="0" Height="23" FontSize="13"
                      VerticalContentAlignment="Center" BorderThickness="1" AutomationProperties.Name="行内编辑"
                      PreviewKeyDown="InputKeyDown" LostKeyboardFocus="InputLostFocus"/>
         </Grid>

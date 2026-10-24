@@ -5,6 +5,9 @@ using System.Windows.Threading;
 using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Gui.Views;
+using Pathman.Core.Notifications;
+using Pathman.Gui.Controls;
+using Pathman.Gui.Notifications;
 namespace Pathman.Gui;
 public partial class MainWindow : Window
 {
@@ -14,6 +17,12 @@ public partial class MainWindow : Window
     private readonly AliasesView aliases;
     private readonly MonitorView monitor;
     private readonly AboutView about;
+    private readonly HealthView health=new();
+    private readonly UserControl versions=new() {Content=new StackPanel {Children={new TextBlock {Text="版本管理",FontSize=28,Margin=new(0,0,0,24)},new TextBlock {Text="开发中",FontSize=14}}}};
+    private readonly NotificationCenter notifications=new();
+    private bool healthBusy,scanAgain;
+    private string healthSignature="";
+    private int previousIssueCount;
     private readonly DispatcherTimer changes=new() {Interval=TimeSpan.FromSeconds(1)};
     private DateTime lastWrite;
     private bool navigating,checking,closingApproved;
@@ -23,6 +32,11 @@ public partial class MainWindow : Window
         InitializeComponent(); store=new(layout.DataDirectory);
         variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(layout);
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
+        NotificationsList.ItemsSource=notifications.Items;
+        AddHandler(Osc8TextBlock.LinkRequestedEvent,new EventHandler<AppLinkEventArgs>(HandleAppLink));
+        health.ScanRequested+=async(_,_)=>await ScanHealthAsync();
+        variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
+        Loaded+=async(_,_)=>await ScanHealthAsync();
         changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
         Closed+=(_,_)=>changes.Stop();
     }
@@ -34,8 +48,55 @@ public partial class MainWindow : Window
         if(!canLeave) { Navigation.SelectedItem=previousNavigation; navigating=false; return; }
         Navigation.SelectedItem=item;
         previousNavigation=item;
-        PageHost.Content=(item.Tag as string) switch { "aliases"=>aliases,"monitor"=>monitor,"about"=>about,_=>variables };
+        PageHost.Content=(item.Tag as string) switch { "health"=>health,"aliases"=>aliases,"versions"=>versions,"monitor"=>monitor,"about"=>about,_=>variables };
         navigating=false;
+    }
+    private void DismissNotification(object sender,RoutedEventArgs e)
+    {if(sender is Button {DataContext:AppNotification notification}) notifications.Dismiss(notification.Id);}
+    private async void HandleAppLink(object? sender,AppLinkEventArgs e)
+    {
+        e.Handled=true;
+        if(AppPageLink.Parse(e.Target) is {} route)
+        {
+            if(route.Page=="variables" && route.Scope is {} scope && route.Name is {} name)
+            {
+                if(!await variables.NavigateToVariableAsync(scope,name)) return;
+                navigating=true; Navigation.SelectedItem=Navigation.Items.Cast<ListBoxItem>().First(item=>item.Tag as string=="variables");
+                previousNavigation=(ListBoxItem)Navigation.SelectedItem; PageHost.Content=variables; navigating=false;
+            }
+            else Navigation.SelectedItem=Navigation.Items.Cast<ListBoxItem>().First(item=>string.Equals(item.Tag as string,route.Page,StringComparison.Ordinal));
+            return;
+        }
+        if(Uri.TryCreate(e.Target,UriKind.Absolute,out var uri) && uri.Scheme is "https" or "http")
+        {
+            try {System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) {UseShellExecute=true});}
+            catch(System.ComponentModel.Win32Exception error) {notifications.Show(new("link","链接未打开",error.Message,NotificationColor.Red));}
+        }
+    }
+    private async Task ScanHealthAsync()
+    {
+        if(healthBusy) {scanAgain=true; return;}
+        healthBusy=true; health.SetScanning(true);
+        try
+        {
+            do
+            {
+                scanAgain=false;
+                var report=await Task.Run(()=>EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll()));
+                health.Update(report);
+                var signature=string.Join('\n',report.Issues.Select(issue=>$"{issue.Kind}:{issue.Scope}:{issue.Name}:{issue.Message}"));
+                if(signature!=healthSignature)
+                {
+                    healthSignature=signature;
+                    if(report.Issues.Count>0) notifications.Show(new("health","环境变量存在问题",$"发现 {report.Errors} 项错误、{report.Warnings} 项提醒。\n"+Osc8Text.Link("查看健康检测","apppage:health"),report.Errors>0 ? NotificationColor.Red : NotificationColor.Yellow));
+                    else if(previousIssueCount>0) notifications.Show(new("health","健康检测通过","之前发现的问题已解决。",NotificationColor.Green));
+                    previousIssueCount=report.Issues.Count;
+                }
+            } while(scanAgain);
+        }
+        catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {health.ShowError(error.Message); notifications.Show(new("health","检测未完成",error.Message,NotificationColor.Red));}
+        finally {healthBusy=false; health.SetScanning(false);}
     }
     private async void CheckWorkspace(object? sender,EventArgs e)
     {

@@ -62,9 +62,15 @@
             <Border x:Name="ValueSurface" Grid.Row="1" Grid.Column="2" Style="{StaticResource Surface}">
                 <Grid>
                     <TextBlock x:Name="EmptySelection" Text="选择环境变量" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <ListBox x:Name="ValuesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="变量条目">
-                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/></Style></ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate><DataTemplate><controls:EditableRow Text="{Binding Value}" ShowPin="False" ShowEdit="False" ShowDelete="False" ShowJump="{Binding HasReferences}" JumpToolTip="{Binding ReferenceToolTip}" JumpRequested="EntryJumpRequested" EditRequested="EntryEditRequested" EditingCanceled="EntryEditCanceled" EditingChanged="RowEditingChanged"/></DataTemplate></ListBox.ItemTemplate>
+                    <ListBox x:Name="ValuesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="变量条目"
+                             PreviewMouseLeftButtonDown="PathMouseDown" PreviewMouseMove="PathMouseMove" PreviewMouseLeftButtonUp="PathMouseUp">
+                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/><Style.Triggers><DataTrigger Binding="{Binding IsDragPlaceholder}" Value="True"><Setter Property="Opacity" Value="0"/></DataTrigger></Style.Triggers></Style></ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate><DataTemplate><Grid Margin="{Binding Indent}"><Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Button IsEnabled="{Binding CanExpand}" Click="TogglePathReference" Focusable="False" ToolTip="{Binding GroupToolTip}" AutomationProperties.Name="{Binding ExpandActionName}">
+                                <Button.Style><Style TargetType="Button"><Setter Property="Visibility" Value="Visible"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="Transparent"><Path x:Name="Chevron" Data="M 0,0 L 4,4 L 0,8" Stroke="{Binding Foreground,RelativeSource={RelativeSource AncestorType=ListBoxItem}}" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin=".5,.5"/></Border><ControlTemplate.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter TargetName="Chevron" Property="RenderTransform"><Setter.Value><RotateTransform Angle="90"/></Setter.Value></Setter></DataTrigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter><Style.Triggers><DataTrigger Binding="{Binding IsGroup}" Value="False"><Setter Property="Visibility" Value="Hidden"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                            </Button>
+                            <controls:EditableRow Grid.Column="1" Text="{Binding Value}" ShowPin="False" ShowEdit="False" ShowDelete="False" ShowJump="{Binding HasReferences}" JumpToolTip="{Binding ReferenceToolTip}" JumpRequested="EntryJumpRequested" EditRequested="EntryEditRequested" EditingCanceled="EntryEditCanceled" EditingChanged="RowEditingChanged"/>
+                        </Grid></DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
                     <ListBox x:Name="GroupVariablesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="分组变量">
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding Title}"/></Style></ListBox.ItemContainerStyle>
@@ -72,7 +78,7 @@
                             <controls:EditableRow Text="{Binding Title}" Detail="{Binding Variable.RawValue}" CanDelete="{Binding CanDelete}" IsPinned="{Binding IsPinned}" EditOnDoubleClick="False" Activated="OpenGroupVariable" EditRequested="RowEditRequested" DeleteRequested="RowDeleteRequested" PinRequested="RowPinRequested" EditingChanged="RowEditingChanged"/>
                         </DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
-                    <TextBox x:Name="ScalarValueBox" Style="{StaticResource ValueTextBox}" Visibility="Collapsed" TextChanged="ValueTextChanged" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="变量值"/>
+                    <controls:ReferenceTextBox x:Name="ScalarValueBox" Style="{StaticResource ValueTextBox}" Visibility="Collapsed" TextChanged="ValueTextChanged" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="变量值"/>
                 </Grid>
             </Border>
             <Grid x:Name="ValueActions" Grid.Row="1" Grid.Column="4" Visibility="Collapsed">
@@ -94,24 +100,28 @@
         <Grid x:Name="CleanupPanel" Grid.Row="1" Visibility="Collapsed">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <DockPanel Margin="0,0,0,16"><Button Content="返回" DockPanel.Dock="Right" Click="CloseCleanup"/><TextBlock Text="清理预览" Style="{StaticResource SectionTitle}"/></DockPanel>
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="CleanupScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" PreviewMouseWheel="ScrollCleanup">
                 <StackPanel>
                     <ListBox x:Name="CleanupChanges" Style="{StaticResource PreviewItems}" AutomationProperties.Name="待清理的变量"><ListBox.ItemTemplate><DataTemplate>
-                        <Border Style="{StaticResource Surface}" Padding="16" Margin="0,0,0,12"><StackPanel>
-                            <TextBlock Text="{Binding Title}" FontSize="14" Margin="0,0,0,12"/>
-                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <StackPanel><TextBlock Text="当前" Opacity=".6" Margin="0,0,0,6"/><TextBlock Text="{Binding Before}" TextWrapping="Wrap" FontSize="13"/></StackPanel>
-                                <StackPanel Grid.Column="2"><TextBlock Text="清理后" Opacity=".6" Margin="0,0,0,6"/><TextBlock Text="{Binding After}" TextWrapping="Wrap" FontSize="13"/></StackPanel>
-                            </Grid>
+                        <Border Style="{StaticResource Surface}" Margin="0,0,0,12"><StackPanel>
+                            <TextBlock Text="{Binding Title}" FontSize="14" Padding="16,12"/>
+                            <ListBox ItemsSource="{Binding Lines}" Style="{StaticResource PreviewItems}" Margin="0,0,0,8"><ListBox.ItemTemplate><DataTemplate>
+                                <Grid x:Name="DiffRow" MinHeight="24">
+                                    <Grid.Style><Style TargetType="Grid"><Setter Property="Background" Value="Transparent"/><Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/><Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAdded}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Green}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                                        <DataTrigger Binding="{Binding IsRemoved}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Red}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                                        <DataTrigger Binding="{Binding IsHunk}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Blue}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                                    </Style.Triggers></Style></Grid.Style>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="42"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding OldLine}" FontSize="12" Opacity=".55" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding NewLine}" FontSize="12" Opacity=".55" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Prefix}" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                    <controls:ReferenceText Grid.Column="3" Text="{Binding Text}" TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei UI" FontSize="13" Margin="0,2,12,2" VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate></ListBox.ItemTemplate></ListBox>
                         </StackPanel></Border>
                     </DataTemplate></ListBox.ItemTemplate></ListBox>
                     <TextBlock x:Name="CleanupEmpty" Text="没有需要清理的条目" Margin="0,8,0,20"/>
-                    <Border x:Name="CleanupWarningsSurface" Style="{StaticResource Surface}" Padding="16" Margin="0,0,0,12"><StackPanel>
-                        <TextBlock Text="需要检查的引用" FontSize="14" Margin="0,0,0,8"/>
-                        <ListBox x:Name="CleanupWarnings" Style="{StaticResource PreviewItems}" AutomationProperties.Name="清理提醒"><ListBox.ItemTemplate><DataTemplate>
-                            <StackPanel Margin="0,0,0,12"><Button AutomationProperties.Name="{Binding Title}" HorizontalAlignment="Left" Click="OpenCleanupWarning" Padding="8,3"><TextBlock Text="{Binding Title}"/></Button><TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="13"/></StackPanel>
-                        </DataTemplate></ListBox.ItemTemplate></ListBox>
-                    </StackPanel></Border>
                 </StackPanel>
             </ScrollViewer>
             <DockPanel Grid.Row="2" Margin="0,12,0,0"><Button x:Name="ApplyCleanupButton" DockPanel.Dock="Right" Content="应用清理" Click="ApplyCleanup" Padding="16,6"/><TextBlock x:Name="CleanupStatus" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0"/></DockPanel>

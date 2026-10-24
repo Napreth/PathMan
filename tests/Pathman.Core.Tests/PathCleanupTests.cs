@@ -22,7 +22,7 @@ internal static class PathCleanupTests
         assert(machine.Mutations.Single(change=>change.Action=="create").Value==@"C:\apps;%JAVA_HOME%\bin;C:\Windows\Custom","Only software entries and non-pure references must be migrated, preserving their text");
         assert(machine.Mutations.Single(change=>change.Action=="set").Value==@"%SystemRoot%\system32;C:\WINDOWS;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH;%DEVELOP_PATH%\;%SOFTWARE2_PATH%","Windows component paths and pure references must stay in system PATH");
         assert(user.MovedEntries==0 && user.Mutations.Count==1 && user.Mutations[0].Value==@"C:\one;%DEVELOP_PATH%;%JAVA_HOME%\bin","User cleanup must deduplicate without creating a software variable");
-        assert(plan.Warnings.Count==0,"Nonoverlapping references must not create warnings");
+        assert(EnvironmentHealth.Analyze([M("Path","%DEVELOP_PATH%"),M("DEVELOP_PATH",@"C:\dev;C:\shared")],runtime).Issues.Count==0,"Nonoverlapping references must not create health warnings");
         var updated=input.ToList();
         foreach(var scope in plan.Scopes) foreach(var change in scope.Mutations)
         {
@@ -34,16 +34,17 @@ internal static class PathCleanupTests
         EnvironmentVariableInfo[] overlaps=[U("Path",@"C:\overlap;%A_PATH%;%B_PATH%;%a_path%\"),U("A_PATH",@"%NESTED_PATH%;C:\same;c:\SAME\"),U("NESTED_PATH",@"C:\overlap"),U("B_PATH",@"C:\overlap;D:\unique")];
         var overlapPlan=EnvironmentPathCleanup.Analyze(overlaps,runtime);
         assert(overlapPlan.Scopes[0].RemovedDuplicates==2 && overlapPlan.Scopes[0].Mutations.Single().Value=="%A_PATH%;%B_PATH%","Direct duplicates must yield to referenced paths; repeated pure references must be removed");
-        assert(overlapPlan.Warnings.Any(item=>item.Name=="A_PATH" && item.Message.Contains("重复")) && overlapPlan.Warnings.Any(item=>item.Name=="Path" && item.Message.Contains("重叠")),"Internal and cross-variable duplicates must produce navigable warnings");
+        var overlapHealth=EnvironmentHealth.Analyze(overlaps,runtime);
+        assert(overlapHealth.Issues.Any(item=>item.Name=="A_PATH" && item.Kind==EnvironmentIssueKind.Duplicate) && overlapHealth.Issues.Any(item=>item.Name=="Path" && item.Kind==EnvironmentIssueKind.Duplicate),"Internal and cross-variable duplicates belong to health detection");
         assert(overlapPlan.Scopes.SelectMany(scope=>scope.Mutations).All(change=>change.Name=="Path"),"Cleanup must not rewrite referenced path variables");
         var nested=EnvironmentPathCleanup.Analyze([U("Path","%A_PATH%"),U("A_PATH","%B_PATH%"),U("B_PATH",@"C:\one;D:\two")],runtime);
-        assert(nested.Warnings.Count==0 && !nested.HasChanges,"A nested reference is not by itself a duplicate");
+        assert(EnvironmentHealth.Analyze([U("Path","%A_PATH%"),U("A_PATH","%B_PATH%"),U("B_PATH",@"C:\one;D:\two")],runtime).Issues.Count==0 && !nested.HasChanges,"A nested reference is not by itself a duplicate");
         var resolver=new EnvironmentPathResolver([M("A_PATH",@"C:\machine"),U("A_PATH",@"D:\user"),U("ONLY_USER",@"D:\private")],runtime);
         assert(resolver.Expand("%a_path%",VariableScope.Machine).Paths.Single()==@"C:\machine" && resolver.Expand("%A_PATH%",VariableScope.User).Paths.Single()==@"D:\user","Expansion must respect the saved scope and user overrides");
         assert(!resolver.Expand("%ONLY_USER%",VariableScope.Machine).IsResolved,"A machine value cannot inherit a user-only variable from the process");
         assert(!new EnvironmentPathResolver([],new Dictionary<string,string> { ["STALE_CUSTOM_PATH"]=@"C:\stale" }).Expand("%STALE_CUSTOM_PATH%",VariableScope.User).IsResolved,"A stale process-only custom value must not be used to delete persisted PATH entries");
         var unresolved=EnvironmentPathCleanup.Analyze([U("Path",@"%A_PATH%;%MISSING%"),U("A_PATH","%B_PATH%"),U("B_PATH","%A_PATH%")],runtime);
-        assert(!unresolved.HasChanges && unresolved.Warnings.Count>=2,"Cyclic and missing references must be retained and reported");
+        assert(!unresolved.HasChanges && EnvironmentHealth.Analyze([U("Path",@"%A_PATH%;%MISSING%"),U("A_PATH","%B_PATH%"),U("B_PATH","%A_PATH%")],runtime).Issues.Count>=2,"Cyclic and missing references must be retained and reported by health detection");
         var collision=EnvironmentPathCleanup.Analyze([M("Path",@"C:\tool;%SOFTWARE_PATH%")],runtime);
         assert(collision.Scopes[0].SoftwareVariable=="SOFTWARE1_PATH","Creating a software variable must not accidentally bind an existing unresolved reference");
         assert(EnvironmentPathResolver.PureReference(@"%SDK_PATH%\")=="SDK_PATH" && EnvironmentPathResolver.PureReference(@"%SDK_PATH%\bin")==null && EnvironmentPathResolver.PureReference("\"%SDK_PATH%\"")==null,"Pure reference parsing must allow trailing separators but no suffix or quotes");

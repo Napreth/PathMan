@@ -28,6 +28,9 @@ public sealed partial class EnvironmentPathResolver
     public EnvironmentVariableInfo? Find(string name, VariableScope scope) =>
         (scope == VariableScope.User ? variables.FirstOrDefault(item => item.Scope == VariableScope.User && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) : null)
         ?? variables.FirstOrDefault(item => item.Scope == VariableScope.Machine && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    public bool IsDefined(string name, VariableScope scope) => Find(name, scope) is not null ||
+        EnvironmentVariableClassifier.IsWindowsBuiltIn(name) && !variables.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) &&
+        runtime.Any(item => item.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     public IReadOnlyList<EnvironmentVariableInfo> ReferencedVariables(string value, VariableScope scope)
     {

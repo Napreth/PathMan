@@ -20,6 +20,9 @@ public partial class VariablesView : UserControl
     private readonly PathmanLayout layout;
     private readonly EnvironmentWorkspaceStore store;
     private readonly ObservableCollection<EnvironmentEntry> entries = [];
+    private PathEditingSession? editingSession;
+    private readonly HashSet<string> expandedPathRows=[];
+    public event EventHandler? SnapshotChanged;
     private IReadOnlyList<EnvironmentTreeNode> userGroups = [], systemGroups = [];
     private IReadOnlyList<EnvironmentVariableInfo> allVariables = [];
     private EnvironmentTreeNode? selected;
@@ -28,17 +31,11 @@ public partial class VariablesView : UserControl
     private EditableRow? activeEditor;
     public bool HasUnsavedChanges => dirty || activeEditor?.IsEditing == true;
     public bool HasInlineEditor => activeEditor?.IsEditing == true;
-    public bool IsBusy => busy || dragging || activeEditor?.IsEditing == true;
+    public bool IsBusy => busy || dragging || pathDragging || activeEditor?.IsEditing == true;
     public string LoadedRevision { get; private set; } = "";
     public VariablesView(PathmanLayout layout, EnvironmentWorkspaceStore store)
     {
         this.layout=layout; this.store=store; InitializeComponent(); ValuesList.ItemsSource=entries;
-        entries.CollectionChanged += (_, change) =>
-        {
-            var draftsOnly = change.Action is NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Remove &&
-                (change.NewItems ?? change.OldItems)?.Cast<EnvironmentEntry>().All(entry => entry.IsDraft) == true;
-            if (!updating && !draftsOnly) SetDirty();
-        };
         Loaded += async (_,_) => { if (userGroups.Count == 0) await ReloadAsync(); };
     }
     private Window OwnerWindow => Window.GetWindow(this);
@@ -48,7 +45,7 @@ public partial class VariablesView : UserControl
         .Where(item => item.Key is string && item.Value is string).ToDictionary(item => (string)item.Key,item => (string)item.Value!,StringComparer.OrdinalIgnoreCase);
     public async Task ReloadAsync(bool external = false)
     {
-        if (busy || external && (HasUnsavedChanges || dragging)) return;
+        if (busy || external && (HasUnsavedChanges || dragging || pathDragging)) return;
         busy=true; RefreshButton.IsEnabled=CleanupButton.IsEnabled=false; UserVariablesTree.IsEnabled=false; SystemVariablesTree.IsEnabled=false;
         var key=preferredKey ?? selected?.Key; preferredKey=null;
         var oldGroups=userGroups.Concat(systemGroups).ToArray();
@@ -76,6 +73,7 @@ public partial class VariablesView : UserControl
             ShowSelection(next);
             if (next?.Key.Equals(key,StringComparison.OrdinalIgnoreCase)==true && entryIndex>=0 && entryIndex<entries.Count) ValuesList.SelectedIndex=entryIndex;
             LoadedRevision=result.State.Revision;
+            SnapshotChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(Expected(error)) { Error(error); }
         finally { updating=false; busy=false; RefreshButton.IsEnabled=CleanupButton.IsEnabled=true; UserVariablesTree.IsEnabled=true; SystemVariablesTree.IsEnabled=true; UpdateActions(); }
@@ -111,19 +109,31 @@ public partial class VariablesView : UserControl
         if (selected!=node && selected is not null) selected.IsSelected=false;
         selected=node; if(node is not null) node.IsSelected=true;
         VariableTitle.Text=node?.Title ?? "环境变量";
-        var variable=node?.Variable;
+        var variable=node?.Variable is {} original ? allVariables.FirstOrDefault(item=>item.Scope==original.Scope && item.Name==original.Name) ?? original : null;
+        var restoreTargets=editingSession is {} previous && variable is not null && previous.Root.Scope==variable.Scope && previous.Root.Name.Equals(variable.Name,StringComparison.OrdinalIgnoreCase)
+            ? entries.Where(entry=>entry.IsExpanded && entry.Row?.TargetScope is not null).Select(entry=>$"{entry.Row!.TargetScope}:{entry.Row.TargetName}").ToHashSet(StringComparer.OrdinalIgnoreCase) : [];
+        editingSession=variable is null ? null : new PathEditingSession(variable,allVariables,RuntimeValues());
+        expandedPathRows.Clear();
+        if(editingSession is {} fresh && restoreTargets.Count>0)
+            for(var depth=0;depth<33;depth++)
+            {
+                var added=false;
+                foreach(var row in fresh.VisibleRows(expandedPathRows).Where(row=>row.IsGroup && !row.IsCycle && restoreTargets.Contains($"{row.TargetScope}:{row.TargetName}")))
+                    added|=expandedPathRows.Add(row.ViewKey);
+                if(!added) break;
+            }
         entries.Clear(); ScalarValueBox.Clear();
         listMode=variable is not null && (variable.IsList || EnvironmentVariableClassifier.IsPathVariable(variable,allVariables,RuntimeValues()));
         EmptySelection.Visibility=node is null ? Visibility.Visible : Visibility.Collapsed;
         GroupVariablesList.ItemsSource=node?.IsGroup == true ? node.Children : null;
         GroupVariablesList.Visibility=node?.IsGroup == true ? Visibility.Visible : Visibility.Collapsed;
         ValueActions.Visibility=variable is null ? Visibility.Collapsed : Visibility.Visible;
-        if(variable is not null) { if(listMode) { if(variable.RawValue.Length>0) foreach(var entry in variable.Entries) entries.Add(CreateEntry(entry)); } else ScalarValueBox.Text=variable.RawValue; }
+        if(variable is not null) { if(listMode) RefreshPathEntries(); else ScalarValueBox.Text=variable.RawValue; }
         UpdateValuePresentation();
         dirty=false; updating=false; UpdateActions();
     }
-    private void SetDirty() { dirty=true; UpdateActions(); }
-    private void ValueTextChanged(object sender,TextChangedEventArgs e) { if(!updating && selected?.Variable is not null) { UpdateValuePresentation(); SetDirty(); } }
+    private void SetDirty() { dirty=editingSession?.HasChanges==true; UpdateActions(); }
+    private void ValueTextChanged(object sender,TextChangedEventArgs e) { if(!updating && editingSession is {} session) {session.SetRaw(session.Root.Scope,session.Root.Name,ScalarValueBox.Text); UpdateValuePresentation(); SetDirty();} }
     private void EntrySelected(object sender,SelectionChangedEventArgs e) => UpdateActions();
     private async void OpenGroupVariable(object? sender, EventArgs e)
     {
@@ -140,22 +150,15 @@ public partial class VariablesView : UserControl
         SaveButton.IsEnabled=(dirty || HasInlineEditor) && !busy; RevertButton.IsEnabled=dirty && !busy;
         EditEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
         DeleteEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
-        MoveUpButton.IsEnabled=ValuesList.SelectedIndex>0 && !busy;
-        MoveDownButton.IsEnabled=ValuesList.SelectedIndex>=0 && ValuesList.SelectedIndex<entries.Count-1 && !busy;
+        var current=SelectedPathItem();
+        MoveUpButton.IsEnabled=current is {} up && up.Index>0 && !busy;
+        MoveDownButton.IsEnabled=current is {} down && down.Index<down.Count-1 && !busy;
         foreach (var toolbar in new[] { UserActions, SystemActions })
         {
             toolbar.IsEnabled = !busy;
         }
     }
-    private string CurrentValue => listMode ? string.Join(';',entries.Where(entry=>!entry.IsDraft).Select(entry=>entry.Value)) : ScalarValueBox.Text;
-    private EnvironmentEntry CreateEntry(string value, bool draft = false)
-    {
-        var variable = selected?.Variable;
-        var resolver = new EnvironmentPathResolver(allVariables);
-        var references = variable?.Name.EndsWith("PATH", StringComparison.OrdinalIgnoreCase) == true
-            ? EnvironmentPathResolver.ReferenceNames(value).Select(name => new EnvironmentReferenceLink(name, resolver.Find(name, variable.Scope)?.Scope)).ToArray() : [];
-        return new(value, draft, references);
-    }
+    private string CurrentValue => editingSession is {} session ? session.Raw(session.Root.Scope,session.Root.Name) : "";
     private void UpdateValuePresentation()
     {
         var variable = selected?.Variable;
@@ -178,11 +181,9 @@ public partial class VariablesView : UserControl
     private async void SaveValue(object sender,RoutedEventArgs e)
     {
         if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
-        if(selected?.Variable is not {} variable) return;
-        if(await ApplyAsync(new("set",variable.Scope,variable.Name,CurrentValue,ExpectedValue:variable.RawValue,ExpectedKind:variable.Kind)))
-        { dirty=false; await ReloadAsync(); }
+        await SavePathSession();
     }
-    private void RevertValue(object sender,RoutedEventArgs e) => ShowSelection(selected);
+    private async void RevertValue(object sender,RoutedEventArgs e) {dirty=false; await ReloadAsync();}
     private string? Prompt(string title,string initial="",bool multiline=false,Func<string,string?>? validator=null)
     {
         var dialog=new TextDialog(OwnerWindow,title,multiline ? "文本" : "名称",initial,multiline,validator);
@@ -192,7 +193,10 @@ public partial class VariablesView : UserControl
     private async void AddEntry(object sender,RoutedEventArgs e)
     {
         if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
-        var entry=CreateEntry("", true); entries.Add(entry); ValuesList.SelectedItem=entry;
+        if(editingSession is not {} session) return;
+        var owner=NewPathOwner();
+        var item=session.Append(owner.Scope,owner.Name,draft:true); RefreshPathEntries(item.Id);
+        var entry=entries.First(itemEntry=>itemEntry.ItemId==item.Id);
         ValuesList.ScrollIntoView(entry);
         await Dispatcher.InvokeAsync(() =>
         {
@@ -210,11 +214,13 @@ public partial class VariablesView : UserControl
     {
         var dialog=new Microsoft.Win32.OpenFolderDialog { Title="选择目录" };
         if(dialog.ShowDialog(OwnerWindow)!=true) return;
-        var index=ValuesList.SelectedIndex;
-        if(index>=0) entries[index]=CreateEntry(dialog.FolderName); else { entries.Add(CreateEntry(dialog.FolderName)); ValuesList.SelectedIndex=entries.Count-1; }
+        if(editingSession is not {} session) return;
+        if(ValuesList.SelectedItem is EnvironmentEntry entry) {session.Update(entry.ItemId,dialog.FolderName); RefreshPathEntries(entry.ItemId);}
+        else {var root=session.Root; var item=session.Append(root.Scope,root.Name,dialog.FolderName); RefreshPathEntries(item.Id);}
+        SetDirty();
     }
-    private void MoveUp(object sender,RoutedEventArgs e) { var index=ValuesList.SelectedIndex; if(index>0) { entries.Move(index,index-1); ValuesList.SelectedIndex=index-1; } }
-    private void MoveDown(object sender,RoutedEventArgs e) { var index=ValuesList.SelectedIndex; if(index>=0 && index<entries.Count-1) { entries.Move(index,index+1); ValuesList.SelectedIndex=index+1; } }
+    private void MoveUp(object sender,RoutedEventArgs e)=>MovePathSibling(-1);
+    private void MoveDown(object sender,RoutedEventArgs e)=>MovePathSibling(1);
     private async void ToggleValueMode(object sender,RoutedEventArgs e)
     {
         if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
@@ -222,7 +228,7 @@ public partial class VariablesView : UserControl
         var value=CurrentValue;
         updating=true;
         listMode=!listMode;
-        entries.Clear(); if(listMode) { if(value.Length>0) foreach(var item in value.Split(';',StringSplitOptions.None)) entries.Add(CreateEntry(item)); } else ScalarValueBox.Text=value;
+        if(listMode) RefreshPathEntries(); else ScalarValueBox.Text=value;
         UpdateValuePresentation(); updating=false; UpdateActions();
     }
     private void CopyValue(object sender,RoutedEventArgs e)
@@ -276,20 +282,18 @@ public partial class VariablesView : UserControl
         if (sender is not EditableRow { DataContext: EnvironmentEntry entry } || selected?.Variable is null) return;
         if (e.Value.Contains(';') || e.Value.Contains('\0') || e.Value.Contains('\r') || e.Value.Contains('\n'))
         { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。"); return; }
-        var index=entries.IndexOf(entry);
-        if (index < 0) return;
-        if (e.Value.Length == 0) { entries.RemoveAt(index); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1); }
-        else if(entry.IsDraft || entry.Value!=e.Value) { entries[index]=CreateEntry(e.Value); ValuesList.SelectedIndex=index; }
+        if(editingSession is not {} session) return;
+        session.Update(entry.ItemId,e.Value); RefreshPathEntries(entry.ItemId); SetDirty();
     }
     private void EntryEditCanceled(object? sender, EventArgs e)
     {
-        if (sender is EditableRow { DataContext: EnvironmentEntry { IsDraft: true } entry }) entries.Remove(entry);
+        if (sender is EditableRow { DataContext: EnvironmentEntry { IsDraft: true } entry } && editingSession is {} session) {session.Remove(entry.ItemId); RefreshPathEntries();}
     }
     private void DeleteEntry(object sender, RoutedEventArgs e)
     {
         if (ValuesList.SelectedItem is not EnvironmentEntry entry) return;
-        var index=entries.IndexOf(entry); if(index<0) return;
-        entries.RemoveAt(index); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1);
+        if(editingSession is not {} session) return;
+        var index=ValuesList.SelectedIndex; session.Remove(entry.ItemId); RefreshPathEntries(); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1); SetDirty();
     }
     private async void RowDeleteRequested(object? sender, EventArgs e)
     { if(sender is EditableRow { DataContext: EnvironmentTreeNode node } && node.CanDelete) await DeleteNode(node); }
@@ -322,12 +326,17 @@ public partial class VariablesView : UserControl
                 finally { busy=false; IsEnabled=true; }
                 if(selected==node) preferredKey=$"variable:{variable.Scope}:{name}";
             }
-            var staged=dirty ? CurrentValue : null;
+            var staged=editingSession?.Mutations() ?? [];
             await ReloadAsync();
-            if(staged is not null && selected?.Variable is not null)
+            if(staged.Count>0 && editingSession is {} session)
             {
-                updating=true; entries.Clear();
-                if(listMode) { if(staged.Length>0) foreach(var entry in staged.Split(';',StringSplitOptions.None)) entries.Add(CreateEntry(entry)); } else ScalarValueBox.Text=staged;
+                updating=true;
+                foreach(var change in staged)
+                {
+                    var stagedName=node.Variable is {} renamed && change.Scope==renamed.Scope && change.Name==renamed.Name ? name : change.Name;
+                    if(session.Originals.Any(item=>item.Scope==change.Scope && item.Name==stagedName)) session.SetRaw(change.Scope,stagedName,change.Value!);
+                }
+                if(listMode) RefreshPathEntries(); else ScalarValueBox.Text=CurrentValue;
                 updating=false; SetDirty();
             }
             return null;

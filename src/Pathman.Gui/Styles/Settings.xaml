@@ -157,7 +157,7 @@
                         <ItemsPresenter x:Name="ItemsHost" Visibility="Collapsed"/>
                     </StackPanel>
                     <ControlTemplate.Triggers>
-                        <DataTrigger Binding="{Binding IsGroup}" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/></DataTrigger>
+                        <DataTrigger Binding="{Binding IsGroup}" Value="False"><Setter TargetName="PART_Header" Property="Margin" Value="18,0,8,0"/></DataTrigger>
                         <Trigger SourceName="Row" Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
                         <Trigger Property="IsExpanded" Value="True"><Setter TargetName="ItemsHost" Property="Visibility" Value="Visible"/></Trigger>
                         <Trigger Property="HasItems" Value="False"><Setter TargetName="Expander" Property="Visibility" Value="Hidden"/></Trigger>
@@ -175,7 +175,7 @@
         <Setter Property="Padding" Value="0"/>
         <Setter Property="BorderThickness" Value="0"/>
         <!-- TextBoxView adds 2 DIP for its bidi caret; match the list's 4 + 8 DIP inset. -->
-        <Setter Property="Margin" Value="10,4,12,4"/>
+        <Setter Property="Margin" Value="30,4,12,4"/>
         <Setter Property="TextBlock.LineHeight" Value="24"/>
         <Setter Property="TextBlock.LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Background" Value="Transparent"/>

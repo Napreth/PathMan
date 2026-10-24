@@ -30,16 +30,27 @@ public partial class VariablesView
         }
         menu.IsOpen=true;
     }
+    public async Task<bool> NavigateToVariableAsync(VariableScope scope,string name)
+    {
+        if(!await ConfirmLeaveAsync()) return false;
+        if(allVariables.Count==0) await ReloadAsync();
+        return await RevealVariable(scope,name);
+    }
     private async Task OpenVariable(VariableScope scope, string name)
     {
         if (!await ConfirmLeaveAsync()) return;
+        await RevealVariable(scope,name);
+    }
+    private async Task<bool> RevealVariable(VariableScope scope,string name)
+    {
         var groups=scope==VariableScope.User ? userGroups : systemGroups;
         var group=groups.FirstOrDefault(group=>group.Children.Any(node=>node.Title.Equals(name,StringComparison.OrdinalIgnoreCase)));
         var node=group?.Children.FirstOrDefault(node=>node.Title.Equals(name,StringComparison.OrdinalIgnoreCase));
-        if (node is null) { StatusText.Text=$"找不到变量 {name}，请刷新后重试。"; return; }
+        if (node is null) { StatusText.Text=$"找不到变量 {name}，请刷新后重试。"; return false; }
         EditorPanel.Visibility=Visibility.Visible; CleanupPanel.Visibility=Visibility.Collapsed;
         group!.IsExpanded=true; ShowSelection(node);
         var tree=scope==VariableScope.User ? UserVariablesTree : SystemVariablesTree;
         await Dispatcher.InvokeAsync(()=> { tree.UpdateLayout(); Container(tree,node)?.BringIntoView(); },DispatcherPriority.Loaded);
+        return true;
     }
 }

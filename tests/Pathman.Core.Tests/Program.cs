@@ -19,6 +19,7 @@ foreach(var (name,raw,list,entries) in cases)
     Assert((list ? string.Join(';',variable.Entries) : variable.Entries.Single())==raw,$"Roundtrip failed: {name}");
 }
 PathCleanupTests.Run(Assert);
+RecursivePathsTests.Run(Assert);
 var fixtureRoot=Path.Combine(Path.GetTempPath(),"PathMan.Core.Tests",Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(fixtureRoot);
 var registryFixture=@"Software\PathMan.Tests\"+Guid.NewGuid().ToString("N");

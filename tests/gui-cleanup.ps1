@@ -118,7 +118,7 @@ try {
     $originalMachine=MachineValue 'Path'; $originalUser=UserValue 'Path'; $originalDevelop=MachineValue 'DEVELOP_PATH'
     Invoke (Id 'CleanupButton')
     Assert ((MachineValue 'Path') -eq $originalMachine -and (UserValue 'Path') -eq $originalUser) 'Cleanup preview does not modify registry values'
-    Assert (($null -ne (Find $window '系统 · DEVELOP_PATH' ([Windows.Automation.ControlType]::Button))) -and (Id 'ApplyCleanupButton').Current.IsEnabled) 'Duplicate references appear inside the preview, with an explicit Apply action'
+    Assert ($null -eq (Id 'CleanupWarningsSurface') -and (Id 'ApplyCleanupButton').Current.IsEnabled) 'Cleanup has an explicit Apply action and no separate health-warning panel'
     'WAITING_FOR_CLEANUP_UAC' | Set-Content ($ResultPath+'.progress')
     Invoke (Id 'ApplyCleanupButton')
     WaitFor { (MachineValue 'Path') -like '*%SOFTWARE1_PATH%' } 'Cleanup did not finish (confirm the UAC prompt in the VM)'
@@ -126,10 +126,11 @@ try {
     Assert ((MachineValue 'SOFTWARE1_PATH') -eq 'C:\Cleanup\App;%JAVA_HOME%\bin;C:\Windows\VendorPath') 'Machine cleanup moves only software entries and embedded references into the next free software variable'
     Assert ((UserValue 'Path') -eq 'C:\Cleanup\User;%USER_TOOLS_PATH%') 'User cleanup only removes duplicates and paths covered by references'
     Assert ((MachineValue 'DEVELOP_PATH') -eq $originalDevelop) 'Referenced variable content is left intact'
-    Assert (($null -ne (Find $window '系统 · DEVELOP_PATH' ([Windows.Automation.ControlType]::Button))) -and !(Id 'ApplyCleanupButton').Current.IsEnabled) 'Reference warnings remain inline after successful idempotent cleanup'
+    Assert (!(Id 'ApplyCleanupButton').Current.IsEnabled) 'Cleanup remains idempotent after applying'
     Assert (@(Get-ChildItem (Join-Path $env:LOCALAPPDATA 'PathMan\backups') -Filter 'path-cleanup-*.json').Count -gt 0) 'Cleanup saves a raw-value backup before applying'
-    Invoke (Find $window '系统 · DEVELOP_PATH' ([Windows.Automation.ControlType]::Button))
-    Assert ((Id 'VariableTitle').Current.Name -eq 'DEVELOP_PATH') 'Inline cleanup warnings link to the affected variable'
+    SelectNode (Find (Id 'Navigation') '健康检测' ([Windows.Automation.ControlType]::ListItem))
+    Invoke (Find $window '系统 · DEVELOP_PATH' ([Windows.Automation.ControlType]::Hyperlink))
+    Assert ((Id 'VariableTitle').Current.Name -eq 'DEVELOP_PATH') 'Health overview links to the affected variable after cleanup'
     SelectNode (Find (Id 'Navigation') '程序别名' ([Windows.Automation.ControlType]::ListItem))
     Toggle (Id 'EnableAliases')
     $shims=Join-Path $env:LOCALAPPDATA 'PathMan\shims'

@@ -91,7 +91,7 @@ try {
     CollapseAll; Expand '工作'; SelectNode (Node '工作')
     Assert ((Rows (Id $window 'GroupVariablesList')).Count -eq 3) 'Selecting a group shows its variables in the right pane'
     Assert ($null -ne (Find (Id $window 'GroupVariablesList') 'beta')) 'Group preview includes variable values'
-    Assert ([Math]::Abs((Text (Node '工作')).Current.BoundingRectangle.Left-(Text (Node 'PATHMAN_DRAG_B')).Current.BoundingRectangle.Left) -lt 1) 'Group and variable names share the same vertical baseline'
+    Assert ((Text (Node 'PATHMAN_DRAG_B')).Current.BoundingRectangle.Left-(Text (Node '工作')).Current.BoundingRectangle.Left -ge 14) 'Variable names are indented from category headings'
     Assert ($null -eq (Find (Id $window 'UserActions') '删除') -and $null -eq (Find (Id $window 'UserActions') '重命名')) 'Scope title toolbar contains no delete or rename buttons'
     $row=(Text (Node 'PATHMAN_DRAG_B')).Current.BoundingRectangle
     $edit=Find (Node 'PATHMAN_DRAG_B') '编辑' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Button)
