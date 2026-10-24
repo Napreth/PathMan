@@ -12,13 +12,17 @@ public partial class VariablesView
 {
     private EnvironmentPathCleanupPlan? cleanupPlan;
     private sealed record CleanupChangeDisplay(string Title,IReadOnlyList<DiffDisplayLine> Lines);
-    private sealed record DiffDisplayLine(string Text,int? OldLine,int? NewLine,string Prefix,ValueDiffKind? Kind)
+    private sealed record DiffCell(ValueDiffLine? Line,bool IsBefore)
     {
-        public string Title=>Prefix+Text;
-        public bool IsAdded=>Kind==ValueDiffKind.Added;
-        public bool IsRemoved=>Kind==ValueDiffKind.Removed;
-        public bool IsHunk=>Kind is null;
+        public string Text=>Line?.Text ?? "";
+        public string Prefix=>Line?.Prefix ?? "";
+        public int? Number=>IsBefore ? Line?.OldLine : Line?.NewLine;
+        public bool IsAdded=>Line?.Kind==ValueDiffKind.Added;
+        public bool IsRemoved=>Line?.Kind==ValueDiffKind.Removed;
+        public bool IsEmpty=>Line is null;
     }
+    private sealed record DiffDisplayLine(DiffCell Before,DiffCell After,string? Hunk=null)
+    {public bool IsHunk=>Hunk is not null; public string Title=>Hunk ?? $"{Before.Text} → {After.Text}";}
     private static IReadOnlyList<DiffDisplayLine> DiffLines(string? before,string after)
     {
         var full=EnvironmentValueDiff.Create(before,after);
@@ -32,8 +36,8 @@ public partial class VariablesView
             var end=index; while(end<full.Count && visible[end]) end++;
             var hunk=full.Skip(index).Take(end-index).ToArray();
             var oldLines=hunk.Where(line=>line.OldLine is not null).ToArray(); var newLines=hunk.Where(line=>line.NewLine is not null).ToArray();
-            result.Add(new($"@@ -{oldLines.FirstOrDefault()?.OldLine ?? 0},{oldLines.Length} +{newLines.FirstOrDefault()?.NewLine ?? 0},{newLines.Length} @@",null,null,"",null));
-            result.AddRange(hunk.Select(line=>new DiffDisplayLine(line.Text,line.OldLine,line.NewLine,line.Prefix,line.Kind)));
+            result.Add(new(new(null,true),new(null,false),$"@@ -{oldLines.FirstOrDefault()?.OldLine ?? 0},{oldLines.Length} +{newLines.FirstOrDefault()?.NewLine ?? 0},{newLines.Length} @@"));
+            result.AddRange(EnvironmentValueDiff.Pair(hunk).Select(pair=>new DiffDisplayLine(new(pair.Before,true),new(pair.After,false))));
             index=end;
         }
         return result;

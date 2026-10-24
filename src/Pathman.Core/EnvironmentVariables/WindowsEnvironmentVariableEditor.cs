@@ -103,7 +103,7 @@ public static class WindowsEnvironmentVariableEditor
         switch (mutation.Action)
         {
             case "create": case "set":
-                var kind = mutation.Value?.Contains('%') == true ? RegistryValueKind.ExpandString : mutation.ExpectedKind ?? RegistryValueKind.String;
+                var kind = EnvironmentPathResolver.ReferenceNames(mutation.Value ?? "").Count>0 ? RegistryValueKind.ExpandString : mutation.ExpectedKind ?? RegistryValueKind.String;
                 key.SetValue(existingName ?? mutation.Name, mutation.Value ?? "", kind);
                 break;
             case "delete": key.DeleteValue(existingName!); break;
@@ -159,7 +159,7 @@ public static class WindowsEnvironmentVariableEditor
             var name = mutation.Action == "rename" ? mutation.NewName! : mutation.Name;
             var value = mutation.Action == "rename" ? mutation.ExpectedValue! : mutation.Value ?? "";
             var kind = mutation.Action == "rename" ? mutation.ExpectedKind ?? RegistryValueKind.String :
-                value.Contains('%') ? RegistryValueKind.ExpandString : mutation.ExpectedKind ?? RegistryValueKind.String;
+                EnvironmentPathResolver.ReferenceNames(value).Count>0 ? RegistryValueKind.ExpandString : mutation.ExpectedKind ?? RegistryValueKind.String;
             state.Snapshot.Add(new(mutation.Scope, name, value, (int)kind));
         }
         if (state.MonitoringEnabled)

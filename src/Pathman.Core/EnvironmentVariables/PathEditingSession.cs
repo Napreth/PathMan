@@ -54,16 +54,16 @@ public sealed class PathEditingSession
     public void Accept(VariableScope scope)
     {
         foreach(var original in originals.Values.Where(item=>item.Scope==scope && Raw(scope,item.Name)!=item.RawValue).ToArray())
-            originals[Key(scope,original.Name)]=new(original.Name,Raw(scope,original.Name),scope,Raw(scope,original.Name).Contains('%') ? Microsoft.Win32.RegistryValueKind.ExpandString : original.Kind);
+            originals[Key(scope,original.Name)]=new(original.Name,Raw(scope,original.Name),scope,EnvironmentPathResolver.ReferenceNames(Raw(scope,original.Name)).Count>0 ? Microsoft.Win32.RegistryValueKind.ExpandString : original.Kind);
         Root=originals[Key(Root.Scope,Root.Name)];
     }
     public PathEditorItem Append(VariableScope scope,string name,string value="",bool draft=false)
     { var item=new PathEditorItem(value,draft); Items(scope,name).Add(item); return item; }
-    public void Update(Guid id,string value)
+    public void Update(Guid id,string value,bool wasChanged=true)
     {
         if(value.IndexOfAny([';','\0','\r','\n'])>=0) throw new ArgumentException("单个条目不能包含分号、空字符或换行。");
         var source=Locate(id);
-        if(value.Length==0) source.Items.Remove(source.Item);
+        if(value.Length==0 && (source.Item.IsDraft || source.Item.Value.Length>0 || wasChanged)) source.Items.Remove(source.Item);
         else {source.Item.Value=value; source.Item.IsDraft=false;}
     }
     public void Remove(Guid id) {var source=Locate(id); source.Items.Remove(source.Item);}

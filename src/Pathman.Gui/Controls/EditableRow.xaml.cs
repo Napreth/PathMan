@@ -5,9 +5,10 @@ using System.Windows.Media;
 
 namespace Pathman.Gui.Controls;
 
-public sealed class InlineEditEventArgs(string value) : EventArgs
+public sealed class InlineEditEventArgs(string value, bool wasChanged) : EventArgs
 {
     public string Value { get; } = value;
+    public bool WasChanged { get; } = wasChanged;
     public Task<string?> Completion { get; set; } = Task.FromResult<string?>(null);
 }
 
@@ -34,6 +35,7 @@ public partial class EditableRow : UserControl
     public bool ShowJump { get => (bool)GetValue(ShowJumpProperty); set => SetValue(ShowJumpProperty, value); }
     public string JumpToolTip { get => (string)GetValue(JumpToolTipProperty); set => SetValue(JumpToolTipProperty, value); }
     public bool IsEditing { get; private set; }
+    private bool inputChanged;
     private Task<bool>? pending;
     public event EventHandler<InlineEditEventArgs>? EditRequested;
     public event EventHandler? DeleteRequested;
@@ -42,7 +44,7 @@ public partial class EditableRow : UserControl
     public event EventHandler? Activated;
     public event EventHandler? EditingCanceled;
     public event EventHandler? JumpRequested;
-    public EditableRow() { InitializeComponent(); Loaded += (_, _) => { RefreshPin(); RefreshDetail(); RefreshActions(); }; }
+    public EditableRow() { InitializeComponent(); Input.TextChanged += (_,_) => { if(IsEditing) inputChanged=true; }; Loaded += (_, _) => { RefreshPin(); RefreshDetail(); RefreshActions(); }; }
     private static void UpdateActions(DependencyObject target, DependencyPropertyChangedEventArgs e) => ((EditableRow)target).RefreshActions();
     private void RefreshActions()
     {
@@ -70,7 +72,7 @@ public partial class EditableRow : UserControl
     public void BeginEdit()
     {
         if (IsEditing || !IsEnabled) return;
-        IsEditing = true; Input.Text = Text; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
+        IsEditing = true; Input.Text = Text; inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
         Label.Visibility = Visibility.Collapsed; Input.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Collapsed;
         EditingChanged?.Invoke(this, EventArgs.Empty);
         Input.Focus(); Input.SelectAll();
@@ -95,7 +97,7 @@ public partial class EditableRow : UserControl
         Input.IsReadOnly = true;
         try
         {
-            var args = new InlineEditEventArgs(Input.Text); EditRequested?.Invoke(this, args);
+            var args = new InlineEditEventArgs(Input.Text,inputChanged); EditRequested?.Invoke(this, args);
             var error = await args.Completion;
             if (error is not null)
             {

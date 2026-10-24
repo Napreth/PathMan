@@ -5,8 +5,23 @@ public sealed record ValueDiffLine(ValueDiffKind Kind,string Text,int? OldLine,i
 {
     public string Prefix=>Kind switch {ValueDiffKind.Added=>"+",ValueDiffKind.Removed=>"−",_=>" "};
 }
+public sealed record ValueDiffPair(ValueDiffLine? Before,ValueDiffLine? After);
 public static class EnvironmentValueDiff
 {
+    public static IReadOnlyList<ValueDiffPair> Pair(IReadOnlyList<ValueDiffLine> lines)
+    {
+        var result=new List<ValueDiffPair>();
+        for(var index=0;index<lines.Count;)
+        {
+            if(lines[index].Kind==ValueDiffKind.Context) {result.Add(new(lines[index],lines[index]));index++;continue;}
+            var removed=new List<ValueDiffLine>(); var added=new List<ValueDiffLine>();
+            while(index<lines.Count && lines[index].Kind!=ValueDiffKind.Context)
+            {var line=lines[index++]; if(line.Kind==ValueDiffKind.Removed) removed.Add(line); else added.Add(line);}
+            for(var row=0;row<Math.Max(removed.Count,added.Count);row++)
+                result.Add(new(row<removed.Count ? removed[row] : null,row<added.Count ? added[row] : null));
+        }
+        return result;
+    }
     public static IReadOnlyList<ValueDiffLine> Create(string? before,string after)
     {
         var old=before is null || before.Length==0 ? [] : before.Split(';',StringSplitOptions.None);

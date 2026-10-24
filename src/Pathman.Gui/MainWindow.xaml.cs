@@ -35,6 +35,8 @@ public partial class MainWindow : Window
         NotificationsList.ItemsSource=notifications.Items;
         AddHandler(Osc8TextBlock.LinkRequestedEvent,new EventHandler<AppLinkEventArgs>(HandleAppLink));
         health.ScanRequested+=async(_,_)=>await ScanHealthAsync();
+        health.FixRequested+=async(_,args)=>await ApplyHealthFixAsync(args.Fix);
+        health.IgnoreRequested+=async(_,args)=>await IgnoreHealthIssueAsync(args);
         variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         Loaded+=async(_,_)=>await ScanHealthAsync();
         changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
@@ -56,6 +58,7 @@ public partial class MainWindow : Window
     private async void HandleAppLink(object? sender,AppLinkEventArgs e)
     {
         e.Handled=true;
+        if(healthWorking) return;
         if(AppPageLink.Parse(e.Target) is {} route)
         {
             if(route.Page=="variables" && route.Scope is {} scope && route.Name is {} name)
@@ -82,9 +85,10 @@ public partial class MainWindow : Window
             do
             {
                 scanAgain=false;
-                var report=await Task.Run(()=>EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll()));
-                health.Update(report);
-                var signature=string.Join('\n',report.Issues.Select(issue=>$"{issue.Kind}:{issue.Scope}:{issue.Name}:{issue.Message}"));
+                var result=await Task.Run(()=>(Report:EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll()),Ignored:store.Read().IgnoredHealthIssues));
+                health.Update(result.Report,result.Ignored);
+                var report=new EnvironmentHealthReport(result.Report.Issues.Where(issue=>!result.Ignored.Contains(issue.Id)).ToArray());
+                var signature=string.Join('\n',report.Issues.Select(issue=>issue.Id));
                 if(signature!=healthSignature)
                 {
                     healthSignature=signature;
@@ -94,13 +98,13 @@ public partial class MainWindow : Window
                 }
             } while(scanAgain);
         }
-        catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
         {health.ShowError(error.Message); notifications.Show(new("health","检测未完成",error.Message,NotificationColor.Red));}
         finally {healthBusy=false; health.SetScanning(false);}
     }
     private async void CheckWorkspace(object? sender,EventArgs e)
     {
-        if(checking || variables.IsBusy) return;
+        if(checking || healthWorking || variables.IsBusy) return;
         var stamp=System.IO.File.Exists(store.FilePath) ? System.IO.File.GetLastWriteTimeUtc(store.FilePath) : DateTime.MinValue;
         if(stamp==lastWrite) return;
         checking=true;
@@ -118,6 +122,7 @@ public partial class MainWindow : Window
     }
     private async void OnClosing(object? sender,CancelEventArgs e)
     {
+        if(healthWorking) {e.Cancel=true;return;}
         if(closingApproved) return;
         if(variables.HasInlineEditor)
         {

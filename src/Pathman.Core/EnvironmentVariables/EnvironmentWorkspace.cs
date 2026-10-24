@@ -8,6 +8,7 @@ namespace Pathman.Core.EnvironmentVariables;
 
 public sealed class VariableGroupDefinition
 {
+    public override string ToString()=>Name;
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "";
     public string Rule { get; set; } = "manual";
@@ -30,6 +31,7 @@ public sealed class EnvironmentWorkspace
     public List<VariableSnapshot> Snapshot { get; set; } = [];
     public HashSet<string> ExternalVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<VariableChange> Changes { get; set; } = [];
+    public HashSet<string> IgnoredHealthIssues {get;set;}=[];
     public string Revision { get; set; } = "";
     public static string Key(VariableScope scope, string name) => $"{scope}:{name}";
     public IEnumerable<VariableGroupDefinition> VisibleGroups(VariableScope scope)

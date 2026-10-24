@@ -20,6 +20,7 @@ foreach(var (name,raw,list,entries) in cases)
 }
 PathCleanupTests.Run(Assert);
 RecursivePathsTests.Run(Assert);
+    HealthActionsTests.Run(Assert);
 var fixtureRoot=Path.Combine(Path.GetTempPath(),"PathMan.Core.Tests",Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(fixtureRoot);
 var registryFixture=@"Software\PathMan.Tests\"+Guid.NewGuid().ToString("N");
@@ -101,6 +102,11 @@ try
     Assert(path.RawValue==rawPath && path.Kind==RegistryValueKind.ExpandString,"Read must preserve references and registry type");
     WindowsEnvironmentVariableEditor.ApplyKey(key,new("create",VariableScope.User,"EMPTY",""));
     Assert(key.GetValueNames().Contains("EMPTY") && (string)key.GetValue("EMPTY")! == "","Creating an empty value must not delete it");
+    key.SetValue("TYPE_FIX","%SystemRoot%",RegistryValueKind.String);
+    WindowsEnvironmentVariableEditor.ApplyKey(key,new("set",VariableScope.User,"TYPE_FIX","%SystemRoot%",ExpectedValue:"%SystemRoot%",ExpectedKind:RegistryValueKind.String));
+    Assert(key.GetValueKind("TYPE_FIX")==RegistryValueKind.ExpandString && (string)key.GetValue("TYPE_FIX",null,RegistryValueOptions.DoNotExpandEnvironmentNames)! == "%SystemRoot%","Fixing a reference type preserves raw text and writes REG_EXPAND_SZ");
+    WindowsEnvironmentVariableEditor.ApplyKey(key,new("create",VariableScope.User,"PERCENT_LITERAL","100%"));
+    Assert(key.GetValueKind("PERCENT_LITERAL")==RegistryValueKind.String,"A literal percent sign does not require an expandable-string type");
     Reject(()=>WindowsEnvironmentVariableEditor.ApplyKey(key,new("create",VariableScope.User,"empty","collision")),"Names must be unique ignoring case");
     WindowsEnvironmentVariableEditor.ApplyKey(key,new("set",VariableScope.User,"Path",@"%SystemRoot%\x;;",ExpectedValue:rawPath,ExpectedKind:RegistryValueKind.ExpandString));
     Assert((string)key.GetValue("Path",null,RegistryValueOptions.DoNotExpandEnvironmentNames)! == @"%SystemRoot%\x;;","Save must preserve empty items and references");

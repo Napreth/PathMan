@@ -4,6 +4,19 @@
         xmlns:local="clr-namespace:Pathman.Gui"
         xmlns:controls="clr-namespace:Pathman.Gui.Controls" FocusVisualStyle="{x:Null}">
     <UserControl.Resources>
+        <DataTemplate x:Key="DiffCellTemplate">
+            <Grid MinHeight="24">
+                <Grid.Style><Style TargetType="Grid"><Setter Property="Background" Value="Transparent"/><Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/><Style.Triggers>
+                    <DataTrigger Binding="{Binding IsAdded}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Green}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                    <DataTrigger Binding="{Binding IsRemoved}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Red}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                    <DataTrigger Binding="{Binding IsEmpty}" Value="True"><Setter Property="Background" Value="#08000000"/></DataTrigger>
+                </Style.Triggers></Style></Grid.Style>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Number}" FontSize="12" Opacity=".55" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBlock Grid.Column="1" Text="{Binding Prefix}" FontFamily="Consolas" VerticalAlignment="Center"/>
+                <controls:ReferenceText Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei UI" FontSize="13" Margin="0,2,8,2" VerticalAlignment="Center"/>
+            </Grid>
+        </DataTemplate>
         <Style TargetType="TreeViewItem" BasedOn="{StaticResource CompactTreeItem}"/>
         <Style TargetType="TreeView" BasedOn="{StaticResource DefaultTreeViewStyle}">
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="4"/>
@@ -105,19 +118,16 @@
                     <ListBox x:Name="CleanupChanges" Style="{StaticResource PreviewItems}" AutomationProperties.Name="待清理的变量"><ListBox.ItemTemplate><DataTemplate>
                         <Border Style="{StaticResource Surface}" Margin="0,0,0,12"><StackPanel>
                             <TextBlock Text="{Binding Title}" FontSize="14" Padding="16,12"/>
+                            <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="修改前" Margin="16,0,0,4" Opacity=".65"/><TextBlock Grid.Column="1" Text="修改后" Margin="16,0,0,4" Opacity=".65"/></Grid>
                             <ListBox ItemsSource="{Binding Lines}" Style="{StaticResource PreviewItems}" Margin="0,0,0,8"><ListBox.ItemTemplate><DataTemplate>
                                 <Grid x:Name="DiffRow" MinHeight="24">
-                                    <Grid.Style><Style TargetType="Grid"><Setter Property="Background" Value="Transparent"/><Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/><Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAdded}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Green}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
-                                        <DataTrigger Binding="{Binding IsRemoved}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Red}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
-                                        <DataTrigger Binding="{Binding IsHunk}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Blue}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
-                                    </Style.Triggers></Style></Grid.Style>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="42"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding OldLine}" FontSize="12" Opacity=".55" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding NewLine}" FontSize="12" Opacity=".55" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding Prefix}" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                    <controls:ReferenceText Grid.Column="3" Text="{Binding Text}" TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei UI" FontSize="13" Margin="0,2,12,2" VerticalAlignment="Center"/>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <ContentControl x:Name="BeforeCell" Content="{Binding Before}" ContentTemplate="{StaticResource DiffCellTemplate}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Focusable="False" AutomationProperties.Name="修改前"/>
+                                    <Border Grid.Column="1" Background="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+                                    <ContentControl x:Name="AfterCell" Grid.Column="2" Content="{Binding After}" ContentTemplate="{StaticResource DiffCellTemplate}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Focusable="False" AutomationProperties.Name="修改后"/>
+                                    <TextBlock x:Name="HunkHeader" Grid.ColumnSpan="3" Text="{Binding Hunk}" Background="{x:Static controls:SemanticPalette.Blue}" Foreground="#242424" FontFamily="Consolas" Padding="16,3" Visibility="Collapsed"/>
                                 </Grid>
+                                <DataTemplate.Triggers><DataTrigger Binding="{Binding IsHunk}" Value="True"><Setter TargetName="HunkHeader" Property="Visibility" Value="Visible"/><Setter TargetName="BeforeCell" Property="Visibility" Value="Collapsed"/><Setter TargetName="AfterCell" Property="Visibility" Value="Collapsed"/></DataTrigger></DataTemplate.Triggers>
                             </DataTemplate></ListBox.ItemTemplate></ListBox>
                         </StackPanel></Border>
                     </DataTemplate></ListBox.ItemTemplate></ListBox>

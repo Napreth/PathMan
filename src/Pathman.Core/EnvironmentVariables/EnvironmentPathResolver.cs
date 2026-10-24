@@ -29,6 +29,7 @@ public sealed partial class EnvironmentPathResolver
         (scope == VariableScope.User ? variables.FirstOrDefault(item => item.Scope == VariableScope.User && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) : null)
         ?? variables.FirstOrDefault(item => item.Scope == VariableScope.Machine && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     public bool IsDefined(string name, VariableScope scope) => Find(name, scope) is not null ||
+        (scope!=VariableScope.Machine || !EnvironmentVariableClassifier.IsUserOnlyBuiltIn(name)) &&
         EnvironmentVariableClassifier.IsWindowsBuiltIn(name) && !variables.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) &&
         runtime.Any(item => item.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
 
@@ -66,7 +67,7 @@ public sealed partial class EnvironmentPathResolver
                 var variable = Find(name, scope);
                 string? replacement = variable?.RawValue;
                 // A user-defined name must never leak from the runtime into a machine value.
-                if (replacement is null && EnvironmentVariableClassifier.IsWindowsBuiltIn(name) && !variables.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                if (replacement is null && (scope!=VariableScope.Machine || !EnvironmentVariableClassifier.IsUserOnlyBuiltIn(name)) && EnvironmentVariableClassifier.IsWindowsBuiltIn(name) && !variables.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
                     replacement = runtime.FirstOrDefault(item => item.Key.Equals(name, StringComparison.OrdinalIgnoreCase)).Value;
                 if (replacement is null) { error = $"找不到引用 %{name}%"; seen.Remove(name); return match.Value; }
                 var expanded = ExpandValue(replacement, depth + 1); seen.Remove(name);

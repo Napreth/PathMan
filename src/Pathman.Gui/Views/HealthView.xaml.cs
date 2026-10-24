@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
 using Pathman.Core.Notifications;
@@ -10,23 +11,61 @@ namespace Pathman.Gui.Views;
 public partial class HealthView : UserControl
 {
     public event EventHandler? ScanRequested;
-    private sealed record IssueDisplay(EnvironmentHealthIssue Issue)
+    public event EventHandler<HealthFixEventArgs>? FixRequested;
+    public event EventHandler<HealthIgnoreEventArgs>? IgnoreRequested;
+    private bool working,scanning;
+    private EnvironmentHealthReport? latest;
+    private IReadOnlySet<string> ignored=new HashSet<string>();
+    private sealed record LocationDisplay(EnvironmentHealthLocation Location)
     {
+        public string AutomationName=>$"{(Location.Scope==VariableScope.User ? "用户" : "系统")} · {Location.Name}，第 {Location.Line} 行";
+        public string Body=>Osc8Text.Link(AutomationName,new AppPageLink("variables",Location.Scope,Location.Name).ToString());
+        private static string Value(string? text,string boundary)=>text is null ? boundary : text.Length==0 ? "（空条目）" : text;
+        public string Previous=>"上一行  "+Value(Location.Previous,"（列表开头）");
+        public string Current=>$"第 {Location.Line} 行  "+Value(Location.Value,"");
+        public string Next=>"下一行  "+Value(Location.Next,"（列表结尾）");
+    }
+    private sealed record IssueDisplay(EnvironmentHealthIssue Issue,bool IsIgnored)
+    {
+        public string AutomationName=>$"{Issue.Kind}:{Issue.Scope}:{Issue.Name}:{Issue.Locations.FirstOrDefault()?.Line ?? 0}";
         public string Body=>Osc8Text.Link($"{(Issue.Scope==VariableScope.User ? "用户" : "系统")} · {Issue.Name}",new AppPageLink("variables",Issue.Scope,Issue.Name).ToString());
         public string Message=>Issue.Message;
         public string Symbol=>Issue.IsError ? "●" : "!";
         public Brush StatusBrush=>Issue.IsError ? Brushes.Firebrick : Brushes.DarkGoldenrod;
+        public string Suggestion=>Issue.Suggestion;
+        public string IgnoreLabel=>IsIgnored ? "恢复提醒" : "忽略";
+        public IReadOnlyList<EnvironmentHealthFix> Fixes=>IsIgnored ? [] : Issue.Fixes;
+        public IReadOnlyList<LocationDisplay> Locations=>Issue.Locations.Select(location=>new LocationDisplay(location)).ToArray();
     }
     public HealthView() {InitializeComponent();}
-    private void Scan(object sender,RoutedEventArgs e)=>ScanRequested?.Invoke(this,EventArgs.Empty);
-    public void SetScanning(bool scanning)=>ScanButton.IsEnabled=!scanning;
+    private void Scan(object sender,RoutedEventArgs e) {ActionStatus.Text="";ScanRequested?.Invoke(this,EventArgs.Empty);}
+    private void ShowIgnoredChanged(object sender,RoutedEventArgs e) {if(latest is not null) Render();}
+    private void Ignore(object sender,RoutedEventArgs e)
+    {if(sender is Button {DataContext:IssueDisplay display}) IgnoreRequested?.Invoke(this,new(display.Issue,display.IsIgnored));}
+    private void Fix(object sender,RoutedEventArgs e)
+    {if(sender is Button {DataContext:EnvironmentHealthFix fix}) FixRequested?.Invoke(this,new(fix));}
+    private void ScrollHealth(object sender,MouseWheelEventArgs e)
+    {if(HealthScroll.ScrollableHeight>0) {HealthScroll.ScrollToVerticalOffset(HealthScroll.VerticalOffset-e.Delta*.5);e.Handled=true;}}
+    public void SetScanning(bool value) {scanning=value;ScanButton.IsEnabled=!working && !scanning;}
+    public void SetWorking(bool value) {working=value;IssueGroups.IsEnabled=ShowIgnored.IsEnabled=!value;ScanButton.IsEnabled=!value && !scanning;}
+    public void ShowActionStatus(string message,bool error=false) {ActionStatus.Text=message;ActionStatus.Foreground=error ? Brushes.Firebrick : (Brush)FindResource("TextFillColorSecondaryBrush");}
     public void ShowError(string error) {Summary.Text="检测未完成"; ScanTime.Text=error;}
-    public void Update(EnvironmentHealthReport report)
+    public void Update(EnvironmentHealthReport report,IReadOnlySet<string> ignoredIssues)
     {
-        Summary.Text=report.Issues.Count==0 ? "所有检查均已通过" : $"发现 {report.Errors} 项错误，{report.Warnings} 项提醒";
+        latest=report;ignored=ignoredIssues;Render();
+    }
+    private void Render()
+    {
+        var report=new EnvironmentHealthReport(latest!.Issues.Where(issue=>!ignored.Contains(issue.Id)).ToArray());
+        var ignoredCount=latest.Issues.Count-report.Issues.Count;
+        ShowIgnored.Visibility=ignoredCount>0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowIgnored.Content=$"显示已忽略（{ignoredCount}）";
+        Summary.Text=report.Issues.Count==0 ? ignoredCount>0 ? "没有未忽略的问题" : "所有检查均已通过" : $"发现 {report.Errors} 项错误，{report.Warnings} 项提醒";
         ScanTime.Text=$"上次检测：{DateTime.Now:HH:mm:ss}";
-        IssueGroups.ItemsSource=report.Issues.GroupBy(issue=>issue.Kind).Select(group=>new {
-            Title=group.Key switch {EnvironmentIssueKind.ReferenceCycle=>"引用回环",EnvironmentIssueKind.UndefinedReference=>"未定义变量",EnvironmentIssueKind.Duplicate=>"重复条目",EnvironmentIssueKind.EmptyPathEntry=>"空路径条目",_=>"引用层级"},
-            Issues=group.Select(issue=>new IssueDisplay(issue)).ToArray()}).ToArray();
+        IssueGroups.ItemsSource=latest.Issues.Where(issue=>ShowIgnored.IsChecked==true || !ignored.Contains(issue.Id)).GroupBy(issue=>issue.Kind).Select(group=>new {
+            Title=group.Key switch {EnvironmentIssueKind.ReferenceCycle=>"引用回环",EnvironmentIssueKind.UndefinedReference=>"未定义变量",EnvironmentIssueKind.UserScopeReference=>"系统变量引用用户变量",EnvironmentIssueKind.RegistryType=>"注册表类型",EnvironmentIssueKind.Duplicate=>"重复条目",EnvironmentIssueKind.EmptyPathEntry=>"空条目",_=>"引用层级"},
+            Issues=group.Select(issue=>new IssueDisplay(issue,ignored.Contains(issue.Id))).ToArray()}).ToArray();
     }
 }
+public sealed class HealthFixEventArgs(EnvironmentHealthFix fix) : EventArgs {public EnvironmentHealthFix Fix {get;}=fix;}
+public sealed class HealthIgnoreEventArgs(EnvironmentHealthIssue issue,bool restore) : EventArgs {public EnvironmentHealthIssue Issue {get;}=issue;public bool Restore {get;}=restore;}

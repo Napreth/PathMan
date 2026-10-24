@@ -123,7 +123,8 @@ try {
         Assert ($result.Code -eq 37 -and (($result.Out|ConvertFrom-Json).Arguments|ConvertTo-Json -Compress) -ceq ($samples|ConvertTo-Json -Compress)) 'Copied shims must preserve arguments and exit codes.'
         [IO.File]::AppendAllText($template, 'PathMan-test-update')
         $refreshed = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'refresh')
-        Assert ($refreshed.Code -eq 0 -and (Get-FileHash $cached).Hash -eq (Get-FileHash $template).Hash) 'Refresh must update a changed cached template.'
+        $cachedHash=(Get-FileHash $cached).Hash; $templateHash=(Get-FileHash $template).Hash
+        Assert ($refreshed.Code -eq 0 -and $cachedHash -eq $templateHash) "Refresh must update a changed cached template. Exit=$($refreshed.Code); cached=$cachedHash; template=$templateHash; stderr=$($refreshed.Error)"
         Assert (@(& fsutil hardlink list $crossAlias).Count -eq 3) 'Refresh must relink both aliases to the updated copy.'
         $result = Invoke-Program $crossAlias @('-NoProfile', '-NonInteractive', '-Command', 'exit 23')
         Assert ($result.Code -eq 23) 'A refreshed copied shim must remain executable.'

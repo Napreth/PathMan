@@ -5,8 +5,10 @@ namespace Pathman.Core.EnvironmentVariables;
 
 public static partial class EnvironmentVariableClassifier
 {
-    private sealed class BuiltInNames { public string[] Names { get; set; } = []; }
-    private static readonly HashSet<string> BuiltIns = new(EnvironmentWorkspaceStore.ReadDefault<BuiltInNames>("windows-variables").Names, StringComparer.OrdinalIgnoreCase);
+    private sealed class BuiltInNames { public string[] Names { get; set; } = []; public string[] UserOnlyNames {get;set;}=[]; }
+    private static readonly BuiltInNames Defaults=EnvironmentWorkspaceStore.ReadDefault<BuiltInNames>("windows-variables");
+    private static readonly HashSet<string> BuiltIns = new(Defaults.Names, StringComparer.OrdinalIgnoreCase);
+    internal static bool IsUserOnlyBuiltIn(string name)=>Defaults.UserOnlyNames.Contains(name,StringComparer.OrdinalIgnoreCase);
     internal static bool IsWindowsBuiltIn(string name) => BuiltIns.Contains(name);
     [GeneratedRegex(@"%([^%]+)%", RegexOptions.CultureInvariant)] private static partial Regex ReferencePattern();
     [GeneratedRegex(@"^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)", RegexOptions.CultureInvariant)] private static partial Regex AbsolutePathPattern();

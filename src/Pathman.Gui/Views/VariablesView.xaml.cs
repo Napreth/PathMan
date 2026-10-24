@@ -256,14 +256,12 @@ public partial class VariablesView : UserControl
     private async Task NewVariable(VariableScope scope)
     {
         if(!await ConfirmLeaveAsync()) return;
-        var group=selected?.Scope == scope ? selected.Group : null;
-        var dialog=new VariableDialog(OwnerWindow,scope);
+        var dialog=new VariableDialog(OwnerWindow,scope,store.Read().VisibleGroups(scope).ToArray());
         if(dialog.ShowDialog()!=true) return;
         if(await ApplyAsync(new("create",dialog.Scope,dialog.VariableName,dialog.RawValue)))
         {
             try {
-            if(group is not null && (group.Scope is null || group.Scope==dialog.Scope))
-                store.Update(state=>state.Assignments[EnvironmentWorkspace.Key(dialog.Scope,dialog.VariableName)]=group.Id);
+            store.Update(state=>state.Assignments[EnvironmentWorkspace.Key(dialog.Scope,dialog.VariableName)]=dialog.GroupId);
             preferredKey=$"variable:{dialog.Scope}:{dialog.VariableName}"; dirty=false; await ReloadAsync();
             } catch(Exception error) when(Expected(error)) { Error(error); }
         }
@@ -283,7 +281,7 @@ public partial class VariablesView : UserControl
         if (e.Value.Contains(';') || e.Value.Contains('\0') || e.Value.Contains('\r') || e.Value.Contains('\n'))
         { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。"); return; }
         if(editingSession is not {} session) return;
-        session.Update(entry.ItemId,e.Value); RefreshPathEntries(entry.ItemId); SetDirty();
+        session.Update(entry.ItemId,e.Value,e.WasChanged); RefreshPathEntries(entry.ItemId); SetDirty();
     }
     private void EntryEditCanceled(object? sender, EventArgs e)
     {
