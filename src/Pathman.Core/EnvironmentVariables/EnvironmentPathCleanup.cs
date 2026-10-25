@@ -4,7 +4,8 @@ using Pathman.Core.Models;
 namespace Pathman.Core.EnvironmentVariables;
 
 public sealed record PathCleanupScopePlan(VariableScope Scope, IReadOnlyList<EnvironmentMutation> Mutations,
-    IReadOnlyList<VariableSnapshot> Preconditions, int RemovedDuplicates, int MovedEntries, string? SoftwareVariable);
+    IReadOnlyList<VariableSnapshot> Preconditions, int RemovedDuplicates, int MovedEntries, string? SoftwareVariable)
+{public bool ChangesPathOrder {get;init;} public bool PathOrderResolved {get;init;}=true;}
 public sealed record EnvironmentPathCleanupPlan(IReadOnlyList<PathCleanupScopePlan> Scopes)
 {
     public bool HasChanges => Scopes.Any(scope => scope.Mutations.Count > 0);
@@ -70,7 +71,10 @@ public static class EnvironmentPathCleanup
             }
             var newPath = string.Join(';', retained.Except(moved).Select(entry => entry.Raw).Concat(softwareName is null ? [] : new[] { $"%{softwareName}%" }));
             if (newPath != path.RawValue) mutations.Add(new("set", scope, path.Name, newPath, ExpectedValue: path.RawValue, ExpectedKind: path.Kind));
-            plans.Add(new(scope, mutations, guards, removed, moved.Length, softwareName));
+            var updated=variables.Where(item=>!mutations.Any(change=>change.Scope==item.Scope && change.Name.Equals(item.Name,StringComparison.OrdinalIgnoreCase)))
+                .Concat(mutations.Select(change=>new EnvironmentVariableInfo(change.Name,change.Value ?? "",change.Scope))).ToArray();
+            var order=PathOrderComparison.Compare(path.RawValue,newPath,scope,variables,updated,runtime);
+            plans.Add(new(scope, mutations, guards, removed, moved.Length, softwareName) {ChangesPathOrder=mutations.Count>0 && order.Changed,PathOrderResolved=order.IsResolved});
         }
         return new(plans);
     }

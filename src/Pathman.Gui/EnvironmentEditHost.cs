@@ -37,11 +37,19 @@ internal static class EnvironmentEditHost
                 session=await ElevatedEnvironmentSession.StartAsync();
                 AuthorizationChanged?.Invoke(null,EventArgs.Empty);
             }
-            try {await session.ApplyAsync(mutations,preconditions);}
-            catch(IOException error) when(error is not EnvironmentOperationException) {session.Dispose();session=null;AuthorizationChanged?.Invoke(null,EventArgs.Empty);throw;}
-            try {await Task.Run(()=>WindowsEnvironmentVariableEditor.RecordOwnChanges(store,mutations));}
-            catch(Exception error) when(error is IOException or UnauthorizedAccessException)
-            {throw new IOException("系统变量已保存，但用户记录更新失败。请刷新确认。"+error.Message,error);}
+            // The registry signal can arrive before the unelevated process records
+            // the result. Pause observation briefly across that hand-off so an
+            // application write is never mistaken for an external PATH addition.
+            store.Update(state=>state.RegistryWriteInProgressUntil=DateTime.UtcNow.AddMinutes(2));
+            try
+            {
+                try {await session.ApplyAsync(mutations,preconditions);}
+                catch(IOException error) when(error is not EnvironmentOperationException) {session.Dispose();session=null;AuthorizationChanged?.Invoke(null,EventArgs.Empty);throw;}
+                try {await Task.Run(()=>WindowsEnvironmentVariableEditor.RecordOwnChanges(store,mutations));}
+                catch(Exception error) when(error is IOException or UnauthorizedAccessException)
+                {throw new IOException("系统变量已保存，但用户记录更新失败。请刷新确认。"+error.Message,error);}
+            }
+            finally {store.Update(state=>state.RegistryWriteInProgressUntil=null);}
         }
         catch(Win32Exception error) when(error.NativeErrorCode==1223) {throw new OperationCanceledException("已取消管理员操作。");}
         finally {Gate.Release();}

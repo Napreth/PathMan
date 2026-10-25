@@ -58,6 +58,10 @@ public partial class VariablesView
             $"{(scope.Scope==VariableScope.User ? "用户" : "系统")} · {change.Name}{(change.Action=="create" ? "（新建）" : "")}",
             DiffLines(change.Action=="create" ? null : change.ExpectedValue,change.Value ?? "")))).ToArray();
         CleanupEmpty.Visibility=cleanupPlan.HasChanges ? Visibility.Collapsed : Visibility.Visible;
+        var reordered=cleanupPlan.Scopes.Where(scope=>scope.ChangesPathOrder).Select(scope=>scope.Scope==VariableScope.User ? "用户 PATH" : "系统 PATH").ToArray();
+        var unknown=cleanupPlan.Scopes.Any(scope=>scope.Mutations.Count>0 && !scope.PathOrderResolved);
+        CleanupOrderWarning.Visibility=reordered.Length>0 || unknown ? Visibility.Visible : Visibility.Collapsed;
+        CleanupOrderWarningText.Text=reordered.Length>0 ? $"清理会改变{string.Join("、",reordered)}的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。请确认预览后再应用。" : "部分引用无法完整展开，无法确认清理后 PATH 的搜索顺序是否保持不变。请检查预览后再应用。";
         ApplyCleanupButton.IsEnabled=cleanupPlan.HasChanges;
     }
     private void CloseCleanup(object sender, RoutedEventArgs e)

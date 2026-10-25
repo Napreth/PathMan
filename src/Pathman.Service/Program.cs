@@ -17,19 +17,20 @@ try
     using var stop = new EventWaitHandle(false, EventResetMode.ManualReset, background.StopEventName);
     using var ready = new EventWaitHandle(false, EventResetMode.ManualReset, background.ReadyEventName);
     stop.Reset();
-    ready.Set();
     var monitor = new EnvironmentMonitor(new EnvironmentWorkspaceStore(layout.DataDirectory));
+    monitor.SetEnabled(true);
     using var signal = new EnvironmentRegistrySignal();
-    while (true)
+    ready.Set();
+    try {while (true)
     {
         try { monitor.Poll(); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
-        { /* Keep the background process available; the UI reports configuration/read errors. */ }
+        {try {monitor.ReportError("监控暂时无法读取或保存环境变量："+error.Message);}catch(IOException) {}}
         var reason = WaitHandle.WaitAny([stop, signal.UserChanged, signal.MachineChanged], 1000);
         if (reason == 0) break;
         if (reason is 1 or 2) signal.Arm(reason-1);
-    }
-    ready.Reset();
+    }}
+    finally {try {monitor.SetEnabled(false);} finally {ready.Reset();}}
 }
 finally { instance.ReleaseMutex(); }
 return 0;

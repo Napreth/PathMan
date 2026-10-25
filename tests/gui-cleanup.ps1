@@ -138,7 +138,7 @@ try {
     Assert (@((UserValue 'Path').Split(';') | Where-Object { $_ -eq $shims }).Count -eq 1) 'Enabling aliases appends exactly one shim directory at the end of user PATH'
     Toggle (Id 'EnableAliases'); WaitFor { (UserValue 'Path') -eq 'C:\Cleanup\User;%USER_TOOLS_PATH%' } 'Disabling aliases changed unrelated user PATH entries'
     SelectNode (Find (Id 'Navigation') '变量监控' ([Windows.Automation.ControlType]::ListItem))
-    Assert ((Id 'StartupEnabled').Current.Name -eq '登录时自动运行服务') 'Startup has moved to monitoring with its requested label'
+    Assert ((Id 'StartupEnabled').Current.Name -eq '登录时自动运行后台程序') 'Startup has moved to monitoring with its requested label'
     Toggle (Id 'StartupEnabled')
     Assert ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PathMan).PathMan -eq '"C:\PathManTestApp\internal\PathMan.Service.exe"') 'The startup switch writes the current user login command'
     Toggle (Id 'StartupEnabled')

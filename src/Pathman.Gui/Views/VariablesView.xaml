@@ -115,6 +115,7 @@
             <DockPanel Margin="0,0,0,16"><Button Content="返回" DockPanel.Dock="Right" Click="CloseCleanup"/><TextBlock Text="清理预览" Style="{StaticResource SectionTitle}"/></DockPanel>
             <ScrollViewer x:Name="CleanupScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" PreviewMouseWheel="ScrollCleanup">
                 <StackPanel>
+                    <Border x:Name="CleanupOrderWarning" Background="{x:Static controls:SemanticPalette.Yellow}" CornerRadius="6" Padding="14,10" Margin="0,0,0,12" Visibility="Collapsed"><TextBlock x:Name="CleanupOrderWarningText" Foreground="#242424" TextWrapping="Wrap"/></Border>
                     <ListBox x:Name="CleanupChanges" Style="{StaticResource PreviewItems}" AutomationProperties.Name="待清理的变量"><ListBox.ItemTemplate><DataTemplate>
                         <Border Style="{StaticResource Surface}" Margin="0,0,0,12"><StackPanel>
                             <TextBlock Text="{Binding Title}" FontSize="14" Padding="16,12"/>

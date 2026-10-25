@@ -19,6 +19,7 @@ foreach(var (name,raw,list,entries) in cases)
     Assert((list ? string.Join(';',variable.Entries) : variable.Entries.Single())==raw,$"Roundtrip failed: {name}");
 }
 PathCleanupTests.Run(Assert);
+MonitoringTests.Run(Assert);
 RecursivePathsTests.Run(Assert);
     HealthActionsTests.Run(Assert);
     AliasAndHealthTests.Run(Assert);

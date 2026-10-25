@@ -22,6 +22,9 @@ public partial class MainWindow : Window
     private readonly NotificationCenter notifications=new();
     private bool healthBusy,scanAgain;
     private string healthSignature="";
+    private string monitorSignature="";
+    private bool monitorApplying;
+    private readonly HashSet<string> attemptedMonitorPlans=[];
     private int previousIssueCount;
     private readonly DispatcherTimer changes=new() {Interval=TimeSpan.FromSeconds(1)};
     private DateTime lastWrite;
@@ -39,6 +42,7 @@ public partial class MainWindow : Window
         health.IgnoreRequested+=async(_,args)=>await IgnoreHealthIssueAsync(args);
         variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         aliases.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
+        monitor.PendingApplyRequested+=async(_,_)=>await ApplyPendingMonitoringAsync();
         Loaded+=async(_,_)=>await ScanHealthAsync();
         EnvironmentEditHost.AuthorizationChanged+=RefreshWindowTitle;
         changes.Tick+=RefreshWindowTitle;changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
@@ -113,13 +117,16 @@ public partial class MainWindow : Window
     }
     private async void CheckWorkspace(object? sender,EventArgs e)
     {
-        if(checking || healthWorking || aliases.IsBusy || variables.IsBusy) return;
+        if(checking || monitorApplying || healthWorking || aliases.IsBusy || variables.IsBusy) return;
         var stamp=System.IO.File.Exists(store.FilePath) ? System.IO.File.GetLastWriteTimeUtc(store.FilePath) : DateTime.MinValue;
         if(stamp==lastWrite) return;
         checking=true;
         try
         {
             var state=await Task.Run(store.Read); monitor.Update(state);
+            ShowMonitorNotification(state);
+            if(state.MonitoringEnabled && state.AutoArrangeMachinePath && (EnvironmentEditHost.IsAdministrator || EnvironmentEditHost.IsAuthorized) && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine && !attemptedMonitorPlans.Contains(item.Id)))
+            {await ApplyPendingMonitoringAsync(automatic:true);return;}
             if(!variables.HasUnsavedChanges && !variables.IsBusy)
             {
                 if(variables.LoadedRevision!=state.Revision) await variables.ReloadAsync(external:true);
@@ -129,9 +136,54 @@ public partial class MainWindow : Window
         catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
         finally { checking=false; }
     }
+    private void ShowMonitorNotification(EnvironmentWorkspace state)
+    {
+        var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine);
+        var signature=$"{pending}:{state.MonitorMessageTime:O}:{state.MonitorMessage}";
+        if(signature==monitorSignature) return;monitorSignature=signature;
+        if(pending) notifications.Show(new("monitor","系统 PATH 等待整理","外部新增项需要管理员授权。\n"+Osc8Text.Link("前往变量监控","apppage:monitor"),NotificationColor.Yellow));
+        else if(state.MonitorMessage is {} message) notifications.Show(new("monitor","变量监控",message+"\n"+Osc8Text.Link("查看变量监控","apppage:monitor"),NotificationColor.Yellow));
+        else notifications.Dismiss("monitor");
+    }
+    private async Task ApplyPendingMonitoringAsync(bool automatic=false)
+    {
+        if(monitorApplying) return;
+        monitorApplying=true;monitor.SetApplying(true);
+        try
+        {
+            var state=await Task.Run(store.Read);
+            foreach(var plan in state.PendingPathOrganizations.Where(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine))
+            {
+                if(automatic && attemptedMonitorPlans.Contains(plan.Id)) continue;
+                attemptedMonitorPlans.Add(plan.Id);
+                state=await Task.Run(store.Read);
+                if(!state.MonitoringEnabled || !state.IsPathOrganizationEnabled(plan.Scope) || plan.Policy!=ExternalPathOrganizer.Policy(state,plan.Scope) || !state.PendingPathOrganizations.Any(item=>item.Id==plan.Id)) continue;
+                await Task.Run(()=>EnvironmentMonitor.Backup(store,plan));
+                await EnvironmentEditHost.ApplyBatchAsync(plan.Mutations,plan.Preconditions,store,layout.DataDirectory);
+                await Task.Run(()=>EnvironmentMonitor.Complete(store,plan));
+            }
+            await ScanHealthAsync();
+        }
+        catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or OperationCanceledException)
+        {
+            if(error is not OperationCanceledException)
+            {
+                notifications.Show(new("monitor","系统 PATH 未整理",error.Message,NotificationColor.Yellow));
+                try {new EnvironmentMonitor(store).ReportError("系统 PATH 未整理："+error.Message);}
+                catch(Exception recordError) when(recordError is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException) { }
+            }
+        }
+        finally
+        {
+            monitorApplying=false;monitor.SetApplying(false);
+            try {var state=store.Read();monitor.Update(state);ShowMonitorNotification(state);}
+            catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
+            {notifications.Show(new("monitor","变量监控",error.Message,NotificationColor.Yellow));}
+        }
+    }
     private async void OnClosing(object? sender,CancelEventArgs e)
     {
-        if(healthWorking) {e.Cancel=true;return;}
+        if(healthWorking || monitorApplying) {e.Cancel=true;return;}
         if(closingApproved) return;
         if(aliases.HasInlineEditor)
         {e.Cancel=true;if(await aliases.ConfirmLeaveAsync()) {closingApproved=true;Close();}return;}

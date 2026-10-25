@@ -40,7 +40,7 @@ public static class WindowsEnvironmentVariableEditor
         });
         Broadcast();
     }
-    public static void ApplyBatch(IReadOnlyList<EnvironmentMutation> mutations, IReadOnlyList<VariableSnapshot> preconditions, EnvironmentWorkspaceStore store)
+    public static void ApplyBatch(IReadOnlyList<EnvironmentMutation> mutations, IReadOnlyList<VariableSnapshot> preconditions, EnvironmentWorkspaceStore store, Action<EnvironmentWorkspace>? validateState=null)
     {
         if (mutations.Count == 0) return;
         var scope = mutations[0].Scope;
@@ -60,6 +60,7 @@ public static class WindowsEnvironmentVariableEditor
             }
             store.Update(state =>
             {
+                validateState?.Invoke(state);
                 rollback = ApplyBatchKeys(keys, mutations, preconditions);
                 foreach (var mutation in mutations) RecordOwnChange(state, mutation);
             });

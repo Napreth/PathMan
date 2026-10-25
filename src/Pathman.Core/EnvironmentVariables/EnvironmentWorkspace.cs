@@ -28,6 +28,32 @@ public sealed class EnvironmentWorkspace
     public Dictionary<VariableScope, List<string>> PinnedGroups { get; set; } = [];
     public List<string> PinnedVariables { get; set; } = [];
     public bool MonitoringEnabled { get; set; }
+    public bool GroupExternalUserVariables {get;set;}=true;
+    public bool GroupExternalMachineVariables {get;set;}=true;
+    public bool AutoArrangeUserPath {get;set;}
+    public bool AutoArrangeMachinePath {get;set;}
+    [JsonIgnore] public bool AnyPathOrganizationEnabled=>AutoArrangeUserPath || AutoArrangeMachinePath;
+    public bool IsPathOrganizationEnabled(VariableScope scope)=>scope switch
+    {VariableScope.User=>AutoArrangeUserPath,VariableScope.Machine=>AutoArrangeMachinePath,_=>false};
+    [JsonPropertyName("autoArrangePath"),JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyAutoArrangePath {get;set;}
+    public bool RemoveUserPathDuplicates {get;set;}=true;
+    public bool RemoveMachinePathDuplicates {get;set;}=true;
+    public bool MoveExternalUserPathEntries {get;set;}=true;
+    public bool MoveExternalMachinePathEntries {get;set;}=true;
+    public bool ShouldGroupExternalVariables(VariableScope scope)=>scope==VariableScope.User ? GroupExternalUserVariables : GroupExternalMachineVariables;
+    public bool ShouldRemovePathDuplicates(VariableScope scope)=>scope==VariableScope.User ? RemoveUserPathDuplicates : RemoveMachinePathDuplicates;
+    public bool ShouldMovePathEntries(VariableScope scope)=>scope==VariableScope.User ? MoveExternalUserPathEntries : MoveExternalMachinePathEntries;
+    [JsonPropertyName("groupExternalNewVariables"),JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyGroupExternalVariables {get;set;}
+    [JsonPropertyName("removeExternalPathDuplicates"),JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyRemovePathDuplicates {get;set;}
+    [JsonPropertyName("moveExternalPathEntries"),JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyMovePathEntries {get;set;}
+    public List<ExternalPathOrganizationPlan> PendingPathOrganizations {get;set;}=[];
+    public string? MonitorMessage {get;set;}
+    public DateTime? MonitorMessageTime {get;set;}
+    public DateTime? RegistryWriteInProgressUntil {get;set;}
     public List<VariableSnapshot> Snapshot { get; set; } = [];
     public HashSet<string> ExternalVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<VariableChange> Changes { get; set; } = [];
@@ -39,7 +65,7 @@ public sealed class EnvironmentWorkspace
         var pins = PinnedGroups.GetValueOrDefault(scope) ?? [];
         var order = GroupOrder.GetValueOrDefault(scope) ?? [];
         return Groups.Where(group => (group.Scope is null || group.Scope == scope) &&
-                (scope != VariableScope.User || group.Rule != "builtin") && (!group.RequiresMonitoring || MonitoringEnabled))
+                (scope != VariableScope.User || group.Rule != "builtin") && (!group.RequiresMonitoring || MonitoringEnabled && ShouldGroupExternalVariables(scope)))
             .OrderBy(group => IsGroupPinned(scope, group.Id) ? 0 : 1)
             .ThenBy(group => Position(IsGroupPinned(scope, group.Id) ? pins : order, group.Id));
     }
@@ -123,6 +149,17 @@ public sealed class EnvironmentWorkspaceStore
             ?? throw new InvalidDataException("环境变量配置为空。") : ReadDefault<EnvironmentWorkspace>("groups");
         state.Assignments = new(state.Assignments, StringComparer.OrdinalIgnoreCase);
         state.ExternalVariables = new(state.ExternalVariables, StringComparer.OrdinalIgnoreCase);
+        if(state.LegacyAutoArrangePath is {} enabled)
+        {
+            state.AutoArrangeUserPath=state.AutoArrangeMachinePath=enabled;
+            state.LegacyAutoArrangePath=null;
+        }
+        if(state.LegacyGroupExternalVariables is {} group)
+        {state.GroupExternalUserVariables=state.GroupExternalMachineVariables=group;state.LegacyGroupExternalVariables=null;}
+        if(state.LegacyRemovePathDuplicates is {} remove)
+        {state.RemoveUserPathDuplicates=state.RemoveMachinePathDuplicates=remove;state.LegacyRemovePathDuplicates=null;}
+        if(state.LegacyMovePathEntries is {} move)
+        {state.MoveExternalUserPathEntries=state.MoveExternalMachinePathEntries=move;state.LegacyMovePathEntries=null;}
         if (state.Groups.Select(group => group.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Groups.Count ||
             state.Groups.Any(group => string.IsNullOrWhiteSpace(group.Id) || string.IsNullOrWhiteSpace(group.Name)) ||
             !state.Groups.Any(group => group.Rule == "fallback" && group.Scope is null && !group.RequiresMonitoring))

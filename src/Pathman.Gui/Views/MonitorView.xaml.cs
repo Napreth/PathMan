@@ -1,5 +1,7 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
@@ -8,27 +10,78 @@ public partial class MonitorView : UserControl
 {
     private readonly PathmanLayout layout;
     private readonly EnvironmentWorkspaceStore store;
-    private bool updating;
-    public MonitorView(PathmanLayout layout, EnvironmentWorkspaceStore store) { this.layout=layout; this.store=store; InitializeComponent(); Update(store.Read()); }
+    private readonly DispatcherTimer statusTimer=new() {Interval=TimeSpan.FromSeconds(1)};
+    private bool updating,busy;
+    public event EventHandler? PendingApplyRequested;
+    public MonitorView(PathmanLayout layout,EnvironmentWorkspaceStore store)
+    {
+        this.layout=layout;this.store=store;InitializeComponent();Update(store.Read());
+        statusTimer.Tick+=(_,_)=> {if(!busy) RefreshProcessState();};
+        Loaded+=(_,_)=> {RefreshProcessState();statusTimer.Start();};Unloaded+=(_,_)=>statusTimer.Stop();
+    }
+    private void RefreshProcessState()
+    {
+        updating=true;
+        try {EnableMonitoring.IsChecked=new BackgroundProcess(layout).IsRunning;StartupEnabled.IsChecked=new StartupManager(layout).IsEnabled;}
+        finally {updating=false;}
+    }
     public void Update(EnvironmentWorkspace state)
     {
-        updating=true; StartupEnabled.IsChecked=new StartupManager(layout).IsEnabled; EnableMonitoring.IsChecked=state.MonitoringEnabled; updating=false;
-        MonitorStatus.Text=state.MonitoringEnabled ? new BackgroundProcess(layout).IsRunning ? "监控中" : "监控已启用，后台当前未运行" : "监控未启用";
-        Changes.ItemsSource=state.Changes.Select(change=>new { TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? "用户" : "系统",change.Name,ActionText=change.Action switch { "create"=>"新增","delete"=>"删除","rename"=>"重命名",_=>"修改" },change.Source }).ToArray();
+        if(busy) return;
+        updating=true;
+        GroupExternalUser.IsChecked=state.GroupExternalUserVariables;GroupExternalMachine.IsChecked=state.GroupExternalMachineVariables;
+        AutoArrangeUser.IsChecked=state.AutoArrangeUserPath;AutoArrangeMachine.IsChecked=state.AutoArrangeMachinePath;
+        RemoveUserDuplicates.IsChecked=state.RemoveUserPathDuplicates;RemoveMachineDuplicates.IsChecked=state.RemoveMachinePathDuplicates;
+        MoveUserEntries.IsChecked=state.MoveExternalUserPathEntries;MoveMachineEntries.IsChecked=state.MoveExternalMachinePathEntries;
+        UserArrangeOptions.IsEnabled=state.AutoArrangeUserPath;MachineArrangeOptions.IsEnabled=state.AutoArrangeMachinePath;
+        updating=false;RefreshProcessState();
+        var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
+        var message=pending ? "系统 PATH 有待整理的外部新增项，需要管理员授权。" : state.MonitorMessage;
+        MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+        ApplyPending.Visibility=pending ? Visibility.Visible : Visibility.Collapsed;
+        var changes=state.Changes.Where(change=>change.Source=="外部程序").Select(change=>new {TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? "用户" : "系统",change.Name,ActionText=change.Action switch {"create"=>"新增","delete"=>"删除",_=>"修改"},change.Before,change.After}).ToArray();
+        Changes.ItemsSource=changes;NoChanges.Visibility=changes.Length==0 ? Visibility.Visible : Visibility.Collapsed;
+        Changes.Visibility=changes.Length==0 ? Visibility.Collapsed : Visibility.Visible;
     }
+    private void OpenHistory(object sender,RoutedEventArgs e) {SettingsPage.Visibility=Visibility.Collapsed;HistoryPage.Visibility=Visibility.Visible;}
+    private void CloseHistory(object sender,RoutedEventArgs e) {HistoryPage.Visibility=Visibility.Collapsed;SettingsPage.Visibility=Visibility.Visible;}
+    private void ShowError(Exception error) {MonitorStatus.Text=error.Message;MonitorNotice.Visibility=Visibility.Visible;}
     private void ChangeStartup(object sender,RoutedEventArgs e)
     {
-        if(updating) return;
-        try { new StartupManager(layout).SetEnabled(StartupEnabled.IsChecked==true); MonitorStatus.Text=""; }
-        catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException)
-        { updating=true; StartupEnabled.IsChecked=!StartupEnabled.IsChecked; updating=false; MonitorStatus.Text=error.Message; }
+        if(updating || busy) return;
+        try {new StartupManager(layout).SetEnabled(StartupEnabled.IsChecked==true);Update(store.Read());}
+        catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
     }
     private async void ChangeMonitoring(object sender,RoutedEventArgs e)
     {
-        if(updating) return;
-        var enabled=EnableMonitoring.IsChecked==true; EnableMonitoring.IsEnabled=false;
-        try { await Task.Run(()=> { if(enabled) new BackgroundProcess(layout).Start(); new EnvironmentMonitor(store).SetEnabled(enabled); }); Update(store.Read()); }
-        catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { updating=true; EnableMonitoring.IsChecked=!enabled; updating=false; MessageBox.Show(Window.GetWindow(this),error.Message,"无法更改监控设置"); }
-        finally { EnableMonitoring.IsEnabled=true; }
+        if(updating || busy) return;
+        var enabled=EnableMonitoring.IsChecked==true;busy=true;SettingsPanel.IsEnabled=false;
+        try
+        {
+            await Task.Run(()=> {var process=new BackgroundProcess(layout);if(enabled) process.Start();else {process.Stop();new EnvironmentMonitor(store).SetEnabled(false);}});
+            busy=false;Update(store.Read());
+        }
+        catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
+        finally {busy=false;SettingsPanel.IsEnabled=true;}
     }
+    private void ChangeOptions(object sender,RoutedEventArgs e)
+    {
+        if(updating || busy) return;
+        try
+        {
+            store.Update(state=>
+            {
+                state.GroupExternalUserVariables=GroupExternalUser.IsChecked==true;state.GroupExternalMachineVariables=GroupExternalMachine.IsChecked==true;
+                state.AutoArrangeUserPath=AutoArrangeUser.IsChecked==true;state.AutoArrangeMachinePath=AutoArrangeMachine.IsChecked==true;
+                state.RemoveUserPathDuplicates=RemoveUserDuplicates.IsChecked==true;state.RemoveMachinePathDuplicates=RemoveMachineDuplicates.IsChecked==true;
+                state.MoveExternalUserPathEntries=MoveUserEntries.IsChecked==true;state.MoveExternalMachinePathEntries=MoveMachineEntries.IsChecked==true;
+                state.PendingPathOrganizations.RemoveAll(plan=>!state.IsPathOrganizationEnabled(plan.Scope));
+            });
+            Update(store.Read());
+        }
+        catch(Exception error) when(Expected(error)) {Update(store.Read());ShowError(error);}
+    }
+    private void ApplyPendingChanges(object sender,RoutedEventArgs e)=>PendingApplyRequested?.Invoke(this,EventArgs.Empty);
+    public void SetApplying(bool value) {busy=value;SettingsPanel.IsEnabled=!value;}
+    private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException;
 }
