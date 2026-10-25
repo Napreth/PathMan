@@ -139,10 +139,12 @@ try {
     Toggle (Id 'EnableAliases'); WaitFor { (UserValue 'Path') -eq 'C:\Cleanup\User;%USER_TOOLS_PATH%' } 'Disabling aliases changed unrelated user PATH entries'
     SelectNode (Find (Id 'Navigation') '变量监控' ([Windows.Automation.ControlType]::ListItem))
     Assert ((Id 'StartupEnabled').Current.Name -eq '登录时自动运行后台程序') 'Startup has moved to monitoring with its requested label'
+    Toggle (Id 'EnableMonitoring')
     Toggle (Id 'StartupEnabled')
     Assert ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PathMan).PathMan -eq '"C:\PathManTestApp\internal\PathMan.Service.exe"') 'The startup switch writes the current user login command'
     Toggle (Id 'StartupEnabled')
     Assert ($null -eq (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name PathMan -ErrorAction SilentlyContinue)) 'Disabling startup removes its login command'
+    Toggle (Id 'EnableMonitoring')
     SelectNode (Find (Id 'Navigation') '关于' ([Windows.Automation.ControlType]::ListItem)); Assert ($null -eq (Id 'StartupEnabled')) 'About no longer contains the startup setting'
     @{Passed=$true;Checks=$checks}|ConvertTo-Json -Depth 5|Set-Content $ResultPath -Encoding UTF8
 } catch { @{Passed=$false;Error=$_.Exception.Message;Line=$_.InvocationInfo.ScriptLineNumber;Checks=$checks}|ConvertTo-Json -Depth 5|Set-Content $ResultPath -Encoding UTF8; throw }

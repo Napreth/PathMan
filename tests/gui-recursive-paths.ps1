@@ -115,7 +115,7 @@ try{
  $rootBefore=UserValue 'Path'
  $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment',$true)
  try{$key.SetValue('Path',$rootBefore+';%MACHINE_PATH%',[Microsoft.Win32.RegistryValueKind]::ExpandString)}finally{$key.Dispose()}
- Invoke (Id 'RefreshButton');ExpandRef '%MACHINE_PATH%';SelectNode (Row 'C:\machine1');Invoke (Id 'EditEntryButton')
+ WaitFor {$null -ne (Row '%MACHINE_PATH%')} 'Readonly monitoring did not expose the new reference';ExpandRef '%MACHINE_PATH%';SelectNode (Row 'C:\machine1');Invoke (Id 'EditEntryButton')
  $inputBox=Find $window '行内编辑' ([Windows.Automation.ControlType]::Edit)
  $inputBox.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('C:\machine-edited');$inputBox.SetFocus();Key 13
  'WAITING_FOR_NESTED_SYSTEM_UAC' | Set-Content ($ResultPath+'.progress');Invoke (Id 'SaveButton')
@@ -124,7 +124,7 @@ try{
  # Exercise the right list's distance-based auto-scroll, then cancel the drag.
  $before=UserValue 'Path';$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment',$true)
  try{$key.SetValue('Path',$before+';'+((0..99 | ForEach-Object {"C:\overflow\$_"}) -join ';'),[Microsoft.Win32.RegistryValueKind]::ExpandString)}finally{$key.Dispose()}
- Invoke (Id 'RefreshButton');$scroll=(Id 'ValuesList').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern);$scroll.SetScrollPercent(-1,0);Start-Sleep -Milliseconds 200
+ WaitFor {(Id 'ValuesList').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern).Current.VerticallyScrollable} 'Readonly monitoring did not update the long list';$scroll=(Id 'ValuesList').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern);$scroll.SetScrollPercent(-1,0);Start-Sleep -Milliseconds 200
  $bounds=(Id 'ValuesList').Current.BoundingRectangle;$r=(RowText 'C:\tail').Current.BoundingRectangle
  Start-Sleep -Milliseconds 550;MovePointer ($r.Left+10) ($r.Top+7);Down;MovePointer ($r.Left+25) ($r.Top+11)
  MovePointer ($bounds.Left+100) ($bounds.Bottom+8);Start-Sleep -Milliseconds 300;$s1=$scroll.Current.VerticalScrollPercent
@@ -132,10 +132,10 @@ try{
  MovePointer ($bounds.Left+100) ($bounds.Bottom+150);Start-Sleep -Milliseconds 450;$s3=$scroll.Current.VerticalScrollPercent
  Assert ($s2 -gt $s1 -and ($s3-$s2) -gt ($s2-$s1)) 'Right-list auto-scroll accelerates with vertical distance from the edge'
  Key 27;Up;Assert (!(Id 'SaveButton').Current.IsEnabled) 'Escape cancels an auto-scrolling path drag without staging changes'
- $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment',$true);try{$key.SetValue('Path',$before,[Microsoft.Win32.RegistryValueKind]::ExpandString)}finally{$key.Dispose()};Invoke (Id 'RefreshButton')
+ $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment',$true);try{$key.SetValue('Path',$before,[Microsoft.Win32.RegistryValueKind]::ExpandString)}finally{$key.Dispose()};WaitFor {$null -eq (Row 'C:\overflow\0')} 'Readonly monitoring did not remove old rows'
  Go '健康检测';Invoke (Id 'ScanButton');Go '变量管理';SelectNode (Node 'Path')
  Invoke (Find $window '关闭通知' ([Windows.Automation.ControlType]::Button))
- Invoke (Id 'RefreshButton');Start-Sleep -Milliseconds 500
+ Start-Sleep -Milliseconds 1000
  Assert ($null -eq (Find $window '环境变量存在问题' ([Windows.Automation.ControlType]::Text))) 'Dismissed health notifications do not return for unchanged findings'
  # Create a long machine PATH for the diff and wheel regression. User mode cannot
  # change it here; the prepared fixture already contains duplicate software paths.

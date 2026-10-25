@@ -20,7 +20,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
         state.MonitoringEnabled = enabled;
         if (enabled) state.Snapshot = ReadAll().Select(Snapshot).ToList();
     });
-    public void Poll()
+    public void Poll(IEnvironmentChangeOrigins? origins=null)
     {
         var paused=false;
         store.Inspect(state=>
@@ -29,8 +29,8 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             if(state.RegistryWriteInProgressUntil>DateTime.UtcNow) {paused=true;return false;}
             var current=ReadAll();
             var before=state.Snapshot.ToArray();
-            var changed=Compare(state,current);
-            return PreparePlans(state,before,current,changed) || changed;
+            var changed=Compare(state,current,origins);
+            return PreparePlans(state,before,current,changed,origins:origins) || changed;
         });
         if(paused) return;
         var saved=store.Read();
@@ -39,7 +39,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
         var administrator=new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
         foreach(var plan in saved.PendingPathOrganizations)
         {
-            if(!saved.IsPathOrganizationEnabled(plan.Scope)) continue;
+            if(!saved.IsPathOrganizationEnabled(plan.Scope) || RequiresOrigin(saved,plan.Scope) && origins?.IsReady!=true) continue;
             if(failedPlans.Contains(plan.Id)) continue;
             if(plan.Scope==VariableScope.Machine && !administrator) continue;
             try
@@ -58,7 +58,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
         failedPlans.RemoveWhere(id=>!saved.PendingPathOrganizations.Any(plan=>plan.Id==id));
     }
     internal static bool PreparePlans(EnvironmentWorkspace state,IReadOnlyList<VariableSnapshot> before,
-        IReadOnlyList<EnvironmentVariableInfo> current,bool changed,IReadOnlyDictionary<string,string>? runtime=null)
+        IReadOnlyList<EnvironmentVariableInfo> current,bool changed,IReadOnlyDictionary<string,string>? runtime=null,IEnvironmentChangeOrigins? origins=null)
     {
         if(!state.AnyPathOrganizationEnabled)
         {var had=state.PendingPathOrganizations.Count>0;state.PendingPathOrganizations.Clear();return had;}
@@ -70,10 +70,18 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             var pending=state.PendingPathOrganizations.FirstOrDefault(item=>item.Scope==scope);
             var old=before.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals("Path",StringComparison.OrdinalIgnoreCase));
             var path=current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals("Path",StringComparison.OrdinalIgnoreCase));
+            var pathChanged=changed && old?.Value!=path?.RawValue;
+            var writers=pathChanged ? origins?.Take(scope,"Path") ?? [] : pending?.Origins ?? [];
+            if(writers.Any(writer=>writer.Excluded(state)) || pathChanged && RequiresOrigin(state,scope) && (origins?.IsReady!=true || writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)))
+            {
+                updated|=state.PendingPathOrganizations.RemoveAll(item=>item.Scope==scope)>0;
+                if(writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)) Message(state,"未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。");
+                continue;
+            }
             if(pending is null && (!changed || old?.Value==path?.RawValue)) continue;
             if(pending is not null && !changed && pending.Policy==ExternalPathOrganizer.Policy(state,scope) &&
                 pending.Mutations.All(mutation=>current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(mutation.Name,StringComparison.OrdinalIgnoreCase))?.RawValue==mutation.ExpectedValue)) continue;
-            var plan=ExternalPathOrganizer.Plan(scope,pending is null ? old : pending.BeforePath,current,state,runtime);
+            var plan=ExternalPathOrganizer.Plan(scope,pending is null ? old : pending.BeforePath,current,state,runtime) with {Origins=writers};
             state.PendingPathOrganizations.RemoveAll(item=>item.Scope==scope);
             if(plan.Mutations.Count>0) state.PendingPathOrganizations.Add(plan);
             if(plan.Warning is not null) Message(state,plan.Warning);
@@ -81,6 +89,9 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
         }
         return updated;
     }
+    public static bool RequiresOrigin(EnvironmentWorkspace state,VariableScope? scope=null)=>state.TrackChangeOrigins &&
+        (scope is {} selected ? state.ShouldIgnoreSystemEditor(selected) || state.ShouldIgnorePowerToys(selected) :
+            new[] {VariableScope.User,VariableScope.Machine}.Where(state.IsPathOrganizationEnabled).Any(item=>state.ShouldIgnoreSystemEditor(item) || state.ShouldIgnorePowerToys(item)));
     public static void Backup(EnvironmentWorkspaceStore store,ExternalPathOrganizationPlan plan)
     {
         var directory=Path.Combine(Path.GetDirectoryName(store.FilePath)!,"backups");Directory.CreateDirectory(directory);
@@ -98,7 +109,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
     private static void Message(EnvironmentWorkspace state,string message)
     {if(state.MonitorMessage==message) return;state.MonitorMessage=message;state.MonitorMessageTime=DateTime.Now;}
     private static VariableSnapshot Snapshot(EnvironmentVariableInfo item) => new(item.Scope, item.Name, item.RawValue, (int)item.Kind);
-    internal static bool Compare(EnvironmentWorkspace state, IReadOnlyList<EnvironmentVariableInfo> current)
+    internal static bool Compare(EnvironmentWorkspace state, IReadOnlyList<EnvironmentVariableInfo> current,IEnvironmentChangeOrigins? origins=null)
     {
         var before = state.Snapshot.ToDictionary(item => EnvironmentWorkspace.Key(item.Scope, item.Name), StringComparer.OrdinalIgnoreCase);
         var after = current.ToDictionary(item => EnvironmentWorkspace.Key(item.Scope, item.Name), StringComparer.OrdinalIgnoreCase);
@@ -108,13 +119,13 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             var key = EnvironmentWorkspace.Key(item.Scope, item.Name);
             if (!before.TryGetValue(key, out var old) || old.Value != item.RawValue || old.Kind != (int)item.Kind)
             {
-                changes.Add(new(DateTime.Now, item.Scope, item.Name, old is null ? "create" : "set", old?.Value, item.RawValue, "外部程序"));
+                changes.Add(new(DateTime.Now, item.Scope, item.Name, old is null ? "create" : "set", old?.Value, item.RawValue, "外部程序") {Origins=origins?.Take(item.Scope,item.Name) ?? []});
                 if(old is null) state.ExternalVariables.Add(key);
             }
         }
         foreach (var old in state.Snapshot.Where(item => !after.ContainsKey(EnvironmentWorkspace.Key(item.Scope, item.Name))))
         {
-            changes.Add(new(DateTime.Now, old.Scope, old.Name, "delete", old.Value, null, "外部程序"));
+            changes.Add(new(DateTime.Now, old.Scope, old.Name, "delete", old.Value, null, "外部程序") {Origins=origins?.Take(old.Scope,old.Name) ?? []});
             state.ExternalVariables.Remove(EnvironmentWorkspace.Key(old.Scope, old.Name));
         }
         if (changes.Count == 0) return false;

@@ -63,8 +63,8 @@ public partial class VariablesView
     {
         if(busy || editingSession is not {} session) return;
         var mutations=session.Mutations();
-        if(mutations.Count==0) {SetDirty(); return;}
-        busy=true; IsEnabled=false;
+        if(mutations.Count==0) {session.FinishReview();RefreshPathEntries();SetDirty();return;}
+        busy=true; IsEnabled=false;UpdateActions();
         var applied=new List<string>();
         var succeeded=false;
         try

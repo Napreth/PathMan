@@ -52,6 +52,8 @@ try
             Console.WriteLine("后台程序已启动。");
             return 0;
         case ["background", "stop"]:
+            new Pathman.Core.EnvironmentVariables.EnvironmentMonitor(new Pathman.Core.EnvironmentVariables.EnvironmentWorkspaceStore(layout.DataDirectory)).SetEnabled(false);
+            startup.SetEnabled(false);
             background.Stop();
             Console.WriteLine("后台程序已停止。");
             return 0;

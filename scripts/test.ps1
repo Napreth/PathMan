@@ -103,15 +103,17 @@ try {
     $missing = Invoke-Program $template @()
     Assert ($missing.Code -eq 13) 'A missing manifest should fail clearly.'
     $null = Invoke-Cli @('startup', 'status')
-    $null = Invoke-Cli @('background', 'start')
+    $refused = Invoke-Program $cli @('--data-root', $dataRoot, 'background', 'start')
+    Assert ($refused.Code -ne 0) 'Background startup must refuse disabled runtime/login preferences without modifying actual login registration.'
     $status = Invoke-Cli @('background', 'status')
-    Assert ($status.Out.Contains('正在运行')) 'Background process did not become ready.'
-    $duplicate = Invoke-Program (Join-Path $installation 'internal/PathMan.Service.exe') @()
-    Assert ($duplicate.Code -eq 0) 'A duplicate background process should exit.'
+    Assert ($status.Out.Contains('未运行')) 'Disabled background must remain stopped.'
+    $duplicate = Invoke-Program (Join-Path $installation 'internal/PathMan.Service.exe') @('--data-root', $dataRoot)
+    Assert ($duplicate.Code -eq 5) 'A direct disabled background launch must also be refused.'
     $null = Invoke-Cli @('background', 'stop')
     $status = Invoke-Cli @('background', 'status')
     Assert ($status.Out.Contains('未运行')) 'Background process did not stop.'
-    $null = Invoke-Cli @('background', 'start')
+    $refused = Invoke-Program $cli @('--data-root', $dataRoot, 'background', 'start')
+    Assert ($refused.Code -ne 0) 'Stopping the background must not silently reenable it.'
     $null = Invoke-Cli @('background', 'stop')
 
     if ([IO.Path]::GetPathRoot($testRoot) -ne [IO.Path]::GetPathRoot([IO.Path]::GetTempPath())) {

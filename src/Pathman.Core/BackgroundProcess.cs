@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
+using Pathman.Core.EnvironmentVariables;
 
 namespace Pathman.Core;
 
@@ -32,6 +33,9 @@ public sealed class BackgroundProcess(PathmanLayout layout)
     public void Start()
     {
         if (IsRunning) return;
+        var state=new EnvironmentWorkspaceStore(layout.DataDirectory).Read();
+        if(!StartupManager.CanRun(state,new StartupManager(layout).IsEnabled))
+            throw new IOException("后台运行与登录自启必须同时开启，后台程序才会运行。");
         if (!File.Exists(layout.BackgroundExecutable))
             throw new FileNotFoundException("后台程序不存在。", layout.BackgroundExecutable);
         using var ready = new EventWaitHandle(false, EventResetMode.ManualReset, ReadyEventName);
@@ -45,8 +49,10 @@ public sealed class BackgroundProcess(PathmanLayout layout)
         start.ArgumentList.Add("--data-root");
         start.ArgumentList.Add(layout.DataDirectory);
         using var process = Process.Start(start);
-        if (process is null || !ready.WaitOne(TimeSpan.FromSeconds(10)))
-            throw new IOException("后台程序未能在 10 秒内启动。");
+        if(process is null) throw new IOException("无法启动后台程序。");
+        for(var retry=0;retry<100;retry++)
+        {if(ready.WaitOne(100)) return;if(process.HasExited) throw new IOException("后台程序拒绝启动，请检查后台运行和登录自启设置。");}
+        throw new IOException("后台程序未能在 10 秒内启动。");
     }
 
     public void Stop()

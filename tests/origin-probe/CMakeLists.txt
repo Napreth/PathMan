@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.24)
+project(PathManOriginProbe LANGUAGES CXX)
+add_executable(OriginProbe main.cpp)
+target_compile_features(OriginProbe PRIVATE cxx_std_20)
+set_property(TARGET OriginProbe PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+target_link_libraries(OriginProbe PRIVATE advapi32)

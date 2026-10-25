@@ -44,9 +44,9 @@
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="24"/></Grid.RowDefinitions>
-        <DockPanel Margin="0,0,0,24"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"><Button x:Name="CleanupButton" Content="清理" Click="PreviewCleanup" Padding="16,5" Margin="0,0,8,0"/><Button x:Name="RefreshButton" Content="刷新" Click="Refresh" Padding="16,5"/></StackPanel><TextBlock Text="变量管理" Style="{StaticResource PageTitle}"/></DockPanel>
+        <DockPanel Margin="0,0,0,24"><Button x:Name="CleanupButton" Content="清理" DockPanel.Dock="Right" Click="PreviewCleanup" Padding="16,5"/><TextBlock Text="变量管理" Style="{StaticResource PageTitle}"/></DockPanel>
         <Grid x:Name="EditorPanel" Grid.Row="1">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="260"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*" MinWidth="260"/><ColumnDefinition Width="12"/><ColumnDefinition Width="96"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="260"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*" MinWidth="260"/><ColumnDefinition Width="12"/><ColumnDefinition Width="112"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="*"/></Grid.RowDefinitions>
             <Grid Margin="0,0,0,6"><TextBlock x:Name="UserTitle" Text="用户变量" Style="{StaticResource SectionTitle}"/><controls:ScopeActions x:Name="UserActions" Scope="User" HorizontalAlignment="Right" VerticalAlignment="Center" ActionRequested="ScopeActionRequested" AutomationProperties.Name="用户变量操作"/></Grid>
             <Grid Grid.Row="1">
@@ -78,11 +78,17 @@
                     <ListBox x:Name="ValuesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="变量条目"
                              PreviewMouseLeftButtonDown="PathMouseDown" PreviewMouseMove="PathMouseMove" PreviewMouseLeftButtonUp="PathMouseUp">
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/><Style.Triggers><DataTrigger Binding="{Binding IsDragPlaceholder}" Value="True"><Setter Property="Opacity" Value="0"/></DataTrigger></Style.Triggers></Style></ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate><DataTemplate><Grid Margin="{Binding Indent}"><Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <ListBox.ItemTemplate><DataTemplate><Grid Margin="{Binding Indent}"><Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.Style><Style TargetType="Grid"><Setter Property="Background" Value="Transparent"/><Style.Triggers>
+                                <DataTrigger Binding="{Binding IsExternalAdded}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Green}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                                <DataTrigger Binding="{Binding IsExternalRemoved}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Red}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                                <DataTrigger Binding="{Binding IsUserChange}" Value="True"><Setter Property="Background" Value="{x:Static controls:SemanticPalette.Blue}"/><Setter Property="TextElement.Foreground" Value="#242424"/></DataTrigger>
+                            </Style.Triggers></Style></Grid.Style>
                             <Button IsEnabled="{Binding CanExpand}" Click="TogglePathReference" Focusable="False" ToolTip="{Binding GroupToolTip}" AutomationProperties.Name="{Binding ExpandActionName}">
                                 <Button.Style><Style TargetType="Button"><Setter Property="Visibility" Value="Visible"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="Transparent"><Path x:Name="Chevron" Data="M 0,0 L 4,4 L 0,8" Stroke="{Binding Foreground,RelativeSource={RelativeSource AncestorType=ListBoxItem}}" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin=".5,.5"/></Border><ControlTemplate.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter TargetName="Chevron" Property="RenderTransform"><Setter.Value><RotateTransform Angle="90"/></Setter.Value></Setter></DataTrigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter><Style.Triggers><DataTrigger Binding="{Binding IsGroup}" Value="False"><Setter Property="Visibility" Value="Hidden"/></DataTrigger></Style.Triggers></Style></Button.Style>
                             </Button>
-                            <controls:EditableRow Grid.Column="1" Text="{Binding Value}" ShowPin="False" ShowEdit="False" ShowDelete="False" ShowJump="{Binding HasReferences}" JumpToolTip="{Binding ReferenceToolTip}" JumpRequested="EntryJumpRequested" EditRequested="EntryEditRequested" EditingCanceled="EntryEditCanceled" EditingChanged="RowEditingChanged"/>
+                            <TextBlock Grid.Column="1" Text="{Binding DiffPrefix}" Width="16" VerticalAlignment="Center" FontFamily="Consolas"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsReview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                            <controls:EditableRow Grid.Column="2" Text="{Binding Value}" CanEdit="{Binding CanEdit}" ShowPin="False" ShowEdit="False" ShowDelete="False" ShowJump="{Binding HasReferences}" JumpToolTip="{Binding ReferenceToolTip}" JumpRequested="EntryJumpRequested" EditRequested="EntryEditRequested" EditingCanceled="EntryEditCanceled" EditingChanged="RowEditingChanged"/>
                         </Grid></DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
                     <ListBox x:Name="GroupVariablesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="分组变量">
@@ -100,14 +106,18 @@
                     <StackPanel x:Name="ListButtons">
                         <Button x:Name="AddEntryButton" Content="新建" Style="{StaticResource Action}" Click="AddEntry" AutomationProperties.Name="新建条目"/>
                         <Button x:Name="EditEntryButton" Content="编辑" Style="{StaticResource Action}" Click="EditEntry"/>
-                        <Button Content="浏览…" Style="{StaticResource Action}" Click="BrowseEntry"/>
+                        <Button x:Name="BrowseEntryButton" Content="浏览…" Style="{StaticResource Action}" Click="BrowseEntry"/>
                         <Button x:Name="MoveUpButton" Content="上移" Style="{StaticResource Action}" Click="MoveUp" Margin="0,16,0,8"/>
                         <Button x:Name="MoveDownButton" Content="下移" Style="{StaticResource Action}" Click="MoveDown"/>
                     </StackPanel>
                     <Button x:Name="CopyValueButton" Content="复制" Style="{StaticResource Action}" Click="CopyValue"/>
                     <Button x:Name="DeleteEntryButton" Content="删除" Style="{StaticResource Action}" Click="DeleteEntry" ToolTip="删除选中条目"/>
                 </StackPanel>
-                <StackPanel Grid.Row="2"><Button x:Name="ToggleModeButton" Content="文本模式" Style="{StaticResource Action}" Click="ToggleValueMode" Margin="0,0,0,16"/><Button x:Name="SaveButton" Content="保存" Style="{StaticResource Action}" Click="SaveValue"/><Button x:Name="RevertButton" Content="撤销" Style="{StaticResource Action}" Click="RevertValue" Margin="0"/></StackPanel>
+                <StackPanel Grid.Row="2"><StackPanel x:Name="ExternalActions" Margin="0,0,0,16">
+                    <Button x:Name="UndoExternalButton" Content="撤回外部更改" Style="{StaticResource Action}" Click="UndoExternalChanges"/>
+                    <Button x:Name="CleanExternalButton" Content="清理外部更改" Style="{StaticResource Action}" Click="CleanExternalChanges"/>
+                    <ToggleButton x:Name="TemporaryCleanupButton" Content="临时自动清理" Padding="6,5" MinHeight="32" FontSize="13" HorizontalAlignment="Stretch" Checked="ChangeTemporaryCleanup" Unchecked="ChangeTemporaryCleanup" ToolTip="仅在当前变量编辑期间整理外部新增项；保存时才写入"/>
+                </StackPanel><Button x:Name="ToggleModeButton" Content="文本模式" Style="{StaticResource Action}" Click="ToggleValueMode" Margin="0,0,0,16"/><Button x:Name="SaveButton" Content="保存" Style="{StaticResource Action}" Click="SaveValue"/><Button x:Name="RevertButton" Content="撤销" Style="{StaticResource Action}" Click="RevertValue" Margin="0"/></StackPanel>
             </Grid>
         </Grid>
         <Grid x:Name="CleanupPanel" Grid.Row="1" Visibility="Collapsed">

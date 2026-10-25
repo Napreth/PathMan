@@ -26,7 +26,7 @@ public partial class VariablesView
         pathDragSource=null;
         if(busy || dragging || HasInlineEditor || e.ClickCount>1 || EditableRow.FindParent<ButtonBase>(e.OriginalSource as DependencyObject) is not null ||
             EditableRow.FindParent<TextBox>(e.OriginalSource as DependencyObject) is not null) return;
-        if(EditableRow.FindParent<EditableRow>(e.OriginalSource as DependencyObject) is {DataContext:EnvironmentEntry entry} && !entry.IsDraft)
+        if(EditableRow.FindParent<EditableRow>(e.OriginalSource as DependencyObject) is {DataContext:EnvironmentEntry entry} && !entry.IsDraft && !entry.IsGhost)
         {pathDragSource=entry; pathStart=e.GetPosition(this);}
     }
     private void PathMouseMove(object sender,MouseEventArgs e)

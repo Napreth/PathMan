@@ -22,7 +22,13 @@ public partial class MonitorView : UserControl
     private void RefreshProcessState()
     {
         updating=true;
-        try {EnableMonitoring.IsChecked=new BackgroundProcess(layout).IsRunning;StartupEnabled.IsChecked=new StartupManager(layout).IsEnabled;}
+        try
+        {
+            var state=store.Read();var startup=new StartupManager(layout);startup.Reconcile();
+            EnableMonitoring.IsChecked=state.MonitoringEnabled;StartupEnabled.IsChecked=startup.IsEnabled;
+            StartupEnabled.IsEnabled=TrackOrigins.IsEnabled=MonitoringRules.IsEnabled=state.MonitoringEnabled;
+            UserEditorExclusions.IsEnabled=MachineEditorExclusions.IsEnabled=state.TrackChangeOrigins;
+        }
         finally {updating=false;}
     }
     public void Update(EnvironmentWorkspace state)
@@ -33,24 +39,34 @@ public partial class MonitorView : UserControl
         AutoArrangeUser.IsChecked=state.AutoArrangeUserPath;AutoArrangeMachine.IsChecked=state.AutoArrangeMachinePath;
         RemoveUserDuplicates.IsChecked=state.RemoveUserPathDuplicates;RemoveMachineDuplicates.IsChecked=state.RemoveMachinePathDuplicates;
         MoveUserEntries.IsChecked=state.MoveExternalUserPathEntries;MoveMachineEntries.IsChecked=state.MoveExternalMachinePathEntries;
+        TrackOrigins.IsChecked=state.TrackChangeOrigins;
+        IgnoreSystemEditorUser.IsChecked=state.IgnoreSystemEditorUserChanges;IgnoreSystemEditorMachine.IsChecked=state.IgnoreSystemEditorMachineChanges;
+        IgnorePowerToysUser.IsChecked=state.IgnorePowerToysUserChanges;IgnorePowerToysMachine.IsChecked=state.IgnorePowerToysMachineChanges;
         UserArrangeOptions.IsEnabled=state.AutoArrangeUserPath;MachineArrangeOptions.IsEnabled=state.AutoArrangeMachinePath;
         updating=false;RefreshProcessState();
         var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
-        var message=pending ? "系统 PATH 有待整理的外部新增项，需要管理员授权。" : state.MonitorMessage;
+        var message=state.OriginTrackingMessage ?? (pending ? "系统 PATH 有待整理的外部新增项，需要管理员授权。" : state.MonitorMessage);
         MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
         ApplyPending.Visibility=pending ? Visibility.Visible : Visibility.Collapsed;
-        var changes=state.Changes.Where(change=>change.Source=="外部程序").Select(change=>new {TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? "用户" : "系统",change.Name,ActionText=change.Action switch {"create"=>"新增","delete"=>"删除",_=>"修改"},change.Before,change.After}).ToArray();
+        ApplyPending.IsEnabled=!EnvironmentMonitor.RequiresOrigin(state,VariableScope.Machine) || state.OriginTrackingReady;
+        var changes=state.Changes.Where(change=>change.Source=="外部程序").Select(change=>new {TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? "用户" : "系统",change.Name,ActionText=change.Action switch {"create"=>"新增","delete"=>"删除",_=>"修改"},ProcessText=change.Origins.Count==0 ? "未识别" : string.Join("、",change.Origins.Select(origin=>$"{origin.ProcessName} ({origin.ProcessId})").Distinct()),change.Before,change.After}).ToArray();
         Changes.ItemsSource=changes;NoChanges.Visibility=changes.Length==0 ? Visibility.Visible : Visibility.Collapsed;
         Changes.Visibility=changes.Length==0 ? Visibility.Collapsed : Visibility.Visible;
     }
     private void OpenHistory(object sender,RoutedEventArgs e) {SettingsPage.Visibility=Visibility.Collapsed;HistoryPage.Visibility=Visibility.Visible;}
     private void CloseHistory(object sender,RoutedEventArgs e) {HistoryPage.Visibility=Visibility.Collapsed;SettingsPage.Visibility=Visibility.Visible;}
     private void ShowError(Exception error) {MonitorStatus.Text=error.Message;MonitorNotice.Visibility=Visibility.Visible;}
-    private void ChangeStartup(object sender,RoutedEventArgs e)
+    private async void ChangeStartup(object sender,RoutedEventArgs e)
     {
         if(updating || busy) return;
-        try {new StartupManager(layout).SetEnabled(StartupEnabled.IsChecked==true);Update(store.Read());}
+        var enabled=StartupEnabled.IsChecked==true;busy=true;SettingsPanel.IsEnabled=false;
+        try
+        {
+            await Task.Run(()=> {new StartupManager(layout).SetEnabled(enabled);var process=new BackgroundProcess(layout);if(enabled) process.Start();else process.Stop();});
+            busy=false;Update(store.Read());
+        }
         catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
+        finally {busy=false;SettingsPanel.IsEnabled=true;}
     }
     private async void ChangeMonitoring(object sender,RoutedEventArgs e)
     {
@@ -58,7 +74,13 @@ public partial class MonitorView : UserControl
         var enabled=EnableMonitoring.IsChecked==true;busy=true;SettingsPanel.IsEnabled=false;
         try
         {
-            await Task.Run(()=> {var process=new BackgroundProcess(layout);if(enabled) process.Start();else {process.Stop();new EnvironmentMonitor(store).SetEnabled(false);}});
+            await Task.Run(()=>
+            {
+                new EnvironmentMonitor(store).SetEnabled(enabled);
+                var process=new BackgroundProcess(layout);var startup=new StartupManager(layout);
+                if(enabled) {if(startup.IsEnabled) process.Start();}
+                else {startup.SetEnabled(false);process.Stop();}
+            });
             busy=false;Update(store.Read());
         }
         catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
@@ -75,6 +97,10 @@ public partial class MonitorView : UserControl
                 state.AutoArrangeUserPath=AutoArrangeUser.IsChecked==true;state.AutoArrangeMachinePath=AutoArrangeMachine.IsChecked==true;
                 state.RemoveUserPathDuplicates=RemoveUserDuplicates.IsChecked==true;state.RemoveMachinePathDuplicates=RemoveMachineDuplicates.IsChecked==true;
                 state.MoveExternalUserPathEntries=MoveUserEntries.IsChecked==true;state.MoveExternalMachinePathEntries=MoveMachineEntries.IsChecked==true;
+                if(state.TrackChangeOrigins!=(TrackOrigins.IsChecked==true)) state.OriginTrackingRequest=Guid.NewGuid().ToString("N");
+                state.TrackChangeOrigins=TrackOrigins.IsChecked==true;
+                state.IgnoreSystemEditorUserChanges=IgnoreSystemEditorUser.IsChecked==true;state.IgnoreSystemEditorMachineChanges=IgnoreSystemEditorMachine.IsChecked==true;
+                state.IgnorePowerToysUserChanges=IgnorePowerToysUser.IsChecked==true;state.IgnorePowerToysMachineChanges=IgnorePowerToysMachine.IsChecked==true;
                 state.PendingPathOrganizations.RemoveAll(plan=>!state.IsPathOrganizationEnabled(plan.Scope));
             });
             Update(store.Read());

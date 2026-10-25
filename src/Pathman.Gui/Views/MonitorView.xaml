@@ -8,7 +8,10 @@
                         <CheckBox x:Name="EnableMonitoring" Content="在后台运行监控程序" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeMonitoring" Unchecked="ChangeMonitoring"/>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
                         <CheckBox x:Name="StartupEnabled" Content="登录时自动运行后台程序" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeStartup" Unchecked="ChangeStartup"/>
+                        <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                        <CheckBox x:Name="TrackOrigins" Content="精确识别修改来源（需要管理员权限）" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                     </StackPanel></Border>
+                    <StackPanel x:Name="MonitoringRules">
                     <TextBlock Text="用户变量" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
                         <CheckBox x:Name="GroupExternalUser" AutomationProperties.Name="将外部新用户环境变量归入‘外部变量’分类" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
@@ -20,6 +23,10 @@
                         <StackPanel x:Name="UserArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveUserDuplicates" Content="删除外部添加的重复PATH项" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                             <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNEL_USER_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNEL_USER_PATH"/></CheckBox>
+                            <StackPanel x:Name="UserEditorExclusions" Margin="0,14,0,0">
+                                <CheckBox x:Name="IgnoreSystemEditorUser" Content="不整理系统编辑器修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
+                                <CheckBox x:Name="IgnorePowerToysUser" Content="不整理PowerToys修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>
                     <TextBlock Text="系统变量" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
@@ -33,6 +40,10 @@
                         <StackPanel x:Name="MachineArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveMachineDuplicates" Content="删除外部添加的重复PATH项" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                             <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNEL_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNEL_PATH"/></CheckBox>
+                            <StackPanel x:Name="MachineEditorExclusions" Margin="0,14,0,0">
+                                <CheckBox x:Name="IgnoreSystemEditorMachine" Content="不整理系统编辑器修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
+                                <CheckBox x:Name="IgnorePowerToysMachine" Content="不整理PowerToys修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>
                     <controls:SettingsLinkCard Content="外部更改记录" Icon="&#xE81C;" Click="OpenHistory"/>
@@ -40,6 +51,7 @@
                         <TextBlock x:Name="MonitorStatus" TextWrapping="Wrap"/>
                         <Button x:Name="ApplyPending" Content="授权并整理系统 PATH" HorizontalAlignment="Left" Margin="0,12,0,0" Click="ApplyPendingChanges" Visibility="Collapsed"/>
                     </StackPanel></Border>
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
@@ -53,6 +65,7 @@
                 <ListView x:Name="Changes" Background="Transparent" BorderThickness="0" FontSize="13" AutomationProperties.Name="外部更改记录"><ListView.View><GridView>
                     <GridViewColumn Header="时间" DisplayMemberBinding="{Binding TimeText}" Width="145"/><GridViewColumn Header="作用域" DisplayMemberBinding="{Binding ScopeText}" Width="70"/>
                     <GridViewColumn Header="变量名" DisplayMemberBinding="{Binding Name}" Width="180"/><GridViewColumn Header="操作" DisplayMemberBinding="{Binding ActionText}" Width="65"/>
+                    <GridViewColumn Header="修改进程" DisplayMemberBinding="{Binding ProcessText}" Width="230"/>
                     <GridViewColumn Header="更改前" DisplayMemberBinding="{Binding Before}" Width="260"/><GridViewColumn Header="更改后" DisplayMemberBinding="{Binding After}" Width="260"/>
                 </GridView></ListView.View></ListView>
             </Grid></Border>

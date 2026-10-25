@@ -18,7 +18,8 @@ public sealed class VariableGroupDefinition
 }
 
 public sealed record VariableSnapshot(VariableScope Scope, string Name, string Value, int Kind);
-public sealed record VariableChange(DateTime Time, VariableScope Scope, string Name, string Action, string? Before, string? After, string Source);
+public sealed record VariableChange(DateTime Time, VariableScope Scope, string Name, string Action, string? Before, string? After, string Source)
+{public IReadOnlyList<EnvironmentChangeOrigin> Origins {get;init;}=[];}
 
 public sealed class EnvironmentWorkspace
 {
@@ -28,6 +29,16 @@ public sealed class EnvironmentWorkspace
     public Dictionary<VariableScope, List<string>> PinnedGroups { get; set; } = [];
     public List<string> PinnedVariables { get; set; } = [];
     public bool MonitoringEnabled { get; set; }
+    public bool TrackChangeOrigins {get;set;}
+    public string OriginTrackingRequest {get;set;}="";
+    public bool IgnoreSystemEditorUserChanges {get;set;}
+    public bool IgnoreSystemEditorMachineChanges {get;set;}
+    public bool IgnorePowerToysUserChanges {get;set;}
+    public bool IgnorePowerToysMachineChanges {get;set;}
+    public bool ShouldIgnoreSystemEditor(VariableScope scope)=>scope==VariableScope.User ? IgnoreSystemEditorUserChanges : IgnoreSystemEditorMachineChanges;
+    public bool ShouldIgnorePowerToys(VariableScope scope)=>scope==VariableScope.User ? IgnorePowerToysUserChanges : IgnorePowerToysMachineChanges;
+    public bool OriginTrackingReady {get;set;}
+    public string? OriginTrackingMessage {get;set;}
     public bool GroupExternalUserVariables {get;set;}=true;
     public bool GroupExternalMachineVariables {get;set;}=true;
     public bool AutoArrangeUserPath {get;set;}

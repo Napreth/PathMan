@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     private string monitorSignature="";
     private bool monitorApplying;
     private readonly HashSet<string> attemptedMonitorPlans=[];
+    private EnvironmentSnapshotWatcher? foregroundMonitor;
+    private IReadOnlyList<EnvironmentVariableInfo>? pendingRegistrySnapshot;
     private int previousIssueCount;
     private readonly DispatcherTimer changes=new() {Interval=TimeSpan.FromSeconds(1)};
     private DateTime lastWrite;
@@ -43,10 +45,18 @@ public partial class MainWindow : Window
         variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         aliases.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         monitor.PendingApplyRequested+=async(_,_)=>await ApplyPendingMonitoringAsync();
-        Loaded+=async(_,_)=>await ScanHealthAsync();
+        Loaded+=async(_,_)=>
+        {
+            foregroundMonitor=new EnvironmentSnapshotWatcher(current=>
+            {
+                if(Dispatcher.HasShutdownStarted) return;
+                Dispatcher.BeginInvoke(()=> {pendingRegistrySnapshot=current;variables.NotifyIncoming(current);CheckWorkspace(null,EventArgs.Empty);});
+            });
+            await ScanHealthAsync();
+        };
         EnvironmentEditHost.AuthorizationChanged+=RefreshWindowTitle;
         changes.Tick+=RefreshWindowTitle;changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
-        Closed+=(_,_)=> {changes.Stop();EnvironmentEditHost.AuthorizationChanged-=RefreshWindowTitle;};
+        Closed+=(_,_)=> {foregroundMonitor?.Dispose();changes.Stop();EnvironmentEditHost.AuthorizationChanged-=RefreshWindowTitle;};
     }
     private void RefreshWindowTitle(object? sender,EventArgs e)
     {
@@ -118,11 +128,12 @@ public partial class MainWindow : Window
     private async void CheckWorkspace(object? sender,EventArgs e)
     {
         if(checking || monitorApplying || healthWorking || aliases.IsBusy || variables.IsBusy) return;
-        var stamp=System.IO.File.Exists(store.FilePath) ? System.IO.File.GetLastWriteTimeUtc(store.FilePath) : DateTime.MinValue;
-        if(stamp==lastWrite) return;
         checking=true;
         try
         {
+            if(pendingRegistrySnapshot is {} pending && await variables.ObserveRegistryAsync(pending) && ReferenceEquals(pendingRegistrySnapshot,pending)) pendingRegistrySnapshot=null;
+            var stamp=System.IO.File.Exists(store.FilePath) ? System.IO.File.GetLastWriteTimeUtc(store.FilePath) : DateTime.MinValue;
+            if(stamp==lastWrite) return;
             var state=await Task.Run(store.Read); monitor.Update(state);
             ShowMonitorNotification(state);
             if(state.MonitoringEnabled && state.AutoArrangeMachinePath && (EnvironmentEditHost.IsAdministrator || EnvironmentEditHost.IsAuthorized) && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine && !attemptedMonitorPlans.Contains(item.Id)))
@@ -139,9 +150,10 @@ public partial class MainWindow : Window
     private void ShowMonitorNotification(EnvironmentWorkspace state)
     {
         var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine);
-        var signature=$"{pending}:{state.MonitorMessageTime:O}:{state.MonitorMessage}";
+        var signature=$"{pending}:{state.MonitorMessageTime:O}:{state.MonitorMessage}:{state.OriginTrackingMessage}";
         if(signature==monitorSignature) return;monitorSignature=signature;
-        if(pending) notifications.Show(new("monitor","系统 PATH 等待整理","外部新增项需要管理员授权。\n"+Osc8Text.Link("前往变量监控","apppage:monitor"),NotificationColor.Yellow));
+        if(state.OriginTrackingMessage is {} tracking) notifications.Show(new("monitor","修改来源识别",tracking+"\n"+Osc8Text.Link("前往变量监控","apppage:monitor"),NotificationColor.Yellow));
+        else if(pending) notifications.Show(new("monitor","系统 PATH 等待整理","外部新增项需要管理员授权。\n"+Osc8Text.Link("前往变量监控","apppage:monitor"),NotificationColor.Yellow));
         else if(state.MonitorMessage is {} message) notifications.Show(new("monitor","变量监控",message+"\n"+Osc8Text.Link("查看变量监控","apppage:monitor"),NotificationColor.Yellow));
         else notifications.Dismiss("monitor");
     }
@@ -158,6 +170,7 @@ public partial class MainWindow : Window
                 attemptedMonitorPlans.Add(plan.Id);
                 state=await Task.Run(store.Read);
                 if(!state.MonitoringEnabled || !state.IsPathOrganizationEnabled(plan.Scope) || plan.Policy!=ExternalPathOrganizer.Policy(state,plan.Scope) || !state.PendingPathOrganizations.Any(item=>item.Id==plan.Id)) continue;
+                if(EnvironmentMonitor.RequiresOrigin(state,plan.Scope) && !state.OriginTrackingReady || plan.Origins.Any(origin=>origin.Excluded(state))) continue;
                 await Task.Run(()=>EnvironmentMonitor.Backup(store,plan));
                 await EnvironmentEditHost.ApplyBatchAsync(plan.Mutations,plan.Preconditions,store,layout.DataDirectory);
                 await Task.Run(()=>EnvironmentMonitor.Complete(store,plan));

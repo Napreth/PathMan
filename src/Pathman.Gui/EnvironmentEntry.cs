@@ -7,6 +7,13 @@ public sealed class EnvironmentEntry(string value, bool isDraft = false, IReadOn
 {
     public string Value { get; } = value;
     public bool IsDraft { get; } = isDraft;
+    public bool IsGhost=>Row?.IsGhost==true;
+    public bool CanEdit=>!IsGhost;
+    public bool IsReview=>Row?.IsReview==true;
+    public string DiffPrefix=>Row?.Origin switch {Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.ExternalAdded or Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.UserAdded=>"+",Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.ExternalRemoved or Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.UserRemoved=>"-",_=>""};
+    public bool IsExternalAdded=>Row?.Origin==Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.ExternalAdded;
+    public bool IsExternalRemoved=>Row?.Origin==Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.ExternalRemoved;
+    public bool IsUserChange=>Row?.Origin is Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.UserAdded or Pathman.Core.EnvironmentVariables.EnvironmentEditOrigin.UserRemoved;
     public IReadOnlyList<EnvironmentReferenceLink> References { get; } = references ?? [];
     public bool HasReferences => References.Count > 0;
     public Pathman.Core.EnvironmentVariables.PathEditorRow? Row { get; } = row;
@@ -20,5 +27,5 @@ public sealed class EnvironmentEntry(string value, bool isDraft = false, IReadOn
     public System.Windows.Thickness Indent => new((Row?.Depth ?? 0)*16,0,0,0);
     public string GroupToolTip => Row?.IsCycle==true ? "引用回环或层级过深，已停止展开" : "展开或折叠引用的路径变量";
     public string ReferenceToolTip => "转到：" + string.Join("、", References.Select(item => item.Name));
-    public string AutomationName => Value.Length == 0 ? "（空条目）" : Value;
+    public string AutomationName => DiffPrefix+(Value.Length == 0 ? "（空条目）" : Value);
 }

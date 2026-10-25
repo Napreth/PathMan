@@ -77,7 +77,14 @@ try {
     $self=[Diagnostics.Process]::Start($start)
     try { $null=$self.StandardError.ReadToEnd(); $self.WaitForExit(); Assert ($self.ExitCode -eq 1059) 'A copied shim resolves its original through uninstall information and rejects it as a target' }
     finally { $self.Dispose(); & $cli shim remove pm-registry-self|Out-Null }
+    $workspace=Get-Content $data -Raw|ConvertFrom-Json
+    $workspace.monitoringEnabled=$true
+    $workspace|Add-Member -NotePropertyName trackChangeOrigins -NotePropertyValue $false -Force
+    $workspace|ConvertTo-Json -Depth 30|Set-Content $data -Encoding UTF8
+    & $cli startup enable | Out-Null
+    if($LASTEXITCODE -ne 0) {throw 'Could not enable login startup for the background maintenance fixture.'}
     & $cli background start | Out-Null
+    if($LASTEXITCODE -ne 0) {throw 'Could not start background with both required switches enabled.'}
     try {
         Install 1602
         $currentSession=(Get-Process -Id $PID).SessionId

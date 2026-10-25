@@ -8,19 +8,20 @@ public sealed record ExternalPathOrganizationPlan(VariableScope Scope,VariableSn
     public string Id {get;init;}=Guid.NewGuid().ToString("N");
     public bool ChangesPathOrder {get;init;}
     public string? Warning {get;init;}
+    public IReadOnlyList<EnvironmentChangeOrigin> Origins {get;init;}=[];
 }
 
 public static class ExternalPathOrganizer
 {
     public static string GroupName(VariableScope scope)=>scope==VariableScope.User ? "EXTERNEL_USER_PATH" : "EXTERNEL_PATH";
-    public static string Policy(EnvironmentWorkspace state,VariableScope scope)=>$"{scope}:{state.IsPathOrganizationEnabled(scope)}:{state.ShouldRemovePathDuplicates(scope)}:{state.ShouldMovePathEntries(scope)}";
+    public static string Policy(EnvironmentWorkspace state,VariableScope scope)=>$"{scope}:{state.IsPathOrganizationEnabled(scope)}:{state.ShouldRemovePathDuplicates(scope)}:{state.ShouldMovePathEntries(scope)}:{state.TrackChangeOrigins}:{state.ShouldIgnoreSystemEditor(scope)}:{state.ShouldIgnorePowerToys(scope)}";
     public static ExternalPathOrganizationPlan Plan(VariableScope scope,VariableSnapshot? beforePath,
-        IReadOnlyList<EnvironmentVariableInfo> current,EnvironmentWorkspace state,IReadOnlyDictionary<string,string>? runtime=null)
+        IReadOnlyList<EnvironmentVariableInfo> current,EnvironmentWorkspace state,IReadOnlyDictionary<string,string>? runtime=null,string pathName="Path")
     {
         ExternalPathOrganizationPlan Empty(string? warning=null)=>new(scope,beforePath,[],[],0,0,Policy(state,scope)) {Warning=warning};
         if(!state.IsPathOrganizationEnabled(scope) || !state.ShouldRemovePathDuplicates(scope) && !state.ShouldMovePathEntries(scope)) return Empty();
         var groupName=GroupName(scope);
-        var path=current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals("Path",StringComparison.OrdinalIgnoreCase));
+        var path=current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(pathName,StringComparison.OrdinalIgnoreCase));
         if(path is null) return Empty();
         var resolver=new EnvironmentPathResolver(current,runtime);
         string Key(string entry)

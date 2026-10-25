@@ -60,6 +60,8 @@ foreach ($cpu in $Arch) {
         }
         Copy-Item -LiteralPath (Join-Path $nativeBuild "$Configuration/PathMan.Shim.exe") -Destination (Join-Path $output 'internal/PathMan.Shim.exe')
         Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $output
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.txt') -Destination $output
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'licenses') -Destination $output -Recurse
         $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
         if ($Test -and $cpu -eq $hostArch) {
             & (Join-Path $PSScriptRoot 'test.ps1') -PublishDirectory $output

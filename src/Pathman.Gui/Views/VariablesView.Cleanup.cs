@@ -75,7 +75,7 @@ public partial class VariablesView
     {
         if (busy || cleanupPlan?.HasChanges != true) return;
         var plan=cleanupPlan;
-        busy=true; RefreshButton.IsEnabled=CleanupButton.IsEnabled=ApplyCleanupButton.IsEnabled=false;
+        busy=true; CleanupButton.IsEnabled=ApplyCleanupButton.IsEnabled=false;
         var applied=new List<string>();
         string status;
         try
@@ -93,7 +93,7 @@ public partial class VariablesView
         }
         catch(Exception error) when(Expected(error) || error is OperationCanceledException)
         { status=(applied.Count>0 ? $"已清理{string.Join("、",applied)}；其余未应用。" : "未应用清理。") + error.Message; }
-        finally { busy=false; RefreshButton.IsEnabled=CleanupButton.IsEnabled=true; }
+        finally { busy=false; CleanupButton.IsEnabled=true; }
         await ReloadAsync();
         cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues()); ShowCleanupPlan(); CleanupStatus.Text=status;
     }

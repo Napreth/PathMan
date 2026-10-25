@@ -62,6 +62,47 @@ bool owns(HKEY root, const wchar_t* flag) {
     DWORD value = 0, size = sizeof(value);
     return !RegGetValueW(root, settings, flag, RRF_RT_REG_DWORD, nullptr, &value, &size) && value == 1;
 }
+std::wstring expand_saved(const std::wstring& value, bool machine, std::vector<std::wstring> seen = {}) {
+    if (seen.size() >= 32) return value;
+    std::wstring result;
+    size_t offset = 0;
+    while (offset < value.size()) {
+        const auto begin = value.find(L'%', offset);
+        const auto end = begin == std::wstring::npos ? begin : value.find(L'%', begin + 1);
+        if (end == std::wstring::npos) { result += value.substr(offset); break; }
+        result += value.substr(offset, begin - offset);
+        const auto name = value.substr(begin + 1, end - begin - 1);
+        const auto token = value.substr(begin, end - begin + 1);
+        bool recursive = false;
+        for (const auto& item : seen) recursive |= _wcsicmp(item.c_str(), name.c_str()) == 0;
+        auto replacement = machine ? std::wstring() : read(HKEY_CURRENT_USER, L"Environment", name.c_str());
+        if (replacement.empty()) replacement = read(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", name.c_str());
+        if (replacement.empty()) {
+            const std::wstring builtins[] = { L"SystemRoot", L"windir", L"ProgramFiles", L"ProgramFiles(x86)", L"ProgramW6432", L"USERPROFILE", L"LOCALAPPDATA", L"APPDATA", L"ProgramData" };
+            for (const auto& builtin : builtins) if (_wcsicmp(name.c_str(), builtin.c_str()) == 0) {
+                if (machine && (_wcsicmp(name.c_str(), L"USERPROFILE") == 0 || _wcsicmp(name.c_str(), L"LOCALAPPDATA") == 0 || _wcsicmp(name.c_str(), L"APPDATA") == 0)) break;
+                const auto size = ExpandEnvironmentStringsW(token.c_str(), nullptr, 0);
+                if (size && size < 32768) { std::vector<wchar_t> buffer(size); if (ExpandEnvironmentStringsW(token.c_str(), buffer.data(), size)) replacement = buffer.data(); }
+                break;
+            }
+        }
+        if (recursive || replacement.empty() || replacement == token) result += token;
+        else { auto nested = seen; nested.push_back(name); result += expand_saved(replacement, machine, nested); }
+        if (result.size() > 262144) return value;
+        offset = end + 1;
+    }
+    return result;
+}
+bool contains_path(const std::wstring& value, const std::wstring& directory) {
+    size_t start = 0;
+    while (start <= value.size()) {
+        const auto end = value.find(L';', start);
+        if (normalized(value.substr(start, end == std::wstring::npos ? end : end - start)) == normalized(directory)) return true;
+        if (end == std::wstring::npos) break;
+        start = end + 1;
+    }
+    return false;
+}
 // Avoid NSIS string truncation of long PATH values. Remove only entries this
 // installation added, retaining entries that were already present beforehand.
 DWORD change_path(const std::wstring& directory, bool machine, bool add, const wchar_t* flag) {
@@ -71,32 +112,33 @@ DWORD change_path(const std::wstring& directory, bool machine, bool add, const w
     auto error = RegCreateKeyExW(root, key, 0, nullptr, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, nullptr, &environment, nullptr);
     if (error) return error;
     const auto previous = read(root, key, L"Path");
-    std::wstring updated;
-    bool found = false;
+    std::vector<std::wstring> entries;
+    bool found = false, covered = false;
     size_t start = 0;
-    while (start < previous.size()) {
+    while (!previous.empty() && start <= previous.size()) {
         const auto end = previous.find(L';', start);
         const auto entry = previous.substr(start, end == std::wstring::npos ? end : end - start);
         const bool match = normalized(entry) == normalized(directory);
         found |= match;
-        if (add || !match || !owns(root, flag)) {
-            if (!updated.empty()) updated += L';';
-            updated += entry;
-        }
+        covered |= !match && entry.find(L'%') != std::wstring::npos && contains_path(expand_saved(entry, machine), directory);
+        entries.push_back(entry);
         if (end == std::wstring::npos) break;
         start = end + 1;
     }
-    if (add && !found) {
-        updated = previous;
-        if (!updated.empty() && updated.back() != L';') updated += L';';
-        updated += directory;
+    std::wstring updated;
+    bool first = true;
+    for (const auto& entry : entries) {
+        if (owns(root, flag) && normalized(entry) == normalized(directory) && (!add || covered)) continue;
+        if (!first) updated += L';';
+        first = false; updated += entry;
     }
-    if ((add && !found) || (!add && found && owns(root, flag))) {
+    if (add && !found && !covered) { if (!updated.empty() && updated.back() != L';') updated += L';'; updated += directory; }
+    if (updated != previous) {
         DWORD type = REG_EXPAND_SZ;
         RegQueryValueExW(environment, L"Path", nullptr, &type, nullptr, nullptr);
         if (type != REG_SZ && type != REG_EXPAND_SZ) type = REG_EXPAND_SZ;
         error = RegSetValueExW(environment, L"Path", 0, type, reinterpret_cast<const BYTE*>(updated.c_str()), static_cast<DWORD>((updated.size() + 1) * sizeof(wchar_t)));
-        if (!error && add) {
+        if (!error && add && !found && !covered) {
             HKEY tracking = nullptr;
             error = RegCreateKeyExW(root, settings, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &tracking, nullptr);
             if (!error) {

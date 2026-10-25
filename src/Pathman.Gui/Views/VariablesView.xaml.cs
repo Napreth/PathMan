@@ -29,7 +29,8 @@ public partial class VariablesView : UserControl
     private bool updating, dirty, busy, listMode;
     private string? preferredKey;
     private EditableRow? activeEditor;
-    public bool HasUnsavedChanges => dirty || activeEditor?.IsEditing == true;
+    private long selectionRequest;
+    public bool HasUnsavedChanges => dirty || editingSession?.IsReviewMode==true || activeEditor?.IsEditing == true;
     public bool HasInlineEditor => activeEditor?.IsEditing == true;
     public bool IsBusy => busy || dragging || pathDragging || activeEditor?.IsEditing == true;
     public string LoadedRevision { get; private set; } = "";
@@ -37,6 +38,7 @@ public partial class VariablesView : UserControl
     {
         this.layout=layout; this.store=store; InitializeComponent(); ValuesList.ItemsSource=entries;
         Loaded += async (_,_) => { if (userGroups.Count == 0) await ReloadAsync(); };
+        Unloaded+=(_,_)=> {updating=true;temporaryCleanup=false;TemporaryCleanupButton.IsChecked=false;updating=false;};
     }
     private Window OwnerWindow => Window.GetWindow(this);
     private static bool Expected(Exception error) => error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or System.Text.Json.JsonException or InvalidOperationException;
@@ -46,7 +48,7 @@ public partial class VariablesView : UserControl
     public async Task ReloadAsync(bool external = false)
     {
         if (busy || external && (HasUnsavedChanges || dragging || pathDragging)) return;
-        busy=true; RefreshButton.IsEnabled=CleanupButton.IsEnabled=false; UserVariablesTree.IsEnabled=false; SystemVariablesTree.IsEnabled=false;
+        busy=true; CleanupButton.IsEnabled=false; UserVariablesTree.IsEnabled=false; SystemVariablesTree.IsEnabled=false;UpdateActions();
         var key=preferredKey ?? selected?.Key; preferredKey=null;
         var oldGroups=userGroups.Concat(systemGroups).ToArray();
         var expanded=oldGroups.Where(group => group.IsExpanded).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -76,11 +78,12 @@ public partial class VariablesView : UserControl
             SnapshotChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(Expected(error)) { Error(error); }
-        finally { updating=false; busy=false; RefreshButton.IsEnabled=CleanupButton.IsEnabled=true; UserVariablesTree.IsEnabled=true; SystemVariablesTree.IsEnabled=true; UpdateActions(); }
+        finally { updating=false; busy=false; CleanupButton.IsEnabled=true; UserVariablesTree.IsEnabled=true; SystemVariablesTree.IsEnabled=true; UpdateActions(); }
     }
     public bool ConfirmLeave()
     {
         if (activeEditor?.IsEditing == true) { _ = activeEditor.CommitAsync(); return false; }
+        dirty=editingSession?.HasChanges==true;
         if (!dirty) return true;
         if(new ConfirmDialog(OwnerWindow,"未保存的更改","有未保存的更改，是否放弃？","放弃").ShowDialog()!=true) return false;
         ShowSelection(selected); return true;
@@ -95,7 +98,10 @@ public partial class VariablesView : UserControl
     private async void SelectVariable(object sender,RoutedPropertyChangedEventArgs<object> e)
     {
         if (updating || e.NewValue is not EnvironmentTreeNode node || node==selected) return;
+        var request=++selectionRequest;
         var key=node.Key;
+        for(var retry=0;busy && retry<500;retry++) await Task.Delay(20);
+        if(busy || !IsLoaded || request!=selectionRequest) return;
         if (!await ConfirmLeaveAsync())
         {
             updating=true; node.IsSelected=false; if (selected is not null) selected.IsSelected=true; updating=false; return;
@@ -106,6 +112,8 @@ public partial class VariablesView : UserControl
     private void ShowSelection(EnvironmentTreeNode? node)
     {
         updating=true;
+        if(temporaryCleanup && temporaryCleanupKey!=node?.Key) {temporaryCleanup=false;temporaryCleanupKey=null;TemporaryCleanupButton.IsChecked=false;}
+        reviewIncoming=false;
         if (selected!=node && selected is not null) selected.IsSelected=false;
         selected=node; if(node is not null) node.IsSelected=true;
         VariableTitle.Text=node?.Title ?? "环境变量";
@@ -147,9 +155,14 @@ public partial class VariablesView : UserControl
     private void UpdateActions()
     {
         if (SaveButton is null) return;
-        SaveButton.IsEnabled=(dirty || HasInlineEditor) && !busy; RevertButton.IsEnabled=dirty && !busy;
-        EditEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
-        DeleteEntryButton.IsEnabled=ValuesList.SelectedIndex>=0 && !busy;
+        SaveButton.IsEnabled=(dirty || HasInlineEditor || editingSession?.IsReviewMode==true) && !busy; RevertButton.IsEnabled=(dirty || editingSession?.IsReviewMode==true) && !busy;
+        System.Windows.Automation.AutomationProperties.SetItemStatus(SaveButton,busy ? "保存中" : dirty || HasInlineEditor || editingSession?.IsReviewMode==true ? "待保存" : "已保存");
+        EditEntryButton.IsEnabled=ValuesList.SelectedItem is EnvironmentEntry {CanEdit:true} && !busy;
+        DeleteEntryButton.IsEnabled=EditEntryButton.IsEnabled;
+        BrowseEntryButton.IsEnabled=ValuesList.SelectedItem is not EnvironmentEntry {IsGhost:true} && !busy;
+        UndoExternalButton.IsEnabled=editingSession?.HasExternalChanges==true && !busy;
+        CleanExternalButton.IsEnabled=editingSession?.HasExternalChanges==true && CanCleanSelected && !busy;
+        TemporaryCleanupButton.IsEnabled=CanCleanSelected && !busy;
         var current=SelectedPathItem();
         MoveUpButton.IsEnabled=current is {} up && up.Index>0 && !busy;
         MoveDownButton.IsEnabled=current is {} down && down.Index<down.Count-1 && !busy;
@@ -206,7 +219,7 @@ public partial class VariablesView : UserControl
     }
     private void EditEntry(object sender,RoutedEventArgs e)
     {
-        if(ValuesList.SelectedItem is not EnvironmentEntry entry) return;
+        if(ValuesList.SelectedItem is not EnvironmentEntry {CanEdit:true} entry) return;
         ValuesList.ScrollIntoView(entry); ValuesList.UpdateLayout();
         if (ValuesList.ItemContainerGenerator.ContainerFromItem(entry) is ListBoxItem item) FindVisual<EditableRow>(item)?.BeginEdit();
     }
@@ -289,7 +302,7 @@ public partial class VariablesView : UserControl
     }
     private void DeleteEntry(object sender, RoutedEventArgs e)
     {
-        if (ValuesList.SelectedItem is not EnvironmentEntry entry) return;
+        if (ValuesList.SelectedItem is not EnvironmentEntry {CanEdit:true} entry) return;
         if(editingSession is not {} session) return;
         var index=ValuesList.SelectedIndex; session.Remove(entry.ItemId); RefreshPathEntries(); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1); SetDirty();
     }
