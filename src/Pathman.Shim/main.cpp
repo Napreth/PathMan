@@ -75,6 +75,27 @@ int fail(const wchar_t* message, DWORD code) {
     return code == 0 ? 1 : static_cast<int>(code);
 }
 
+class console_title {
+    std::wstring previous_;
+    bool restore_ = false;
+public:
+    explicit console_title(const std::wstring& title) {
+        if (title.empty() || title.find_first_of(L"\r\n\x1b") != std::wstring::npos) return;
+        std::vector<wchar_t> previous(65536);
+        SetLastError(ERROR_SUCCESS);
+        const auto size = GetConsoleTitleW(previous.data(), static_cast<DWORD>(previous.size()));
+        if (size == 0 && GetLastError() != ERROR_SUCCESS) return;
+        previous_.assign(previous.data(), size);
+        DWORD clients[2]{};
+        const bool has_caller = GetConsoleProcessList(clients, 2) > 1;
+        // Set once before launch; the target remains free to choose its own title.
+        restore_ = SetConsoleTitleW(title.c_str()) != FALSE && has_caller;
+    }
+    ~console_title() { if (restore_) SetConsoleTitleW(previous_.c_str()); }
+    console_title(const console_title&) = delete;
+    console_title& operator=(const console_title&) = delete;
+};
+
 int wait_for_target(HANDLE process) {
     if (!process) return 0; // An existing associated application handled the file.
     SetConsoleCtrlHandler(handle_console_control, TRUE);
@@ -157,10 +178,14 @@ int wmain() {
     if (same_file(executable, target) || (!original.empty() && same_file(original, target)))
         return fail(L"Alias cannot launch a PathMan shim", ERROR_CIRCULAR_DEPENDENCY);
 
+    auto title = std::filesystem::path(target).filename().wstring();
+    console_title title_scope(title);
     std::wstring command = L"\"" + target + L"\"" + argument_tail();
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     GetStartupInfoW(&startup);
+    startup.dwFlags &= ~(STARTF_TITLEISAPPID | STARTF_TITLEISLINKNAME);
+    startup.lpTitle = title.data();
     PROCESS_INFORMATION process{};
     // Inherit the caller's environment, working directory and redirected standard handles.
     if (!CreateProcessW(target.c_str(), command.data(), nullptr, nullptr, TRUE, 0,

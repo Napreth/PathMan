@@ -63,6 +63,8 @@
 启动位置不能确定安装目录时，读取 `HKCU`／`HKLM` 的 `Software\Microsoft\Windows\CurrentVersion\Uninstall\PathMan\InstallLocation`，兼容 32／64 位注册表视图。安装器也使用卸载登记识别正在运行的复制垫片。
 垫片通过自身启动路径定位同名 `.shim`。原生可执行程序继承调用方的工作目录、环境、标准输入输出，透传参数和目标退出码；其他文件统一按系统文件关联打开，不按 `.cmd`、`.vbs`、`.py` 等扩展名做分支。关联文件的参数解析和标准输入输出由对应处理程序决定。系统返回新进程句柄时等待并返回退出码；由已有应用接收文件时返回成功。实际能否打开取决于系统是否安装了对应的文件处理程序。该流程使用 [ShellExecuteEx 的文件关联及进程句柄机制](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-shellexecuteinfow)。
 
+所有目标统一使用 Windows 控制台标题接口：启动时以目标文件名作为初始标题，传递对应的启动标题，不检测终端品牌或目标程序名称。目标运行后可以自行更新标题；继承已有控制台时，运行结束恢复调用方原来的标题。没有控制台时跳过标题修改，不向标准输出写入标题控制码。
+
 ## 构建与打包
 
 构建环境：Windows、PowerShell 7、.NET 10 SDK、CMake 3.24+、Visual Studio C++ 桌面工具集和 Windows SDK，以及 [NSIS 3.12+](https://nsis.sourceforge.io/Download)。ARM64 需要相应的 C++ 工具集。
@@ -96,6 +98,8 @@ dotnet run --project tests/Pathman.Core.Tests -c Release  # 单独验证分号�
 `tests/gui-elevation-session.ps1` 使用相同辅助函数，验证取消 UAC 不写入且保留草稿；加 `-Elevated` 时需在管理员交互会话运行，验证管理员标题与直接保存。各项 GUI 脚本依次执行，避免共享窗口、鼠标和测试数据互相干扰。
 
 `tests/gui-health-alias-regressions.ps1` 覆盖健康详情引用链与整行标红、左右列编辑边界、别名名称校验、空／无效目标存储、浏览期间与取消后的配置不变、选择非 EXE／无后缀文件、删除前不写入临时配置、点击空白与键盘失焦自动保存、无弹窗的页面切换／刷新／关闭，以及管理员授权后的标题更新。`tests/shim-file-associations.ps1` 在隔离虚拟机中验证批处理及任意扩展名的系统文件关联调用；测试关联使用独立临时名称并在结束时移除。
+
+`tests/shim-terminal-title.ps1` 使用普通控制台探针验证修改前后的标题、启动标题、目标程序自行改标题、调用方标题恢复及退出码，并检查 Windows Terminal 实际可见的标签文字。夹具位于虚拟机的 `C:\PathManTitleTest`，`before`／`after` 各包含对应版本的 `terminal-alias.exe` 与 `.shim`，目标为使用 .NET Framework C# 编译器编译 `tests/shim-console-probe.cs` 得到的 `目标 程序.exe`；控制台探针本身不依赖 PowerShell 或特定终端。
 
 产物：
 
