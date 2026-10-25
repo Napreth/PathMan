@@ -7,7 +7,7 @@ namespace Pathman.Core.Shims;
 
 public sealed record ShimAlias(string Name, string Target);
 
-public sealed class ShimManager(PathmanLayout layout)
+public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
 {
     private const string Header = "[PathMan.Shim]";
     private const string Format = "Format=1";
@@ -26,7 +26,19 @@ public sealed class ShimManager(PathmanLayout layout)
     private ShimAlias AddAlias(string name, string target)
     {
         name = ValidateName(name);
-        target = Path.GetFullPath(target);
+        target = ValidateTarget(target);
+        Directory.CreateDirectory(layout.ShimsDirectory);
+        var executable = Path.Combine(layout.ShimsDirectory, name + ".exe");
+        var manifest = Path.Combine(layout.ShimsDirectory, name + ".shim");
+        if (Path.Exists(executable) || Path.Exists(manifest)) throw new IOException($"别名或同名文件已存在：{name}");
+        CreateLink(executable);
+        try {WriteManifest(manifest,target,false);} catch {File.Delete(executable);throw;}
+        if(ensureUserPath) EnsureUserShimsPath();
+        return new(name,target);
+    }
+    private string ValidateTarget(string target)
+    {
+        target=Path.GetFullPath(target);
         if (!target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("别名目标必须是 .exe 文件。");
         if (!File.Exists(target)) throw new FileNotFoundException("别名目标不存在。", target);
@@ -38,35 +50,54 @@ public sealed class ShimManager(PathmanLayout layout)
             target.Equals(layout.CachedShimExecutable, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("别名目标不能是 PathMan 垫片，避免循环启动。");
 
-        Directory.CreateDirectory(layout.ShimsDirectory);
-        var executable = Path.Combine(layout.ShimsDirectory, name + ".exe");
-        var manifest = Path.Combine(layout.ShimsDirectory, name + ".shim");
-        if (Path.Exists(executable) || Path.Exists(manifest))
-            throw new IOException($"别名或同名文件已存在：{name}");
-
-        // Create the executable before its manifest, so failures do not publish a broken alias.
-        CreateLink(executable);
-
+        return target;
+    }
+    private static void WriteManifest(string manifest,string target,bool overwrite)
+    {
+        var temporary=manifest+"."+Guid.NewGuid().ToString("N")+".tmp";
+        try {File.WriteAllText(temporary,$"{Header}\r\n{Format}\r\nTarget={target}\r\n",Encoding.Unicode);File.Move(temporary,manifest,overwrite);}
+        finally {File.Delete(temporary);}
+    }
+    private ShimAlias Existing(string name,string? expectedTarget)
+    {
+        var alias=ReadAlias(Path.Combine(layout.ShimsDirectory,name+".shim"));
+        if(expectedTarget is not null && alias.Target!=expectedTarget) throw new IOException("别名已被其他程序修改，请刷新后重试。");
+        return alias;
+    }
+    public ShimAlias Update(string name,string target,string? expectedTarget=null)=>WithLock(()=>
+    {
+        name=ValidateName(name);var existing=Existing(name,expectedTarget);target=ValidateTarget(target);
+        WriteManifest(Path.Combine(layout.ShimsDirectory,existing.Name+".shim"),target,true);
+        return new ShimAlias(existing.Name,target);
+    });
+    public ShimAlias Rename(string name,string newName,string? expectedTarget=null)=>WithLock(()=>
+    {
+        name=ValidateName(name);newName=ValidateName(newName);var existing=Existing(name,expectedTarget);
+        if(existing.Name==newName) return existing;
+        var oldExe=Path.Combine(layout.ShimsDirectory,existing.Name+".exe");var oldManifest=Path.Combine(layout.ShimsDirectory,existing.Name+".shim");
+        var newExe=Path.Combine(layout.ShimsDirectory,newName+".exe");var newManifest=Path.Combine(layout.ShimsDirectory,newName+".shim");
+        if(!existing.Name.Equals(newName,StringComparison.OrdinalIgnoreCase) && (Path.Exists(newExe) || Path.Exists(newManifest))) throw new IOException("别名或同名文件已存在。");
+        var temporary=Path.Combine(layout.ShimsDirectory,Guid.NewGuid().ToString("N"));var exeAt=oldExe;var manifestAt=oldManifest;
         try
         {
-            using var stream = new FileStream(manifest, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-            using var writer = new StreamWriter(stream, Encoding.Unicode);
-            writer.Write($"{Header}\r\n{Format}\r\nTarget={target}\r\n");
+            File.Move(exeAt,temporary+".exe.tmp");exeAt=temporary+".exe.tmp";
+            File.Move(manifestAt,temporary+".shim.tmp");manifestAt=temporary+".shim.tmp";
+            File.Move(exeAt,newExe);exeAt=newExe;
+            File.Move(manifestAt,newManifest);manifestAt=newManifest;
         }
         catch
         {
-            File.Delete(executable);
+            if(manifestAt!=oldManifest) File.Move(manifestAt,oldManifest);
+            if(exeAt!=oldExe) File.Move(exeAt,oldExe);
             throw;
         }
-        EnsureUserShimsPath();
-        return new ShimAlias(name, target);
-    }
-
-    public void Remove(string name) => WithLock(() =>
+        return new ShimAlias(newName,existing.Target);
+    });
+    public void Remove(string name,string? expectedTarget=null) => WithLock(() =>
     {
         name = ValidateName(name);
         var manifest = Path.Combine(layout.ShimsDirectory, name + ".shim");
-        _ = ReadAlias(manifest);
+        _ = Existing(name,expectedTarget);
         File.Delete(Path.Combine(layout.ShimsDirectory, name + ".exe"));
         File.Delete(manifest);
         return true;
@@ -83,7 +114,7 @@ public sealed class ShimManager(PathmanLayout layout)
             try { File.Move(temporary, executable, overwrite: true); }
             finally { File.Delete(temporary); }
         }
-        if (aliases.Count > 0) EnsureUserShimsPath();
+        if (aliases.Count > 0 && ensureUserPath) EnsureUserShimsPath();
         return aliases.Count;
     });
 
@@ -146,18 +177,19 @@ public sealed class ShimManager(PathmanLayout layout)
         return new ShimAlias(Path.GetFileNameWithoutExtension(manifest), lines[2][7..]);
     }
 
-    private static string ValidateName(string name)
+    public static string ValidateName(string name)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
-        var stem = name.Split('.')[0];
+        var stem = name.Split('.')[0].TrimEnd(' ','.');
         var reserved = new[] { "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "CLOCK$" };
-        if (string.IsNullOrWhiteSpace(name) || name.EndsWith('.') || name.EndsWith(' ') ||
+        if (string.IsNullOrWhiteSpace(name) || name.Length>250 || name.EndsWith('.') || name.EndsWith(' ') ||
             name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
             reserved.Contains(stem, StringComparer.OrdinalIgnoreCase) ||
             (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
                                  stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
              "123456789¹²³".Contains(stem[3])))
-            throw new ArgumentException("别名必须是有效的 Windows 文件名，不能使用设备保留名。");
+            throw new ArgumentException("别名必须是有效的 Windows 文件名，最长 250 个字符，不能使用设备保留名或以空格、句点结尾。");
         return name;
     }
 

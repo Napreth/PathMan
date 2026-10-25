@@ -5,10 +5,11 @@ using System.Windows.Media;
 
 namespace Pathman.Gui.Controls;
 
-public sealed class InlineEditEventArgs(string value, bool wasChanged) : EventArgs
+public sealed class InlineEditEventArgs(string value, bool wasChanged,bool isDetail=false) : EventArgs
 {
     public string Value { get; } = value;
     public bool WasChanged { get; } = wasChanged;
+    public bool IsDetail {get;}=isDetail;
     public Task<string?> Completion { get; set; } = Task.FromResult<string?>(null);
 }
 
@@ -16,6 +17,8 @@ public partial class EditableRow : UserControl
 {
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(nameof(Text), typeof(string), typeof(EditableRow), new PropertyMetadata(""));
     public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(nameof(Detail), typeof(string), typeof(EditableRow), new PropertyMetadata("", UpdateDetail));
+    public static readonly DependencyProperty NameWidthProperty=DependencyProperty.Register(nameof(NameWidth),typeof(double),typeof(EditableRow),new PropertyMetadata(double.NaN,UpdateDetail));
+    public static readonly DependencyProperty CanEditProperty=DependencyProperty.Register(nameof(CanEdit),typeof(bool),typeof(EditableRow),new PropertyMetadata(true));
     public static readonly DependencyProperty CanDeleteProperty = DependencyProperty.Register(nameof(CanDelete), typeof(bool), typeof(EditableRow), new PropertyMetadata(true));
     public static readonly DependencyProperty ShowPinProperty = DependencyProperty.Register(nameof(ShowPin), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdatePin));
     public static readonly DependencyProperty IsPinnedProperty = DependencyProperty.Register(nameof(IsPinned), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdatePin));
@@ -26,6 +29,8 @@ public partial class EditableRow : UserControl
     public static readonly DependencyProperty JumpToolTipProperty = DependencyProperty.Register(nameof(JumpToolTip), typeof(string), typeof(EditableRow), new PropertyMetadata("转到引用变量"));
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public string Detail { get => (string)GetValue(DetailProperty); set => SetValue(DetailProperty, value); }
+    public double NameWidth {get=>(double)GetValue(NameWidthProperty);set=>SetValue(NameWidthProperty,value);}
+    public bool CanEdit {get=>(bool)GetValue(CanEditProperty);set=>SetValue(CanEditProperty,value);}
     public bool CanDelete { get => (bool)GetValue(CanDeleteProperty); set => SetValue(CanDeleteProperty, value); }
     public bool ShowPin { get => (bool)GetValue(ShowPinProperty); set => SetValue(ShowPinProperty, value); }
     public bool IsPinned { get => (bool)GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
@@ -35,7 +40,7 @@ public partial class EditableRow : UserControl
     public bool ShowJump { get => (bool)GetValue(ShowJumpProperty); set => SetValue(ShowJumpProperty, value); }
     public string JumpToolTip { get => (string)GetValue(JumpToolTipProperty); set => SetValue(JumpToolTipProperty, value); }
     public bool IsEditing { get; private set; }
-    private bool inputChanged;
+    private bool inputChanged,editingDetail;
     private Task<bool>? pending;
     public event EventHandler<InlineEditEventArgs>? EditRequested;
     public event EventHandler? DeleteRequested;
@@ -57,6 +62,7 @@ public partial class EditableRow : UserControl
     private void RefreshDetail()
     {
         if (NameColumn is null) return;
+        if(!double.IsNaN(NameWidth)) {NameColumn.Width=new(NameWidth);DetailColumn.Width=new(1,GridUnitType.Star);return;}
         NameColumn.Width = new GridLength(string.IsNullOrEmpty(Detail) ? 1 : 3, GridUnitType.Star);
         DetailColumn.Width = string.IsNullOrEmpty(Detail) ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
     }
@@ -69,11 +75,13 @@ public partial class EditableRow : UserControl
         PinButton.ToolTip = IsPinned ? "取消置顶" : "置顶";
         System.Windows.Automation.AutomationProperties.SetName(PinButton, IsPinned ? "取消置顶" : "置顶");
     }
-    public void BeginEdit()
+    public void BeginEdit(bool detail=false)
     {
-        if (IsEditing || !IsEnabled) return;
-        IsEditing = true; Input.Text = Text; inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
-        Label.Visibility = Visibility.Collapsed; Input.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Collapsed;
+        if (IsEditing || !IsEnabled || !CanEdit) return;
+        editingDetail=detail;IsEditing = true; Input.Text = detail ? Detail : Text; inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
+        Input.Margin=detail ? new(NameColumn.ActualWidth+12,0,0,0) : new(0);
+        Label.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;DetailLabel.Visibility=detail ? Visibility.Hidden : Visibility.Visible;
+        Input.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Collapsed;
         EditingChanged?.Invoke(this, EventArgs.Empty);
         Input.Focus(); Input.SelectAll();
     }
@@ -97,7 +105,7 @@ public partial class EditableRow : UserControl
         Input.IsReadOnly = true;
         try
         {
-            var args = new InlineEditEventArgs(Input.Text,inputChanged); EditRequested?.Invoke(this, args);
+            var args = new InlineEditEventArgs(Input.Text,inputChanged,editingDetail); EditRequested?.Invoke(this, args);
             var error = await args.Completion;
             if (error is not null)
             {
@@ -110,20 +118,22 @@ public partial class EditableRow : UserControl
     }
     private void EndEdit()
     {
-        IsEditing = false; Input.Visibility = Visibility.Collapsed; Label.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Visible;
+        IsEditing = false; Input.Visibility = Visibility.Collapsed; Label.Visibility = DetailLabel.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Visible;
         EditingChanged?.Invoke(this, EventArgs.Empty);
     }
+    public void CancelEdit()
+    {if(IsEditing && pending is null) {EndEdit();EditingCanceled?.Invoke(this,EventArgs.Empty);}}
     private void Edit(object sender, RoutedEventArgs e) { e.Handled = true; BeginEdit(); }
     private void Pin(object sender, RoutedEventArgs e) { e.Handled = true; PinRequested?.Invoke(this, EventArgs.Empty); }
     private void Delete(object sender, RoutedEventArgs e) { e.Handled = true; DeleteRequested?.Invoke(this, EventArgs.Empty); }
     private void Jump(object sender, RoutedEventArgs e) { e.Handled = true; JumpRequested?.Invoke(this, EventArgs.Empty); }
     private void DoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing) return;
+        if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing || !CanEdit) return;
         e.Handled = true;
         if (EditOnDoubleClick) BeginEdit(); else Activated?.Invoke(this, EventArgs.Empty);
     }
-    private void RowKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.F2 && !IsEditing) { e.Handled = true; BeginEdit(); } }
+    private void RowKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.F2 && !IsEditing && CanEdit) { e.Handled = true; BeginEdit(); } }
     private async void InputKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter) { e.Handled = true; await CommitAsync(); }

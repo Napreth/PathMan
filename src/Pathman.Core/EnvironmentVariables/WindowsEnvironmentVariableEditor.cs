@@ -9,6 +9,19 @@ public sealed record EnvironmentMutation(string Action, VariableScope Scope, str
 
 public static class WindowsEnvironmentVariableEditor
 {
+    // The elevated worker accepts registry operations only. User configuration
+    // remains in the unelevated desktop process; no client-supplied file is opened.
+    public static void ApplyMachineRegistry(IReadOnlyList<EnvironmentMutation> mutations,IReadOnlyList<VariableSnapshot> preconditions)
+    {
+        if(mutations.Count is 0 or >1024 || mutations.Any(item=>item.Scope!=VariableScope.Machine) || preconditions.Any(item=>item.Scope!=VariableScope.Machine))
+            throw new ArgumentException("管理员操作仅支持系统环境变量。");
+        using var key=Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",true) ?? throw new IOException("找不到系统环境变量注册表项。");
+        if(mutations.Count==1 && preconditions.Count==0) ApplyKey(key,mutations[0]);
+        else ApplyBatchKeys(new Dictionary<VariableScope,RegistryKey>{{VariableScope.Machine,key}},mutations,preconditions);
+        Broadcast();
+    }
+    public static void RecordOwnChanges(EnvironmentWorkspaceStore store,IReadOnlyList<EnvironmentMutation> mutations)=>store.Update(state=>
+    {foreach(var mutation in mutations) RecordOwnChange(state,mutation);});
     public static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || name.IndexOfAny(['=', '\0', '\r', '\n']) >= 0)

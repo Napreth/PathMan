@@ -29,7 +29,7 @@ public partial class MainWindow : Window
     private ListBoxItem? previousNavigation;
     public MainWindow()
     {
-        InitializeComponent(); store=new(layout.DataDirectory);
+        InitializeComponent(); Title="PathMan · "+(EnvironmentEditHost.IsAdministrator ? "以管理员身份运行" : "以非管理员身份运行");WindowTitle.Text=Title;store=new(layout.DataDirectory);
         variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(layout);
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         NotificationsList.ItemsSource=notifications.Items;
@@ -38,6 +38,7 @@ public partial class MainWindow : Window
         health.FixRequested+=async(_,args)=>await ApplyHealthFixAsync(args.Fix);
         health.IgnoreRequested+=async(_,args)=>await IgnoreHealthIssueAsync(args);
         variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
+        aliases.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         Loaded+=async(_,_)=>await ScanHealthAsync();
         changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
         Closed+=(_,_)=>changes.Stop();
@@ -46,7 +47,7 @@ public partial class MainWindow : Window
     {
         if(PageHost is null || variables is null || navigating || Navigation.SelectedItem is not ListBoxItem item) return;
         navigating=true;
-        var canLeave=PageHost.Content!=variables || await variables.ConfirmLeaveAsync();
+        var canLeave=PageHost.Content==aliases ? await aliases.ConfirmLeaveAsync() : PageHost.Content!=variables || await variables.ConfirmLeaveAsync();
         if(!canLeave) { Navigation.SelectedItem=previousNavigation; navigating=false; return; }
         Navigation.SelectedItem=item;
         previousNavigation=item;
@@ -61,6 +62,7 @@ public partial class MainWindow : Window
         if(healthWorking) return;
         if(AppPageLink.Parse(e.Target) is {} route)
         {
+            if(PageHost.Content==aliases && !await aliases.ConfirmLeaveAsync()) return;
             if(route.Page=="variables" && route.Scope is {} scope && route.Name is {} name)
             {
                 if(!await variables.NavigateToVariableAsync(scope,name)) return;
@@ -85,7 +87,7 @@ public partial class MainWindow : Window
             do
             {
                 scanAgain=false;
-                var result=await Task.Run(()=>(Report:EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll()),Ignored:store.Read().IgnoredHealthIssues));
+                var result=await Task.Run(()=>(Report:EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll(),shimsDirectory:layout.ShimsDirectory),Ignored:store.Read().IgnoredHealthIssues));
                 health.Update(result.Report,result.Ignored);
                 var report=new EnvironmentHealthReport(result.Report.Issues.Where(issue=>!result.Ignored.Contains(issue.Id)).ToArray());
                 var signature=string.Join('\n',report.Issues.Select(issue=>issue.Id));
@@ -93,6 +95,7 @@ public partial class MainWindow : Window
                 {
                     healthSignature=signature;
                     if(report.Issues.Count>0) notifications.Show(new("health","环境变量存在问题",$"发现 {report.Errors} 项错误、{report.Warnings} 项提醒。\n"+Osc8Text.Link("查看健康检测","apppage:health"),report.Errors>0 ? NotificationColor.Red : NotificationColor.Yellow));
+                    else if(result.Report.Issues.Count>0) notifications.Show(new("health","健康问题已忽略",Osc8Text.Link("查看已忽略的问题","apppage:health"),NotificationColor.Blue));
                     else if(previousIssueCount>0) notifications.Show(new("health","健康检测通过","之前发现的问题已解决。",NotificationColor.Green));
                     previousIssueCount=report.Issues.Count;
                 }
@@ -104,7 +107,7 @@ public partial class MainWindow : Window
     }
     private async void CheckWorkspace(object? sender,EventArgs e)
     {
-        if(checking || healthWorking || variables.IsBusy) return;
+        if(checking || healthWorking || aliases.IsBusy || variables.IsBusy) return;
         var stamp=System.IO.File.Exists(store.FilePath) ? System.IO.File.GetLastWriteTimeUtc(store.FilePath) : DateTime.MinValue;
         if(stamp==lastWrite) return;
         checking=true;
@@ -124,6 +127,9 @@ public partial class MainWindow : Window
     {
         if(healthWorking) {e.Cancel=true;return;}
         if(closingApproved) return;
+        if(aliases.HasInlineEditor)
+        {e.Cancel=true;if(await aliases.ConfirmLeaveAsync()) {closingApproved=true;Close();}return;}
+        if(aliases.IsBusy) {e.Cancel=true;return;}
         if(variables.HasInlineEditor)
         {
             e.Cancel=true;

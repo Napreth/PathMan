@@ -35,7 +35,7 @@ public static class HealthInput {
 }
 '@
 $checks=[Collections.Generic.List[string]]::new()
-function Assert($value,[string]$message){if(!$value){throw $message};$checks.Add($message);$message|Set-Content ($ResultPath+'.progress')}
+function Assert($value,[string]$message){if(!$value){throw $message};$checks.Add($message);try{$message|Set-Content ($ResultPath+'.progress')}catch [IO.IOException]{}}
 function WaitFor([scriptblock]$condition,[string]$message){for($i=0;$i -lt 1200;$i++){if(& $condition){return};Start-Sleep -Milliseconds 100};throw $message}
 function Find($root,[string]$name,$type=$null){
  $c=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,$name)
@@ -57,7 +57,7 @@ function UserValue([string]$name){$key=[Microsoft.Win32.Registry]::CurrentUser.O
 function ValueKind([string]$name,[bool]$machine=$false){$key=if($machine){[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment')}else{[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')};try{$key.GetValueKind($name)}finally{$key.Dispose()}}
 function Issue([string]$name){Find (Id 'IssueGroups') $name ([Windows.Automation.ControlType]::ListItem)}
 function State{Get-Content (Join-Path $env:LOCALAPPDATA 'PathMan\environment.json') -Raw|ConvertFrom-Json}
-function Window{Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan' ([Windows.Automation.ControlType]::Window)}
+function Window{Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan · 以非管理员身份运行' ([Windows.Automation.ControlType]::Window)}
 function StartApp{Start-Process C:\PathManTestApp\PathMan.exe;WaitFor {$script:window=Window;$null -ne $window} 'Application did not launch';[void][HealthInput]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle);WaitFor {$null -ne (Node 'PATHMAN_EMPTY_PATH')} 'Variables did not load'}
 function Save{Invoke (Id 'SaveButton');WaitFor {!(Id 'SaveButton').Current.IsEnabled} 'Save did not finish'}
 function WaitHealth{WaitFor {(Id 'ScanButton').Current.IsEnabled} 'Health operation did not finish'}
@@ -76,7 +76,9 @@ try{
  Go '健康检测';Invoke (Id 'ScanButton');WaitHealth
  $empty=Issue 'EmptyPathEntry:User:PATHMAN_EMPTY_PATH:2'
  Assert ($null -ne $empty -and $null -ne (Find $empty '上一行  C:\after' ([Windows.Automation.ControlType]::Text)) -and $null -ne (Find $empty '下一行  （列表结尾）' ([Windows.Automation.ControlType]::Text))) 'Empty findings show their exact previous and next row context'
- Assert (!(Find $empty '查看详情' ([Windows.Automation.ControlType]::Button)).Current.IsEnabled) 'View details is visible and intentionally disabled'
+ Invoke (Find $empty '查看详情' ([Windows.Automation.ControlType]::Button))
+ Assert ($null -ne (Id 'RelatedVariables') -and $null -ne (Find (Id 'DetailActions') '删除空行' ([Windows.Automation.ControlType]::Button))) 'View details opens related variables and repair buttons in the current page'
+ Invoke (Find (Id 'DetailsPanel') '返回' ([Windows.Automation.ControlType]::Button))
  $scroll=(Id 'HealthScroll').GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern);$scroll.SetScrollPercent(-1,0)
  $r=(Id 'IssueGroups').Current.BoundingRectangle;[void][HealthInput]::SetCursorPos([int]($r.Left+80),[int]($r.Top+100));[HealthInput]::Wheel(-120);Start-Sleep -Milliseconds 250
  Assert ($scroll.Current.VerticalScrollPercent -gt 0) 'Health overview wheel scrolling works over nested issue content'

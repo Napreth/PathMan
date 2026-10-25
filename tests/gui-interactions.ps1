@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param([string]$ResultPath='C:\PathManInteractionTest\gui-results.json', [switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine') { throw 'Run this fixture-driven GUI test only in the disposable Windows VM.' }
@@ -86,7 +86,7 @@ function TextOrigin($element) {
 }
 try {
     $window=$null
-    WaitFor { $script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Window); $null -ne $script:window } 'PathMan window did not launch'
+    WaitFor { $script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan · 以非管理员身份运行' ([Windows.Automation.AutomationElement]::NameProperty) ([Windows.Automation.ControlType]::Window); $null -ne $script:window } 'PathMan window did not launch'
     [void][InteractionInput]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle); Start-Sleep -Milliseconds 350
     CollapseAll; Expand '工作'; SelectNode (Node '工作')
     Assert ((Rows (Id $window 'GroupVariablesList')).Count -eq 3) 'Selecting a group shows its variables in the right pane'

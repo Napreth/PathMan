@@ -66,7 +66,7 @@ function Toggle($element) { $element.GetCurrentPattern([Windows.Automation.Toggl
 try {
     Start-Process $app
     $window=$null
-    WaitFor { $script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan' ([Windows.Automation.ControlType]::Window); $null -ne $window } 'Window did not open'
+    WaitFor { $script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan · 以非管理员身份运行' ([Windows.Automation.ControlType]::Window); $null -ne $window } 'Window did not open'
     [void][CleanupInput]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle)
     WaitFor { $null -ne (Node '工作') } 'Variables did not load'
     Assert ($null -eq (Node '系统变量')) 'User scope has no built-in system category'

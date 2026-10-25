@@ -62,7 +62,7 @@ function Go([string]$page){SelectNode (Find (Id 'Navigation') $page ([Windows.Au
 try{
  Start-Process 'C:\PathManTestApp\PathMan.exe'
  $window=$null
- WaitFor {$script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan' ([Windows.Automation.ControlType]::Window);$null -ne $window} 'Window did not launch'
+ WaitFor {$script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan · 以非管理员身份运行' ([Windows.Automation.ControlType]::Window);$null -ne $window} 'Window did not launch'
  [void][RecursiveInput]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle)
  WaitFor {$null -ne (Node 'Path')} 'Variables did not load'
  WaitFor {$null -ne (Find $window '环境变量存在问题' ([Windows.Automation.ControlType]::Text))} 'Startup health notification missing'

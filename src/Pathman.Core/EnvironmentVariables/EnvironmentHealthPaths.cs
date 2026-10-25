@@ -14,7 +14,7 @@ public static partial class EnvironmentHealth
         }
     }
     private sealed record Occurrence(string Value,IReadOnlyList<EntrySource> Sources);
-    private static void AnalyzeEntries(EnvironmentVariableInfo variable,EnvironmentPathResolver resolver,IReadOnlyList<VariableSnapshot> guards,bool resolved,bool pathLike,List<EnvironmentHealthIssue> issues)
+    internal static void AnalyzeEntries(EnvironmentVariableInfo variable,EnvironmentPathResolver resolver,IReadOnlyList<VariableSnapshot> guards,bool resolved,bool pathLike,List<EnvironmentHealthIssue> issues)
     {
         var occurrences=new List<Occurrence>();
         var ancestry=new HashSet<string>(StringComparer.OrdinalIgnoreCase);

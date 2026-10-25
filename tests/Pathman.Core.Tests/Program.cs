@@ -21,6 +21,7 @@ foreach(var (name,raw,list,entries) in cases)
 PathCleanupTests.Run(Assert);
 RecursivePathsTests.Run(Assert);
     HealthActionsTests.Run(Assert);
+    AliasAndHealthTests.Run(Assert);
 var fixtureRoot=Path.Combine(Path.GetTempPath(),"PathMan.Core.Tests",Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(fixtureRoot);
 var registryFixture=@"Software\PathMan.Tests\"+Guid.NewGuid().ToString("N");
