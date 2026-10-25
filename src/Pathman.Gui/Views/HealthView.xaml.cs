@@ -17,11 +17,14 @@ public partial class HealthView : UserControl
     private EnvironmentHealthReport? latest;
     private IReadOnlySet<string> ignored=new HashSet<string>();
     private string? detailId;
-    private sealed record RelatedVariable(VariableSnapshot Snapshot)
+    private sealed record DetailEntry(string Text,int Line,bool IsProblem)
+    {public string AutomationName=>$"第 {Line} 行"+(IsProblem ? "（问题）" : "");}
+    private sealed record RelatedVariable(EnvironmentHealthDetailVariable Variable)
     {
+        private VariableSnapshot Snapshot=>Variable.Snapshot;
         public string Title=>$"{(Snapshot.Scope==VariableScope.User ? "用户" : "系统")} · {Snapshot.Name}";
         public string Body=>Osc8Text.Link(Title,new AppPageLink("variables",Snapshot.Scope,Snapshot.Name).ToString());
-        public IReadOnlyList<string> Entries=>Snapshot.Value.Split(';',StringSplitOptions.None).Select(value=>value.Length==0 ? "（空条目）" : value).ToArray();
+        public IReadOnlyList<DetailEntry> Entries=>Snapshot.Value.Split(';',StringSplitOptions.None).Select((value,index)=>new DetailEntry(value.Length==0 ? "（空条目）" : value,index+1,Variable.ProblemLines.Contains(index+1))).ToArray();
     }
     private sealed record LocationDisplay(EnvironmentHealthLocation Location)
     {
@@ -59,7 +62,15 @@ public partial class HealthView : UserControl
     {
         SummarySurface.Visibility=HealthScroll.Visibility=Visibility.Collapsed;DetailsPanel.Visibility=Visibility.Visible;
         DetailMessage.Text=display.Message;DetailSuggestion.Text=display.Suggestion;DetailActions.DataContext=display;
-        RelatedVariables.ItemsSource=display.Issue.Sources.DistinctBy(source=>EnvironmentWorkspace.Key(source.Scope,source.Name),StringComparer.OrdinalIgnoreCase).Select(source=>new RelatedVariable(source)).ToArray();
+        RelatedVariables.ItemsSource=EnvironmentHealthDetails.For(display.Issue).Select(variable=>new RelatedVariable(variable)).ToArray();
+        DetailScroll.ScrollToTop();
+        Dispatcher.BeginInvoke(()=>FirstProblem(RelatedVariables)?.BringIntoView(),System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+    private static FrameworkElement? FirstProblem(DependencyObject parent)
+    {
+        if(parent is Border {DataContext:DetailEntry {IsProblem:true}} row) return row;
+        for(var index=0;index<VisualTreeHelper.GetChildrenCount(parent);index++) if(FirstProblem(VisualTreeHelper.GetChild(parent,index)) is {} found) return found;
+        return null;
     }
     private void ScrollHealth(object sender,MouseWheelEventArgs e)
     {if(sender is ScrollViewer scroll && scroll.ScrollableHeight>0) {scroll.ScrollToVerticalOffset(scroll.VerticalOffset-e.Delta*.5);e.Handled=true;}}

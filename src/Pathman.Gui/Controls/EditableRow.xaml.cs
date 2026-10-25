@@ -12,6 +12,7 @@ public sealed class InlineEditEventArgs(string value, bool wasChanged,bool isDet
     public bool IsDetail {get;}=isDetail;
     public Task<string?> Completion { get; set; } = Task.FromResult<string?>(null);
 }
+public sealed class InlineEditRegionEventArgs(bool isDetail) : EventArgs {public bool IsDetail {get;}=isDetail;}
 
 public partial class EditableRow : UserControl
 {
@@ -19,6 +20,9 @@ public partial class EditableRow : UserControl
     public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(nameof(Detail), typeof(string), typeof(EditableRow), new PropertyMetadata("", UpdateDetail));
     public static readonly DependencyProperty NameWidthProperty=DependencyProperty.Register(nameof(NameWidth),typeof(double),typeof(EditableRow),new PropertyMetadata(double.NaN,UpdateDetail));
     public static readonly DependencyProperty CanEditProperty=DependencyProperty.Register(nameof(CanEdit),typeof(bool),typeof(EditableRow),new PropertyMetadata(true));
+    public static readonly DependencyProperty SeparateEditorsProperty=DependencyProperty.Register(nameof(SeparateEditors),typeof(bool),typeof(EditableRow),new PropertyMetadata(false));
+    public static readonly DependencyProperty EditOnSingleClickProperty=DependencyProperty.Register(nameof(EditOnSingleClick),typeof(bool),typeof(EditableRow),new PropertyMetadata(false));
+    public static readonly DependencyProperty CommitOnLostFocusProperty=DependencyProperty.Register(nameof(CommitOnLostFocus),typeof(bool),typeof(EditableRow),new PropertyMetadata(true));
     public static readonly DependencyProperty CanDeleteProperty = DependencyProperty.Register(nameof(CanDelete), typeof(bool), typeof(EditableRow), new PropertyMetadata(true));
     public static readonly DependencyProperty ShowPinProperty = DependencyProperty.Register(nameof(ShowPin), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdatePin));
     public static readonly DependencyProperty IsPinnedProperty = DependencyProperty.Register(nameof(IsPinned), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdatePin));
@@ -31,6 +35,9 @@ public partial class EditableRow : UserControl
     public string Detail { get => (string)GetValue(DetailProperty); set => SetValue(DetailProperty, value); }
     public double NameWidth {get=>(double)GetValue(NameWidthProperty);set=>SetValue(NameWidthProperty,value);}
     public bool CanEdit {get=>(bool)GetValue(CanEditProperty);set=>SetValue(CanEditProperty,value);}
+    public bool SeparateEditors {get=>(bool)GetValue(SeparateEditorsProperty);set=>SetValue(SeparateEditorsProperty,value);}
+    public bool EditOnSingleClick {get=>(bool)GetValue(EditOnSingleClickProperty);set=>SetValue(EditOnSingleClickProperty,value);}
+    public bool CommitOnLostFocus {get=>(bool)GetValue(CommitOnLostFocusProperty);set=>SetValue(CommitOnLostFocusProperty,value);}
     public bool CanDelete { get => (bool)GetValue(CanDeleteProperty); set => SetValue(CanDeleteProperty, value); }
     public bool ShowPin { get => (bool)GetValue(ShowPinProperty); set => SetValue(ShowPinProperty, value); }
     public bool IsPinned { get => (bool)GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
@@ -40,6 +47,11 @@ public partial class EditableRow : UserControl
     public bool ShowJump { get => (bool)GetValue(ShowJumpProperty); set => SetValue(ShowJumpProperty, value); }
     public string JumpToolTip { get => (string)GetValue(JumpToolTipProperty); set => SetValue(JumpToolTipProperty, value); }
     public bool IsEditing { get; private set; }
+    public bool IsEditingDetail=>IsEditing && editingDetail;
+    public int EditVersion {get;private set;}
+    public string EditingValue {get=>Input.Text;set=>Input.Text=value;}
+    public bool IsInputTarget(DependencyObject? source)=>FindParent<TextBox>(source)==Input;
+    public void FocusEditor() {if(IsEditing) Input.Focus();}
     private bool inputChanged,editingDetail;
     private Task<bool>? pending;
     public event EventHandler<InlineEditEventArgs>? EditRequested;
@@ -49,6 +61,7 @@ public partial class EditableRow : UserControl
     public event EventHandler? Activated;
     public event EventHandler? EditingCanceled;
     public event EventHandler? JumpRequested;
+    public event EventHandler<InlineEditRegionEventArgs>? RegionEditRequested;
     public EditableRow() { InitializeComponent(); Input.TextChanged += (_,_) => { if(IsEditing) inputChanged=true; }; Loaded += (_, _) => { RefreshPin(); RefreshDetail(); RefreshActions(); }; }
     private static void UpdateActions(DependencyObject target, DependencyPropertyChangedEventArgs e) => ((EditableRow)target).RefreshActions();
     private void RefreshActions()
@@ -78,9 +91,12 @@ public partial class EditableRow : UserControl
     public void BeginEdit(bool detail=false)
     {
         if (IsEditing || !IsEnabled || !CanEdit) return;
-        editingDetail=detail;IsEditing = true; Input.Text = detail ? Detail : Text; inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
+        EditVersion++;editingDetail=detail;IsEditing = true; Input.Text = detail ? Detail : Text; inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
         Input.Margin=detail ? new(NameColumn.ActualWidth+12,0,0,0) : new(0);
-        Label.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;DetailLabel.Visibility=detail ? Visibility.Hidden : Visibility.Visible;
+        Input.Width=SeparateEditors && !detail ? NameColumn.ActualWidth : double.NaN;
+        Input.HorizontalAlignment=SeparateEditors && !detail ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+        Label.Visibility = SeparateEditors || detail ? Visibility.Visible : Visibility.Collapsed;
+        NameLabel.Visibility=SeparateEditors && !detail ? Visibility.Hidden : Visibility.Visible;DetailLabel.Visibility=detail ? Visibility.Hidden : Visibility.Visible;
         Input.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Collapsed;
         EditingChanged?.Invoke(this, EventArgs.Empty);
         Input.Focus(); Input.SelectAll();
@@ -118,7 +134,7 @@ public partial class EditableRow : UserControl
     }
     private void EndEdit()
     {
-        IsEditing = false; Input.Visibility = Visibility.Collapsed; Label.Visibility = DetailLabel.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Visible;
+        IsEditing = false; Input.Visibility = Visibility.Collapsed; Label.Visibility = NameLabel.Visibility = DetailLabel.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Visible;
         EditingChanged?.Invoke(this, EventArgs.Empty);
     }
     public void CancelEdit()
@@ -127,6 +143,13 @@ public partial class EditableRow : UserControl
     private void Pin(object sender, RoutedEventArgs e) { e.Handled = true; PinRequested?.Invoke(this, EventArgs.Empty); }
     private void Delete(object sender, RoutedEventArgs e) { e.Handled = true; DeleteRequested?.Invoke(this, EventArgs.Empty); }
     private void Jump(object sender, RoutedEventArgs e) { e.Handled = true; JumpRequested?.Invoke(this, EventArgs.Empty); }
+    private void SingleClick(object sender,MouseButtonEventArgs e)
+    {
+        if(!EditOnSingleClick || !CanEdit || !IsEnabled || FindParent<Button>(e.OriginalSource as DependencyObject) is not null || FindParent<TextBox>(e.OriginalSource as DependencyObject) is not null) return;
+        var detail=e.GetPosition(Label).X>=NameColumn.ActualWidth;
+        if(IsEditing && detail==editingDetail) {Input.Focus();return;}
+        RegionEditRequested?.Invoke(this,new(detail));
+    }
     private void DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing || !CanEdit) return;
@@ -140,7 +163,7 @@ public partial class EditableRow : UserControl
         else if (e.Key == Key.Escape && pending is null) { e.Handled = true; EndEdit(); EditingCanceled?.Invoke(this, EventArgs.Empty); Focus(); }
     }
     private async void InputLostFocus(object sender, KeyboardFocusChangedEventArgs e)
-    { if (IsEditing && pending is null) await CommitAsync(); }
+    { if (CommitOnLostFocus && IsEditing && pending is null) await CommitAsync(); }
     internal static T? FindParent<T>(DependencyObject? current) where T : DependencyObject
     {
         while (current is not null)

@@ -29,7 +29,7 @@ public partial class MainWindow : Window
     private ListBoxItem? previousNavigation;
     public MainWindow()
     {
-        InitializeComponent(); Title="PathMan · "+(EnvironmentEditHost.IsAdministrator ? "以管理员身份运行" : "以非管理员身份运行");WindowTitle.Text=Title;store=new(layout.DataDirectory);
+        InitializeComponent();RefreshWindowTitle(null,EventArgs.Empty);store=new(layout.DataDirectory);
         variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(layout);
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         NotificationsList.ItemsSource=notifications.Items;
@@ -40,8 +40,14 @@ public partial class MainWindow : Window
         variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         aliases.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         Loaded+=async(_,_)=>await ScanHealthAsync();
-        changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
-        Closed+=(_,_)=>changes.Stop();
+        EnvironmentEditHost.AuthorizationChanged+=RefreshWindowTitle;
+        changes.Tick+=RefreshWindowTitle;changes.Tick+=CheckWorkspace; changes.Start(); Closing+=OnClosing;
+        Closed+=(_,_)=> {changes.Stop();EnvironmentEditHost.AuthorizationChanged-=RefreshWindowTitle;};
+    }
+    private void RefreshWindowTitle(object? sender,EventArgs e)
+    {
+        var title="PathMan · "+(EnvironmentEditHost.IsAdministrator ? "以管理员身份运行" : EnvironmentEditHost.IsAuthorized ? "管理员操作已授权" : "以非管理员身份运行");
+        if(Title!=title) {Title=title;WindowTitle.Text=title;}
     }
     private async void Navigate(object sender,SelectionChangedEventArgs e)
     {

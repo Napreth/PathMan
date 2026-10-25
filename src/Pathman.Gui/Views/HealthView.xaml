@@ -51,11 +51,15 @@
             <DockPanel Margin="0,0,0,12"><Button DockPanel.Dock="Right" Content="返回" Click="CloseDetails"/><TextBlock Text="问题详情" FontSize="18" VerticalAlignment="Center"/></DockPanel>
             <StackPanel Grid.Row="1" Margin="0,0,0,16"><controls:ReferenceText x:Name="DetailMessage" TextWrapping="Wrap" FontSize="14"/><TextBlock x:Name="DetailSuggestion" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,6,0,0" FontSize="13"/></StackPanel>
             <Grid Grid.Row="2" x:Name="DetailBody"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
-                <Border Style="{StaticResource Surface}"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ScrollHealth">
+                <Border Style="{StaticResource Surface}"><ScrollViewer x:Name="DetailScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ScrollHealth">
                     <ListBox x:Name="RelatedVariables" Style="{StaticResource HealthItems}" Padding="12" AutomationProperties.Name="相关环境变量">
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource HealthItem}"><Setter Property="AutomationProperties.Name" Value="{Binding Title}"/></Style></ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="0,0,0,16"><controls:Osc8TextBlock Body="{Binding Body}" FontSize="14" Margin="0,0,0,8"/>
-                            <ListBox ItemsSource="{Binding Entries}" Style="{StaticResource HealthItems}"><ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource HealthItem}"><Setter Property="AutomationProperties.Name" Value="{Binding}"/></Style></ListBox.ItemContainerStyle><ListBox.ItemTemplate><DataTemplate><controls:ReferenceText Text="{Binding}" TextWrapping="Wrap" FontSize="13" Margin="8,3" MinHeight="20"/></DataTemplate></ListBox.ItemTemplate></ListBox>
+                            <ListBox ItemsSource="{Binding Entries}" Style="{StaticResource HealthItems}"><ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource HealthItem}"><Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/></Style></ListBox.ItemContainerStyle><ListBox.ItemTemplate><DataTemplate>
+                                <Border Padding="8,3" MinHeight="24"><Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding IsProblem}" Value="True"><Setter Property="Background" Value="#FFDDDD"/></DataTrigger></Style.Triggers></Style></Border.Style>
+                                    <controls:ReferenceText Text="{Binding Text}" TextWrapping="Wrap" FontSize="13"><controls:ReferenceText.Style><Style TargetType="controls:ReferenceText"><Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/><Style.Triggers><DataTrigger Binding="{Binding IsProblem}" Value="True"><Setter Property="Foreground" Value="#8B1010"/></DataTrigger></Style.Triggers></Style></controls:ReferenceText.Style></controls:ReferenceText>
+                                </Border>
+                            </DataTemplate></ListBox.ItemTemplate></ListBox>
                         </StackPanel></DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
                 </ScrollViewer></Border>

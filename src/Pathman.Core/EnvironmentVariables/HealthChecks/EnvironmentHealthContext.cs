@@ -23,6 +23,14 @@ public sealed class EnvironmentHealthContext
     public IReadOnlyList<VariableSnapshot> SourcesFor(EnvironmentVariableInfo variable)=>Resolver.ReferencedVariables(variable.RawValue,variable.Scope).Prepend(variable)
         .DistinctBy(item=>EnvironmentWorkspace.Key(item.Scope,item.Name),StringComparer.OrdinalIgnoreCase).OrderBy(item=>item.Scope).ThenBy(item=>item.Name,StringComparer.OrdinalIgnoreCase)
         .Select(item=>new VariableSnapshot(item.Scope,item.Name,item.RawValue,(int)item.Kind)).ToArray();
-    public EnvironmentHealthIssue Issue(EnvironmentVariableInfo variable,EnvironmentIssueKind kind,string message,string suggestion)=>new(kind,variable.Scope,variable.Name,message)
-    {Suggestion=suggestion,Sources=SourcesFor(variable)};
+    public EnvironmentHealthLocation Location(EnvironmentVariableInfo variable,int index)
+    {
+        var entries=variable.RawValue.Split(';',StringSplitOptions.None);
+        return new(variable.Scope,variable.Name,index+1,entries[index],index>0 ? entries[index-1] : null,index+1<entries.Length ? entries[index+1] : null);
+    }
+    public IEnumerable<EnvironmentHealthLocation> ReferenceLocations(EnvironmentVariableInfo variable,string name)=>variable.Entries
+        .Select((value,index)=>(value,index)).Where(item=>EnvironmentPathResolver.ReferenceNames(item.value).Contains(name,StringComparer.OrdinalIgnoreCase)).Select(item=>Location(variable,item.index));
+    public EnvironmentHealthIssue Issue(EnvironmentVariableInfo variable,EnvironmentIssueKind kind,string message,string suggestion,
+        IEnumerable<EnvironmentHealthLocation>? detailLocations=null)=>new(kind,variable.Scope,variable.Name,message)
+    {Suggestion=suggestion,Sources=SourcesFor(variable),DetailLocations=(detailLocations ?? variable.Entries.Select((_,index)=>Location(variable,index))).ToArray()};
 }

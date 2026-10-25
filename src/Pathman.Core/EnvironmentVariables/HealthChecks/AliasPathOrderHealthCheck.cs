@@ -32,6 +32,6 @@ public sealed class AliasPathOrderHealthCheck : IEnvironmentHealthCheck
             var mutation=new AliasPathSetting(layout).Plan(true,context.Variables,context.Runtime);
             if(mutation is not null) issue=issue with {Fixes=[new("移到用户 PATH 末尾",[mutation],sources)]};
         }
-        yield return issue;
+        yield return issue with {DetailLocations=issue.Locations};
     }
 }

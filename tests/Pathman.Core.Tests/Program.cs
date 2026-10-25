@@ -22,6 +22,7 @@ PathCleanupTests.Run(Assert);
 RecursivePathsTests.Run(Assert);
     HealthActionsTests.Run(Assert);
     AliasAndHealthTests.Run(Assert);
+HealthAliasRegressionTests.Run(Assert);
 var fixtureRoot=Path.Combine(Path.GetTempPath(),"PathMan.Core.Tests",Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(fixtureRoot);
 var registryFixture=@"Software\PathMan.Tests\"+Guid.NewGuid().ToString("N");

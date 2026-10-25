@@ -60,7 +60,7 @@ public static partial class EnvironmentHealth
             return new(label,[new("set",owner.Scope,owner.Name,value,ExpectedValue:owner.RawValue,ExpectedKind:owner.Kind)],guards);
         }
         EnvironmentHealthIssue Finding(EnvironmentIssueKind kind,string message,string suggestion,IEnumerable<Occurrence> items)=>new(kind,variable.Scope,variable.Name,message) {
-            Suggestion=suggestion,Sources=guards,Locations=items.Select(item=>item.Sources.LastOrDefault()).OfType<EntrySource>()
+            Suggestion=suggestion,Sources=guards,DetailLocations=items.SelectMany(item=>item.Sources).DistinctBy(source=>source.Key,StringComparer.OrdinalIgnoreCase).Select(source=>source.Location()).ToArray(),Locations=items.Select(item=>item.Sources.LastOrDefault()).OfType<EntrySource>()
                 .DistinctBy(source=>source.Key,StringComparer.OrdinalIgnoreCase).Take(8).Select(source=>source.Location()).ToArray()};
         if(pathLike || variable.IsList)
         {

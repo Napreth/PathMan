@@ -23,6 +23,8 @@ public sealed record EnvironmentHealthIssue(EnvironmentIssueKind Kind,VariableSc
     public string Category {get;init;}="";
     public string Suggestion {get;init;}="";
     public IReadOnlyList<EnvironmentHealthLocation> Locations {get;init;}=[];
+    // Display provenance is separate from the full snapshot used to guard repairs.
+    public IReadOnlyList<EnvironmentHealthLocation> DetailLocations {get;init;}=[];
     public IReadOnlyList<EnvironmentHealthFix> Fixes {get;init;}=[];
     public IReadOnlyList<VariableSnapshot> Sources {get;init;}=[];
     // Ignore only this exact finding. A changed source value/type is a new finding.
@@ -33,6 +35,23 @@ public sealed record EnvironmentHealthReport(IReadOnlyList<EnvironmentHealthIssu
 {
     public int Errors=>Issues.Count(item=>item.IsError);
     public int Warnings=>Issues.Count-Errors;
+}
+
+public sealed record EnvironmentHealthDetailVariable(VariableSnapshot Snapshot,IReadOnlySet<int> ProblemLines);
+public static class EnvironmentHealthDetails
+{
+    public static IReadOnlyList<EnvironmentHealthDetailVariable> For(EnvironmentHealthIssue issue)
+    {
+        var locations=issue.DetailLocations.Count>0 ? issue.DetailLocations : issue.Locations;
+        if(locations.Count==0)
+        {
+            var root=issue.Sources.FirstOrDefault(source=>source.Scope==issue.Scope && source.Name.Equals(issue.Name,StringComparison.OrdinalIgnoreCase));
+            return root is null ? [] : [new(root,Enumerable.Range(1,root.Value.Split(';').Length).ToHashSet())];
+        }
+        return locations.GroupBy(location=>EnvironmentWorkspace.Key(location.Scope,location.Name),StringComparer.OrdinalIgnoreCase)
+            .Select(group=>(Group:group,Snapshot:issue.Sources.FirstOrDefault(source=>EnvironmentWorkspace.Key(source.Scope,source.Name).Equals(group.Key,StringComparison.OrdinalIgnoreCase))))
+            .Where(item=>item.Snapshot is not null).Select(item=>new EnvironmentHealthDetailVariable(item.Snapshot!,item.Group.Select(location=>location.Line).ToHashSet())).ToArray();
+    }
 }
 
 public static partial class EnvironmentHealth

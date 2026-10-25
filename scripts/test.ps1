@@ -79,7 +79,15 @@ try {
     foreach ($invalid in @('../escape', 'NUL', 'COM1.txt', 'LPT¹', 'trailing.')) {
         $null = Invoke-Cli @('shim', 'add', $invalid, $pwsh) 1
     }
-    $null = Invoke-Cli @('shim', 'add', 'recursive', $alias) 1
+    $null = Invoke-Cli @('shim', 'add', 'recursive', $alias)
+    $recursive = Invoke-Program (Join-Path $dataRoot 'shims/recursive.exe') @()
+    Assert ($recursive.Code -eq 1059) 'A recursive target must be accepted for storage and rejected when launched.'
+    foreach ($rawTarget in @('', 'C:\missing\PathMan-no-target.exe', 'invalid?:<>|path', 'relative-target', '"C:\quoted.exe"')) {
+        $null = Invoke-Cli @('shim', 'add', 'invalid-target', $rawTarget)
+        $invalidTarget = Invoke-Program (Join-Path $dataRoot 'shims/invalid-target.exe') @()
+        Assert ($invalidTarget.Code -ne 0 -and $invalidTarget.Error.Contains('PathMan.Shim:')) 'Invalid targets must fail at invocation, without preventing alias storage.'
+        $null = Invoke-Cli @('shim', 'remove', 'invalid-target')
+    }
     # Replacing the template does not update existing hard links until refresh.
     $replacement = Join-Path $installation 'internal/replacement.exe'
     Copy-Item -LiteralPath $template -Destination $replacement

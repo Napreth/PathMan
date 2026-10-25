@@ -10,13 +10,14 @@ public sealed record ShimAlias(string Name, string Target);
 public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
 {
     private const string Header = "[PathMan.Shim]";
-    private const string Format = "Format=1";
+    private const string Format = "Format=2";
 
     public IReadOnlyList<ShimAlias> List()
     {
         if (!Directory.Exists(layout.ShimsDirectory)) return [];
-        return Directory.EnumerateFiles(layout.ShimsDirectory, "*.shim")
-            .Select(ReadAlias)
+        return Directory.EnumerateFiles(layout.ShimsDirectory).Where(file=>Path.GetExtension(file).Equals(".shim",StringComparison.OrdinalIgnoreCase) || Path.GetExtension(file).Equals(".exe",StringComparison.OrdinalIgnoreCase))
+            .Select(file=>Path.GetFileNameWithoutExtension(file)).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(name=>ReadAlias(Path.Combine(layout.ShimsDirectory,name+".shim")))
             .OrderBy(alias => alias.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
@@ -26,7 +27,7 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
     private ShimAlias AddAlias(string name, string target)
     {
         name = ValidateName(name);
-        target = ValidateTarget(target);
+        ArgumentNullException.ThrowIfNull(target);
         Directory.CreateDirectory(layout.ShimsDirectory);
         var executable = Path.Combine(layout.ShimsDirectory, name + ".exe");
         var manifest = Path.Combine(layout.ShimsDirectory, name + ".shim");
@@ -36,37 +37,23 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
         if(ensureUserPath) EnsureUserShimsPath();
         return new(name,target);
     }
-    private string ValidateTarget(string target)
-    {
-        target=Path.GetFullPath(target);
-        if (!target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("别名目标必须是 .exe 文件。");
-        if (!File.Exists(target)) throw new FileNotFoundException("别名目标不存在。", target);
-        if (!File.Exists(layout.ShimExecutable))
-            throw new FileNotFoundException("找不到垫片本体，请先构建发布目录。", layout.ShimExecutable);
-        if (target.StartsWith(Path.TrimEndingDirectorySeparator(layout.ShimsDirectory) + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase) ||
-            target.Equals(layout.ShimExecutable, StringComparison.OrdinalIgnoreCase) ||
-            target.Equals(layout.CachedShimExecutable, StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("别名目标不能是 PathMan 垫片，避免循环启动。");
-
-        return target;
-    }
     private static void WriteManifest(string manifest,string target,bool overwrite)
     {
         var temporary=manifest+"."+Guid.NewGuid().ToString("N")+".tmp";
-        try {File.WriteAllText(temporary,$"{Header}\r\n{Format}\r\nTarget={target}\r\n",Encoding.Unicode);File.Move(temporary,manifest,overwrite);}
+        // Store the literal text, including empty/invalid paths, without INI trimming or line injection.
+        try {File.WriteAllText(temporary,$"{Header}\r\n{Format}\r\nTargetBase64={Convert.ToBase64String(Encoding.Unicode.GetBytes(target))}\r\n",Encoding.Unicode);File.Move(temporary,manifest,overwrite);}
         finally {File.Delete(temporary);}
     }
     private ShimAlias Existing(string name,string? expectedTarget)
     {
+        if(!File.Exists(Path.Combine(layout.ShimsDirectory,name+".shim")) && !File.Exists(Path.Combine(layout.ShimsDirectory,name+".exe"))) throw new IOException("别名已不存在，请刷新后重试。");
         var alias=ReadAlias(Path.Combine(layout.ShimsDirectory,name+".shim"));
         if(expectedTarget is not null && alias.Target!=expectedTarget) throw new IOException("别名已被其他程序修改，请刷新后重试。");
         return alias;
     }
     public ShimAlias Update(string name,string target,string? expectedTarget=null)=>WithLock(()=>
     {
-        name=ValidateName(name);var existing=Existing(name,expectedTarget);target=ValidateTarget(target);
+        name=ValidateName(name);var existing=Existing(name,expectedTarget);ArgumentNullException.ThrowIfNull(target);
         WriteManifest(Path.Combine(layout.ShimsDirectory,existing.Name+".shim"),target,true);
         return new ShimAlias(existing.Name,target);
     });
@@ -80,10 +67,10 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
         var temporary=Path.Combine(layout.ShimsDirectory,Guid.NewGuid().ToString("N"));var exeAt=oldExe;var manifestAt=oldManifest;
         try
         {
-            File.Move(exeAt,temporary+".exe.tmp");exeAt=temporary+".exe.tmp";
-            File.Move(manifestAt,temporary+".shim.tmp");manifestAt=temporary+".shim.tmp";
-            File.Move(exeAt,newExe);exeAt=newExe;
-            File.Move(manifestAt,newManifest);manifestAt=newManifest;
+            if(File.Exists(exeAt)) {File.Move(exeAt,temporary+".exe.tmp");exeAt=temporary+".exe.tmp";}
+            if(File.Exists(manifestAt)) {File.Move(manifestAt,temporary+".shim.tmp");manifestAt=temporary+".shim.tmp";}
+            if(exeAt!=oldExe) {File.Move(exeAt,newExe);exeAt=newExe;}
+            if(manifestAt!=oldManifest) {File.Move(manifestAt,newManifest);manifestAt=newManifest;}
         }
         catch
         {
@@ -171,10 +158,18 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
 
     private static ShimAlias ReadAlias(string manifest)
     {
-        var lines = File.ReadAllLines(manifest, Encoding.Unicode);
-        if (lines.Length != 3 || lines[0] != Header || lines[1] != Format || !lines[2].StartsWith("Target="))
-            throw new InvalidDataException($"无法识别垫片配置：{manifest}");
-        return new ShimAlias(Path.GetFileNameWithoutExtension(manifest), lines[2][7..]);
+        var target="";
+        try
+        {
+            var lines=File.ReadAllLines(manifest,Encoding.Unicode);
+            if(lines.Length>=3 && lines[0]==Header)
+            {
+                if(lines[1]=="Format=1" && lines[2].StartsWith("Target=")) target=lines[2][7..];
+                else if(lines[1]==Format && lines[2].StartsWith("TargetBase64=")) target=Encoding.Unicode.GetString(Convert.FromBase64String(lines[2][13..]));
+            }
+        }
+        catch(Exception error) when(error is IOException or UnauthorizedAccessException or FormatException) { }
+        return new(Path.GetFileNameWithoutExtension(manifest),target);
     }
 
     public static string ValidateName(string name)

@@ -27,6 +27,7 @@ function MachineValue([string]$name){$key=[Microsoft.Win32.Registry]::LocalMachi
 function SetUserPath([string]$raw){$key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment',$true);try{$key.SetValue('Path',$raw,[Microsoft.Win32.RegistryValueKind]::ExpandString)}finally{$key.Dispose()}}
 $shims=Join-Path $env:LOCALAPPDATA 'PathMan\shims'
 function Manifest([string]$name){Join-Path $shims ($name+'.shim')}
+function AliasTarget([string]$name){$lines=Get-Content (Manifest $name);if($lines[1] -eq 'Format=2'){[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($lines[2].Substring(13)))}else{$lines[2].Substring(7)}}
 function Buttons{ @('NewAliasButton','RenameAliasButton','EditAliasButton','BrowseAliasButton','CopyAliasButton','DeleteAliasButton') }
 try{
  StartApp
@@ -48,7 +49,7 @@ try{
   if($pair[0] -eq 'MACHINE_EDIT_A'){$worker=(Workers)[0].Id;Assert ((Workers).Count -eq 1) 'The first authorized write creates exactly one elevated worker'}
   else{Assert ((Workers).Count -eq 1 -and (Workers)[0].Id -eq $worker) 'The second system edit reuses authorization and the same worker'}
  }
- Assert ($window.Current.Name -eq 'PathMan · 以非管理员身份运行') 'Authorizing writes does not mark the desktop itself as elevated'
+ Assert ($window.Current.Name -eq 'PathMan · 管理员操作已授权') 'The title immediately reports reusable administrator authorization'
  Go '健康检测';Invoke (Id 'ScanButton');WaitHealth
  Invoke (Find (Issue 'RegistryType:Machine:MACHINE_TYPE:0') '查看详情' ([Windows.Automation.ControlType]::Button))
  Invoke (Find (Id 'DetailActions') '修正类型' ([Windows.Automation.ControlType]::Button));WaitHealth
@@ -65,25 +66,25 @@ try{
  SetInput 'bad?name';Key 13;Assert ($null -ne (Input)) 'Invalid Windows file names keep the inline editor open'
  SetInput 'gui_alias';Key 13;WaitFor {$null -ne (Input) -and (Input).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value -eq ''} 'A valid new name did not advance to target input'
  SetInput 'C:\Windows\System32\notepad.exe';Key 13
- WaitFor {Test-Path (Manifest 'gui_alias')} 'New alias did not create its manifest'
+ WaitFor {(AliasTarget 'gui_alias') -eq 'C:\Windows\System32\notepad.exe'} 'New alias did not save its target'
  Assert (Test-Path (Join-Path $shims 'gui_alias.exe')) 'New aliases create an executable and matching manifest'
  SelectNode (AliasRow 'gui_alias');Invoke (Id 'RenameAliasButton');SetInput 'CON';Key 13;Assert ($null -ne (Input)) 'Rename rejects reserved Windows device names'
  SetInput 'fixture';Key 13;Assert ($null -ne (Input)) 'Rename rejects an existing alias without overwriting it'
  SetInput 'gui_renamed';Key 13;WaitFor {Test-Path (Manifest 'gui_renamed')} 'Rename did not finish'
  Assert (!(Test-Path (Manifest 'gui_alias')) -and (Test-Path (Join-Path $shims 'gui_renamed.exe'))) 'Rename moves both files and preserves the selected alias'
- DoubleClick (AliasText 'gui_renamed');WaitFor {$null -ne (Input)} 'Double-click target editing did not begin'
+ DoubleClick (Find (AliasRow 'gui_renamed') 'C:\Windows\System32\notepad.exe' ([Windows.Automation.ControlType]::Text));WaitFor {$null -ne (Input)} 'Double-click target editing did not begin'
  Assert ((Input).GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value -eq 'C:\Windows\System32\notepad.exe') 'Double-click edits the alias target inline'
- SetInput 'C:\Windows\System32\cmd.exe';Key 13;WaitFor {(Get-Content (Manifest 'gui_renamed') -Raw) -like '*Target=C:\Windows\System32\cmd.exe*'} 'Edited target did not save'
+ SetInput 'C:\Windows\System32\cmd.exe';Key 13;WaitFor {(AliasTarget 'gui_renamed') -eq 'C:\Windows\System32\cmd.exe'} 'Edited target did not save'
  $launched=Start-Process (Join-Path $shims 'gui_renamed.exe') -ArgumentList '/c exit 37' -WindowStyle Hidden -Wait -PassThru
  Assert ($launched.ExitCode -eq 37) 'The edited alias launches its target and returns its exit code'
  Invoke (Id 'CopyAliasButton');Assert ((Get-Clipboard -Raw) -eq 'gui_renamed') 'Copy places the selected command name on the clipboard'
- Invoke (Id 'BrowseAliasButton');$dialog=$null;WaitFor {$script:dialog=Find ([Windows.Automation.AutomationElement]::RootElement) '选择目标程序' ([Windows.Automation.ControlType]::Window);$null -ne $dialog} 'The executable picker did not open'
+ Invoke (Id 'BrowseAliasButton');$dialog=$null;WaitFor {$script:dialog=Find ([Windows.Automation.AutomationElement]::RootElement) '选择目标文件' ([Windows.Automation.ControlType]::Window);$null -ne $dialog} 'The file picker did not open'
  $fileName=Find $dialog 'File name:' ([Windows.Automation.ControlType]::Edit)
  if($null -eq $fileName){$fileName=Find $dialog '文件名:' ([Windows.Automation.ControlType]::Edit)}
  $fileName.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue('C:\Windows\System32\where.exe')
  Invoke (Find $dialog 'Open' ([Windows.Automation.ControlType]::Button))
- WaitFor {(Get-Content (Manifest 'gui_renamed') -Raw) -like '*Target=C:\Windows\System32\where.exe*'} 'Browse did not update the alias target'
- Assert ($true) 'Browse uses an executable picker and saves the selected target'
+ WaitFor {(AliasTarget 'gui_renamed') -eq 'C:\Windows\System32\where.exe'} 'Browse did not update the alias target'
+ Assert ($true) 'Browse uses a file picker and saves the selected target'
  Invoke (Id 'DeleteAliasButton');WaitFor {!(Test-Path (Manifest 'gui_renamed'))} 'Deletion did not finish'
  Assert (!(Test-Path (Join-Path $shims 'gui_renamed.exe')) -and (Test-Path C:\Windows\System32\where.exe)) 'Deletion removes only the alias pair, preserving its target program'
  SetUserPath ($shims+';%REL_A_PATH%;%REL_B_PATH%')

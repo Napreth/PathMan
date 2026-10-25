@@ -11,6 +11,8 @@ internal static class EnvironmentEditHost
 {
     private static readonly SemaphoreSlim Gate=new(1,1);
     private static ElevatedEnvironmentSession? session;
+    public static event EventHandler? AuthorizationChanged;
+    public static bool IsAuthorized=>session?.IsAlive==true;
     public static bool IsAdministrator {get {using var identity=WindowsIdentity.GetCurrent();return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);}}
     public static Task ApplyAsync(EnvironmentMutation mutation,EnvironmentWorkspaceStore store,string dataDirectory)=>ApplyBatchAsync([mutation],[],store,dataDirectory);
     public static async Task ApplyBatchAsync(IReadOnlyList<EnvironmentMutation> mutations,IReadOnlyList<VariableSnapshot> preconditions,EnvironmentWorkspaceStore store,string dataDirectory)
@@ -33,9 +35,10 @@ internal static class EnvironmentEditHost
             {
                 session?.Dispose();session=null;
                 session=await ElevatedEnvironmentSession.StartAsync();
+                AuthorizationChanged?.Invoke(null,EventArgs.Empty);
             }
             try {await session.ApplyAsync(mutations,preconditions);}
-            catch(IOException error) when(error is not EnvironmentOperationException) {session.Dispose();session=null;throw;}
+            catch(IOException error) when(error is not EnvironmentOperationException) {session.Dispose();session=null;AuthorizationChanged?.Invoke(null,EventArgs.Empty);throw;}
             try {await Task.Run(()=>WindowsEnvironmentVariableEditor.RecordOwnChanges(store,mutations));}
             catch(Exception error) when(error is IOException or UnauthorizedAccessException)
             {throw new IOException("系统变量已保存，但用户记录更新失败。请刷新确认。"+error.Message,error);}
@@ -43,5 +46,5 @@ internal static class EnvironmentEditHost
         catch(Win32Exception error) when(error.NativeErrorCode==1223) {throw new OperationCanceledException("已取消管理员操作。");}
         finally {Gate.Release();}
     }
-    public static void Shutdown() {session?.Dispose();session=null;}
+    public static void Shutdown() {session?.Dispose();session=null;AuthorizationChanged?.Invoke(null,EventArgs.Empty);}
 }
