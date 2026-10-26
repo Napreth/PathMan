@@ -8,7 +8,7 @@
         <Grid Margin="0,0,4,0">
             <Grid x:Name="Label"><Grid.ColumnDefinitions><ColumnDefinition x:Name="NameColumn" Width="3*"/><ColumnDefinition x:Name="DetailColumn" Width="2*"/></Grid.ColumnDefinitions>
                 <controls:ReferenceText x:Name="NameLabel" Text="{Binding Text, ElementName=Root}" VerticalAlignment="Center" ToolTip="{Binding Text, ElementName=Root}"/>
-                <TextBlock Text="（空条目）" Opacity=".5" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Text="{Binding EmptyPlaceholder,ElementName=Root}" Opacity=".5" VerticalAlignment="Center" IsHitTestVisible="False">
                     <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Text,ElementName=Root}" Value=""/><Condition Binding="{Binding ShowPin,ElementName=Root}" Value="False"/><Condition Binding="{Binding ShowDelete,ElementName=Root}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style>
                 </TextBlock>
                 <controls:ReferenceText x:Name="DetailLabel" Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" VerticalAlignment="Center" ToolTip="{Binding Detail, ElementName=Root}"/>

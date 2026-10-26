@@ -6,18 +6,18 @@ namespace Pathman.Gui.Views;
 
 public partial class VariablesView
 {
-    private bool temporaryCleanup,reviewIncoming;
+    private bool temporaryCleanup;
     private string? temporaryCleanupKey;
     public void NotifyIncoming(IReadOnlyList<EnvironmentVariableInfo> current)
     {
         if(HasInlineEditor && !EnvironmentSnapshotWatcher.Equal(allVariables,current))
-        {reviewIncoming=true;StatusText.Text="检测到外部更改，结束当前行输入后显示对比。";}
+        {StatusText.Text="检测到外部更改，结束当前行输入后更新。";}
     }
     public async Task<bool> ObserveRegistryAsync(IReadOnlyList<EnvironmentVariableInfo> current)
     {
         if(EnvironmentSnapshotWatcher.Equal(allVariables,current)) return true;
         if(busy || dragging || pathDragging || HasInlineEditor) {NotifyIncoming(current);return false;}
-        if(editingSession is not {} session || !HasUnsavedChanges && !session.IsReviewMode && !reviewIncoming && !temporaryCleanup)
+        if(editingSession is not {} session || !session.HasChanges && !session.IsReviewMode)
         {
             await ReloadAsync(external:true);
             if(CleanupPanel.Visibility==Visibility.Visible) {cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues());ShowCleanupPlan();}
@@ -28,7 +28,7 @@ public partial class VariablesView
         {
             var snapshot=await Task.Run(()=>(State:store.Read(),Variables:EnvironmentMonitor.ReadAll()));
             var state=snapshot.State;current=snapshot.Variables;
-            session.Observe(current);allVariables=current;reviewIncoming=false;
+            session.Observe(current);allVariables=current;
             if(temporaryCleanup) StageExternalCleanup(state);
             var oldGroups=userGroups.Concat(systemGroups).ToArray();
             var open=oldGroups.Where(group=>group.IsExpanded).Select(group=>group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);

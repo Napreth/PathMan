@@ -5,6 +5,7 @@
 #include <tlhelp32.h>
 #include <aclapi.h>
 #include <sddl.h>
+#include <bcrypt.h>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -255,8 +256,47 @@ BOOL CALLBACK close_window(HWND window, LPARAM parameter) {
     DWORD id = 0; GetWindowThreadProcessId(window, &id);
     // WPF can give its visible main window a hidden owner HWND. Do not filter by GW_OWNER.
     wchar_t title[256]{}; GetWindowTextW(window, title, 256);
-    if (id == static_cast<DWORD>(parameter) && IsWindowVisible(window) && _wcsicmp(title, L"PathMan") == 0) PostMessageW(window, WM_CLOSE, 0, 0);
+    const std::wstring caption(title);
+    if (id == static_cast<DWORD>(parameter) && IsWindowVisible(window) && (caption == L"PathMan" || caption.starts_with(L"PathMan \u00b7"))) PostMessageW(window, WM_CLOSE, 0, 0);
     return TRUE;
+}
+void stop_background(const std::filesystem::path& root) {
+    HANDLE token = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return;
+    DWORD size = 0;
+    GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+    std::vector<BYTE> user(size);
+    const bool found = GetTokenInformation(token, TokenUser, user.data(), size, &size) != FALSE;
+    CloseHandle(token);
+    if (!found) return;
+    LPWSTR sid = nullptr;
+    if (!ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(user.data())->User.Sid, &sid)) return;
+    std::wstring identity(sid); LocalFree(sid);
+    auto directory = std::filesystem::absolute(root).lexically_normal().wstring();
+    while (directory.size() > 3 && (directory.back() == L'\\' || directory.back() == L'/')) directory.pop_back();
+    const auto signal = [&](DWORD flags) -> DWORD {
+    const int mapped = LCMapStringEx(LOCALE_NAME_INVARIANT, flags, directory.data(), static_cast<int>(directory.size()), nullptr, 0, nullptr, nullptr, 0);
+    if (!mapped) return GetLastError();
+    std::wstring upper(static_cast<size_t>(mapped), L'\0');
+    if (!LCMapStringEx(LOCALE_NAME_INVARIANT, flags, directory.data(), static_cast<int>(directory.size()), upper.data(), mapped, nullptr, nullptr, 0)) return GetLastError();
+    // .NET invariant casing preserves dotless i, including when using ICU.
+    if (upper.size() == directory.size()) for (size_t index = 0; index < directory.size(); ++index) if (directory[index] == L'\u0131') upper[index] = directory[index];
+    const int bytes = WideCharToMultiByte(CP_UTF8, 0, upper.data(), mapped, nullptr, 0, nullptr, nullptr);
+    if (!bytes) return GetLastError();
+    std::string utf8(static_cast<size_t>(bytes), '\0');
+    if (!WideCharToMultiByte(CP_UTF8, 0, upper.data(), mapped, utf8.data(), bytes, nullptr, nullptr)) return GetLastError();
+    BYTE hash[32]{};
+    if (BCryptHash(BCRYPT_SHA256_ALG_HANDLE, nullptr, 0, reinterpret_cast<PUCHAR>(utf8.data()), static_cast<ULONG>(utf8.size()), hash, sizeof(hash)) < 0) return ERROR_GEN_FAILURE;
+    constexpr wchar_t hex[] = L"0123456789ABCDEF";
+    std::wstring digest;
+    for (size_t index = 0; index < 8; ++index) { digest += hex[hash[index] >> 4]; digest += hex[hash[index] & 15]; }
+    const auto name = L"Local\\PathMan." + identity + L"." + digest + L".Stop";
+    const HANDLE stop = OpenEventW(EVENT_MODIFY_STATE, FALSE, name.c_str());
+    if (!stop) return GetLastError();
+    const auto error = SetEvent(stop) ? ERROR_SUCCESS : GetLastError(); CloseHandle(stop); return error;
+    };
+    // ICU uppercases final sigma where Windows invariant NLS preserves it.
+    if (signal(LCMAP_UPPERCASE) == ERROR_FILE_NOT_FOUND) signal(LCMAP_UPPERCASE | LCMAP_LINGUISTIC_CASING);
 }
 }
 extern "C" __declspec(dllexport) DWORD __stdcall ValidateDirectory(const wchar_t* directory, const wchar_t* localData) {
@@ -302,12 +342,7 @@ extern "C" __declspec(dllexport) DWORD __stdcall StopApplications(const wchar_t*
         auto error = applications(root, running);
         if (error || running.empty()) return error;
         for (const auto& app : running) if (app.gui) EnumWindows(close_window, static_cast<LPARAM>(app.id));
-        // The CLI signals the normal background stop event, retaining its per-user/per-install identity.
-        auto command = L"\"" + (root / L"bin" / L"pathman.exe").wstring() + L"\" background stop";
-        STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
-        if (CreateProcessW((root / L"bin" / L"pathman.exe").c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, root.c_str(), &start, &process)) {
-            WaitForSingleObject(process.hProcess, 6000); CloseHandle(process.hThread); CloseHandle(process.hProcess);
-        }
+        for (const auto& app : running) if (app.background) { stop_background(root); break; }
         // Never discard unsaved edits or kill alias child commands. A refused WM_CLOSE stays retryable.
         for (int retry = 0; retry < 50; ++retry) {
             running.clear(); error = applications(root, running);
@@ -372,10 +407,10 @@ extern "C" __declspec(dllexport) DWORD __stdcall RefreshShims(const wchar_t* dir
     try {
         const auto data = std::filesystem::path(localData) / L"PathMan";
         if (!std::filesystem::exists(data / L"shims")) return ERROR_SUCCESS;
-        const auto cli = std::filesystem::path(directory) / L"bin" / L"pathman.exe";
-        auto command = L"\"" + cli.wstring() + L"\" --data-root \"" + data.wstring() + L"\" shim refresh";
+        const auto helper = std::filesystem::path(directory) / L"internal" / L"PathMan.Service.exe";
+        auto command = L"\"" + helper.wstring() + L"\" --installer-refresh-shims \"" + data.wstring() + L"\"";
         STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
-        if (!CreateProcessW(cli.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, directory, &start, &process)) return GetLastError();
+        if (!CreateProcessW(helper.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, directory, &start, &process)) return GetLastError();
         WaitForSingleObject(process.hProcess, INFINITE);
         DWORD exitCode = ERROR_INSTALL_FAILURE;
         GetExitCodeProcess(process.hProcess, &exitCode);

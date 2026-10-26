@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$PublishDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/publish/win-x64'))
+param([string]$PublishDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/publish/win-x64'),[string]$CoreAssembly = (Join-Path (Split-Path -Parent $PSScriptRoot) 'src/Pathman.Core/bin/Release/net10.0-windows/Pathman.Core.dll'))
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $testRoot = Join-Path $projectRoot ('artifacts/tests/' + [guid]::NewGuid().ToString('N'))
@@ -48,9 +48,13 @@ function Invoke-Program([string]$Executable, [string[]]$Arguments, [string]$Inpu
 }
 
 function Invoke-Cli([string[]]$Command, [int]$ExpectedCode = 0) {
-    $result = Invoke-Program $cli (@('--data-root', $dataRoot) + $Command)
+    $result = Invoke-Program $cli $Command
     Assert ($result.Code -eq $ExpectedCode) "CLI failed ($($result.Code)): $Command $($result.Error)"
     return $result
+}
+function Assert-Rejected([scriptblock]$Action) {
+    try {& $Action} catch {if($_.Exception.GetBaseException() -is [ArgumentException] -or $_.Exception.GetBaseException() -is [IO.IOException]) {return};throw}
+    throw 'The operation should have been rejected.'
 }
 
 try {
@@ -58,11 +62,22 @@ try {
     Copy-Item -Path (Join-Path $PublishDirectory '*') -Destination $installation -Recurse
     Assert (@(Get-ChildItem -LiteralPath (Join-Path $installation 'bin')).Count -eq 1) 'bin must contain only the CLI EXE.'
     Assert (@(Get-ChildItem -LiteralPath $installation -Recurse -Filter '*.exe').Count -eq 4) 'Exactly four production EXEs are required.'
-    $layout = Invoke-Cli @('layout')
-    Assert ($layout.Out.Contains($installation)) 'CLI installation discovery failed.'
-    Assert ($layout.Out.Contains($dataRoot)) 'CLI data directory override failed.'
+    $help=Invoke-Cli @('--help')
+    $commands=@([regex]::Matches($help.Out,'(?m)^\s+pathman (\w+)') | ForEach-Object {$_.Groups[1].Value})
+    Assert (($commands -join ',') -ceq 'list,add,switch,delete') 'CLI help must contain only version commands.'
+    Assert (!$help.Out.Contains('--data-root') -and !$help.Out.Contains('首次 add') -and !$help.Out.Contains('硬链接') -and !$help.Out.Contains('管理员授权')) 'Removed help prose must not remain.'
+    foreach($removed in @(@('layout'),@('shim','list'),@('shim','add','sample','x'),@('shim','remove','sample'),@('shim','refresh'),@('startup','status'),@('startup','enable'),@('startup','disable'),@('background','start'),@('background','stop'),@('background','status'),@('--data-root',$dataRoot,'list'),@('--environment-session','invalid'))) {$null=Invoke-Cli $removed 2}
+    $null=Invoke-Cli @('add') 1
+    $null=Invoke-Cli @('add','sample','1','x','--type','invalid') 1
+    $null=Invoke-Cli @('list','one','two') 1
+    # Exercise shared APIs directly with temporary directories; production CLI has no test overrides.
+    if([Environment]::Version.Major -lt 10){throw 'Runtime tests require PowerShell 7.6 or later (.NET 10).'}
+    $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($CoreAssembly))
+    $layout=[Pathman.Core.PathmanLayout]::new($installation,$dataRoot)
+    $manager=[Pathman.Core.Shims.ShimManager]::new($layout,$false)
+    $background=[Pathman.Core.BackgroundProcess]::new($layout)
     $name = "p'w'sh-中文"
-    $null = Invoke-Cli @('shim', 'add', $name, $pwsh)
+    $null = $manager.Add($name,$pwsh)
     $alias = Join-Path $dataRoot "shims/$name.exe"
     $template = Join-Path $installation 'internal/PathMan.Shim.exe'
     $links = & fsutil hardlink list $alias
@@ -75,74 +90,71 @@ try {
     Assert ($observed.WorkingDirectory -eq $testRoot) 'Working directory was not inherited.'
     Assert ($observed.Environment -ceq 'PathMan-测试') 'Environment was not inherited.'
     Assert ($observed.StandardInput -ceq "stdin-data`n") 'Redirected stdin was not inherited.'
-    $null = Invoke-Cli @('shim', 'add', $name, $pwsh) 1
+    Assert-Rejected {$manager.Add($name,$pwsh)}
     foreach ($invalid in @('../escape', 'NUL', 'COM1.txt', 'LPT¹', 'trailing.')) {
-        $null = Invoke-Cli @('shim', 'add', $invalid, $pwsh) 1
+        Assert-Rejected {$manager.Add($invalid,$pwsh)}
     }
-    $null = Invoke-Cli @('shim', 'add', 'recursive', $alias)
+    $null = $manager.Add('recursive',$alias)
     $recursive = Invoke-Program (Join-Path $dataRoot 'shims/recursive.exe') @()
     Assert ($recursive.Code -eq 1059) 'A recursive target must be accepted for storage and rejected when launched.'
     foreach ($rawTarget in @('', 'C:\missing\PathMan-no-target.exe', 'invalid?:<>|path', 'relative-target', '"C:\quoted.exe"')) {
-        $null = Invoke-Cli @('shim', 'add', 'invalid-target', $rawTarget)
+        $null = $manager.Add('invalid-target',$rawTarget)
         $invalidTarget = Invoke-Program (Join-Path $dataRoot 'shims/invalid-target.exe') @()
         Assert ($invalidTarget.Code -ne 0 -and $invalidTarget.Error.Contains('PathMan.Shim:')) 'Invalid targets must fail at invocation, without preventing alias storage.'
-        $null = Invoke-Cli @('shim', 'remove', 'invalid-target')
+        $manager.Remove('invalid-target')
     }
     # Replacing the template does not update existing hard links until refresh.
     $replacement = Join-Path $installation 'internal/replacement.exe'
     Copy-Item -LiteralPath $template -Destination $replacement
     Move-Item -LiteralPath $replacement -Destination $template -Force
-    $null = Invoke-Cli @('shim', 'refresh')
+    $maintenance = Invoke-Program $layout.BackgroundExecutable @('--installer-refresh-shims',$dataRoot)
+    Assert ($maintenance.Code -eq 0) 'Installer shim maintenance must work independently of monitoring preferences.'
     $links = & fsutil hardlink list $alias
     Assert (($links -join "`n").Contains('internal\PathMan.Shim.exe')) 'Refresh must link aliases to the new template.'
-    $listing = Invoke-Cli @('shim', 'list')
-    Assert ($listing.Out.Contains($name)) 'Alias listing failed.'
-    $null = Invoke-Cli @('shim', 'remove', $name)
+    Assert (@($manager.List() | Where-Object Name -eq $name).Count -eq 1) 'Alias listing failed.'
+    $manager.Remove($name)
     Assert (!(Test-Path -LiteralPath $alias)) 'Removing an alias left its EXE behind.'
     Assert (!(Test-Path -LiteralPath (Join-Path $dataRoot "shims/$name.shim"))) 'Removing an alias left its manifest behind.'
     $missing = Invoke-Program $template @()
     Assert ($missing.Code -eq 13) 'A missing manifest should fail clearly.'
-    $null = Invoke-Cli @('startup', 'status')
-    $refused = Invoke-Program $cli @('--data-root', $dataRoot, 'background', 'start')
-    Assert ($refused.Code -ne 0) 'Background startup must refuse disabled runtime/login preferences without modifying actual login registration.'
-    $status = Invoke-Cli @('background', 'status')
-    Assert ($status.Out.Contains('未运行')) 'Disabled background must remain stopped.'
+    Assert-Rejected {$background.Start()}
+    Assert (!$background.IsRunning) 'Disabled background must remain stopped.'
     $duplicate = Invoke-Program (Join-Path $installation 'internal/PathMan.Service.exe') @('--data-root', $dataRoot)
     Assert ($duplicate.Code -eq 5) 'A direct disabled background launch must also be refused.'
-    $null = Invoke-Cli @('background', 'stop')
-    $status = Invoke-Cli @('background', 'status')
-    Assert ($status.Out.Contains('未运行')) 'Background process did not stop.'
-    $refused = Invoke-Program $cli @('--data-root', $dataRoot, 'background', 'start')
-    Assert ($refused.Code -ne 0) 'Stopping the background must not silently reenable it.'
-    $null = Invoke-Cli @('background', 'stop')
+    $background.Stop()
+    Assert (!$background.IsRunning) 'Background process did not stop.'
+    Assert-Rejected {$background.Start()}
+    $background.Stop()
 
     if ([IO.Path]::GetPathRoot($testRoot) -ne [IO.Path]::GetPathRoot([IO.Path]::GetTempPath())) {
         $crossVolumeRoot = Join-Path ([IO.Path]::GetTempPath()) ('PathMan-test-' + [guid]::NewGuid().ToString('N'))
-        $crossVolume = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'add', 'cross-volume', $pwsh)
-        Assert ($crossVolume.Code -eq 0) "Cross-volume deployment failed: $($crossVolume.Error)"
+        $crossManager=[Pathman.Core.Shims.ShimManager]::new([Pathman.Core.PathmanLayout]::new($installation,$crossVolumeRoot),$false)
+        $null=$crossManager.Add('cross-volume',$pwsh)
         $cached = Join-Path $crossVolumeRoot 'internal/PathMan.Shim.exe'
         $crossAlias = Join-Path $crossVolumeRoot 'shims/cross-volume.exe'
         $firstLinks = @(& fsutil hardlink list $crossAlias)
         Assert (($firstLinks -join "`n").Contains('internal\PathMan.Shim.exe')) 'Cross-volume aliases must link to one local cached template.'
         Assert ((Get-FileHash $cached).Hash -eq (Get-FileHash $template).Hash) 'The cached template must match the installation.'
-        $second = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'add', 'cross-volume-two', $pwsh)
-        Assert ($second.Code -eq 0) 'A second cross-volume alias must reuse the template.'
+        $null=$crossManager.Add('cross-volume-two',$pwsh)
         $links = @(& fsutil hardlink list $crossAlias)
         Assert ($links.Count -eq 3 -and ($links -join "`n").Contains('cross-volume-two.exe')) 'Both aliases must share the same cached file.'
         $result = Invoke-Program $crossAlias (@('-NoProfile', '-NonInteractive', '-File', $probe) + $samples) "stdin-data`n"
         Assert ($result.Code -eq 37 -and (($result.Out|ConvertFrom-Json).Arguments|ConvertTo-Json -Compress) -ceq ($samples|ConvertTo-Json -Compress)) 'Copied shims must preserve arguments and exit codes.'
-        [IO.File]::AppendAllText($template, 'PathMan-test-update')
-        $refreshed = Invoke-Program $cli @('--data-root', $crossVolumeRoot, 'shim', 'refresh')
+        $updatedTemplate=$template+'.updated'
+        Copy-Item -LiteralPath $template -Destination $updatedTemplate
+        [IO.File]::AppendAllText($updatedTemplate, 'PathMan-test-update')
+        Move-Item -LiteralPath $updatedTemplate -Destination $template -Force
+        $refreshed=$crossManager.Refresh()
         $cachedHash=(Get-FileHash $cached).Hash; $templateHash=(Get-FileHash $template).Hash
-        Assert ($refreshed.Code -eq 0 -and $cachedHash -eq $templateHash) "Refresh must update a changed cached template. Exit=$($refreshed.Code); cached=$cachedHash; template=$templateHash; stderr=$($refreshed.Error)"
+        Assert ($refreshed -eq 2 -and $cachedHash -eq $templateHash) "Refresh must update a changed cached template. Count=$refreshed; cached=$cachedHash; template=$templateHash"
         Assert (@(& fsutil hardlink list $crossAlias).Count -eq 3) 'Refresh must relink both aliases to the updated copy.'
         $result = Invoke-Program $crossAlias @('-NoProfile', '-NonInteractive', '-Command', 'exit 23')
         Assert ($result.Code -eq 23) 'A refreshed copied shim must remain executable.'
     }
-    Write-Host 'PASS: layout, hard links, Unicode aliases, arguments, stdio, exit codes, validation, refresh, background lifecycle, cross-volume cache reuse and updates.'
+    Write-Host 'PASS: version-only CLI, rejected legacy commands, direct Core alias APIs, arguments, stdio, exit codes, installer maintenance, disabled background and cross-volume cache updates.'
 }
 finally {
-    if (Test-Path -LiteralPath $cli) { $null = Invoke-Program $cli @('background', 'stop') }
+    if ($background) {$background.Stop()}
     $allowedTests = [IO.Path]::GetFullPath((Join-Path $projectRoot 'artifacts/tests')) + [IO.Path]::DirectorySeparatorChar
     if ([IO.Path]::GetFullPath($testRoot).StartsWith($allowedTests, [StringComparison]::OrdinalIgnoreCase)) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue

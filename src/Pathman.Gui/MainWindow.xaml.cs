@@ -18,7 +18,7 @@ public partial class MainWindow : Window
     private readonly MonitorView monitor;
     private readonly AboutView about;
     private readonly HealthView health=new();
-    private readonly UserControl versions=new() {Content=new StackPanel {Children={new TextBlock {Text="版本管理",FontSize=28,Margin=new(0,0,0,24)},new TextBlock {Text="开发中",FontSize=14}}}};
+    private readonly VersionsView versions;
     private readonly NotificationCenter notifications=new();
     private bool healthBusy,scanAgain;
     private string healthSignature="";
@@ -35,7 +35,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();RefreshWindowTitle(null,EventArgs.Empty);store=new(layout.DataDirectory);
-        variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(layout);
+        variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(layout,store);versions=new(layout,store);
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         NotificationsList.ItemsSource=notifications.Items;
         AddHandler(Osc8TextBlock.LinkRequestedEvent,new EventHandler<AppLinkEventArgs>(HandleAppLink));
@@ -44,6 +44,7 @@ public partial class MainWindow : Window
         health.IgnoreRequested+=async(_,args)=>await IgnoreHealthIssueAsync(args);
         variables.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         aliases.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
+        versions.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         monitor.PendingApplyRequested+=async(_,_)=>await ApplyPendingMonitoringAsync();
         Loaded+=async(_,_)=>
         {
@@ -67,7 +68,8 @@ public partial class MainWindow : Window
     {
         if(PageHost is null || variables is null || navigating || Navigation.SelectedItem is not ListBoxItem item) return;
         navigating=true;
-        var canLeave=PageHost.Content==aliases ? await aliases.ConfirmLeaveAsync() : PageHost.Content!=variables || await variables.ConfirmLeaveAsync();
+        if(versions.IsBusy) {Navigation.SelectedItem=previousNavigation;navigating=false;return;}
+        var canLeave=PageHost.Content==aliases ? await aliases.ConfirmLeaveAsync() : PageHost.Content==versions ? await versions.ConfirmLeaveAsync() : PageHost.Content!=variables || await variables.ConfirmLeaveAsync();
         if(!canLeave) { Navigation.SelectedItem=previousNavigation; navigating=false; return; }
         Navigation.SelectedItem=item;
         previousNavigation=item;
@@ -79,10 +81,11 @@ public partial class MainWindow : Window
     private async void HandleAppLink(object? sender,AppLinkEventArgs e)
     {
         e.Handled=true;
-        if(healthWorking) return;
+        if(healthWorking || versions.IsBusy) return;
         if(AppPageLink.Parse(e.Target) is {} route)
         {
             if(PageHost.Content==aliases && !await aliases.ConfirmLeaveAsync()) return;
+            if(PageHost.Content==versions && !await versions.ConfirmLeaveAsync()) return;
             if(route.Page=="variables" && route.Scope is {} scope && route.Name is {} name)
             {
                 if(!await variables.NavigateToVariableAsync(scope,name)) return;
@@ -127,14 +130,17 @@ public partial class MainWindow : Window
     }
     private async void CheckWorkspace(object? sender,EventArgs e)
     {
-        if(checking || monitorApplying || healthWorking || aliases.IsBusy || variables.IsBusy) return;
+        if(checking || monitorApplying || healthWorking || aliases.IsBusy || variables.IsBusy || versions.IsBusy) return;
         checking=true;
         try
         {
+            var registryChanged=pendingRegistrySnapshot is not null;
             if(pendingRegistrySnapshot is {} pending && await variables.ObserveRegistryAsync(pending) && ReferenceEquals(pendingRegistrySnapshot,pending)) pendingRegistrySnapshot=null;
             var stamp=System.IO.File.Exists(store.FilePath) ? System.IO.File.GetLastWriteTimeUtc(store.FilePath) : DateTime.MinValue;
+            if(versions.IsLoaded && (registryChanged || stamp!=lastWrite)) await versions.ReloadAsync();
             if(stamp==lastWrite) return;
             var state=await Task.Run(store.Read); monitor.Update(state);
+            if(about.IsLoaded) about.Update(state);
             ShowMonitorNotification(state);
             if(state.MonitoringEnabled && state.AutoArrangeMachinePath && (EnvironmentEditHost.IsAdministrator || EnvironmentEditHost.IsAuthorized) && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine && !attemptedMonitorPlans.Contains(item.Id)))
             {await ApplyPendingMonitoringAsync(automatic:true);return;}
@@ -196,8 +202,10 @@ public partial class MainWindow : Window
     }
     private async void OnClosing(object? sender,CancelEventArgs e)
     {
-        if(healthWorking || monitorApplying) {e.Cancel=true;return;}
+        if(healthWorking || monitorApplying || versions.IsBusy) {e.Cancel=true;return;}
         if(closingApproved) return;
+        if(versions.HasInlineEditor)
+        {e.Cancel=true;if(await versions.ConfirmLeaveAsync()) {closingApproved=true;Close();}return;}
         if(aliases.HasInlineEditor)
         {e.Cancel=true;if(await aliases.ConfirmLeaveAsync()) {closingApproved=true;Close();}return;}
         if(aliases.IsBusy) {e.Cancel=true;return;}

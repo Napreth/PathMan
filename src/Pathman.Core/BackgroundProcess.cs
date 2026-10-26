@@ -39,8 +39,7 @@ public sealed class BackgroundProcess(PathmanLayout layout)
         if (!File.Exists(layout.BackgroundExecutable))
             throw new FileNotFoundException("后台程序不存在。", layout.BackgroundExecutable);
         using var ready = new EventWaitHandle(false, EventResetMode.ManualReset, ReadyEventName);
-        // Shell activation detaches the background process from redirected CLI pipes.
-        // Otherwise `pathman background start | ...` can wait until the background exits.
+        // Shell activation keeps the background process independent of its launcher.
         var start = new ProcessStartInfo(layout.BackgroundExecutable)
         {
             UseShellExecute = true,

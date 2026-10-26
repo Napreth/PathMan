@@ -3,7 +3,8 @@ param([string]$ResultPath='C:\PathManFeaturesTest\file-associations.json')
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine'){throw 'Use only the disposable Windows VM and restore its initial checkpoint.'}
 $root=Join-Path 'C:\PathManFeaturesTest' ('associated-files-'+[guid]::NewGuid().ToString('N'))
-$data=Join-Path $root 'data';$cli='C:\PathManTestApp\bin\pathman.exe'
+$data=Join-Path $root 'data'
+. (Join-Path $PSScriptRoot 'shim-fixtures.ps1')
 $id=[guid]::NewGuid().ToString('N');$extension='.pathman-'+$id;$class='PathManTest.'+$id
 $checks=[Collections.Generic.List[string]]::new()
 function Assert($condition,[string]$message){if(!$condition){throw $message};$checks.Add($message)}
@@ -12,7 +13,7 @@ function Run([string]$exe,[string[]]$arguments){
  $process=Start-Process @start;$null=$process.Handle
  try{if(!$process.WaitForExit(20000)){Stop-Process -Id $process.Id -Force;throw 'Associated target timed out'};$process.ExitCode}finally{$process.Dispose()}
 }
-function Alias([string]$name,[string]$target){& $cli --data-root $data shim add $name $target|Out-Null;if($LASTEXITCODE -ne 0){throw 'Could not add target alias'};Join-Path $data ('shims\'+$name+'.exe')}
+function Alias([string]$name,[string]$target){New-TestShim 'C:\PathManTestApp' $data $name $target}
 try{
  New-Item -ItemType Directory -Path $root -Force|Out-Null
  foreach($suffix in '.cmd','.bat'){

@@ -3,6 +3,7 @@ param([Parameter(Mandatory)][string]$Installer, [string]$InstallDirectory='C:\Pa
 # Run only in the disposable test VM: this installs into HKCU and tests ownership/version checks.
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine') { throw 'Run maintenance tests only in the disposable Windows VM.' }
+. (Join-Path $PSScriptRoot 'shim-fixtures.ps1')
 $checks=[Collections.Generic.List[string]]::new()
 function Assert($condition,[string]$message) { if(!$condition) { throw $message }; $checks.Add($message) }
 function Install([int]$expected=0,[string]$directory=$InstallDirectory) {
@@ -66,9 +67,10 @@ try {
     $detached=Join-Path $env:TEMP 'PathMan-detached-cli'
     New-Item -ItemType Directory -Path $detached -Force|Out-Null
     Copy-Item $cli (Join-Path $detached 'pathman.exe') -Force
-    $layout=& (Join-Path $detached 'pathman.exe') layout
-    Assert ($LASTEXITCODE -eq 0 -and ($layout -join "`n").Contains($InstallDirectory)) 'A relocated CLI discovers InstallLocation from the uninstall registration'
-    & $cli shim add pm-registry-self $env:ComSpec | Out-Null
+    $help=& (Join-Path $detached 'pathman.exe') --help
+    Assert ($LASTEXITCODE -eq 0 -and ($help -join "`n").Contains('pathman switch') -and !($help -join "`n").Contains('pathman shim')) 'A relocated CLI exposes version management only'
+    $userData=Join-Path $env:LOCALAPPDATA 'PathMan'
+    $null=New-TestShim $InstallDirectory $userData 'pm-registry-self' $env:ComSpec
     $manifest=Join-Path $env:LOCALAPPDATA 'PathMan\shims\pm-registry-self.shim'
     $original=Join-Path $InstallDirectory 'internal\PathMan.Shim.exe'
     [IO.File]::WriteAllText($manifest,"[PathMan.Shim]`r`nFormat=1`r`nTarget=$original`r`n",[Text.Encoding]::Unicode)
@@ -76,29 +78,29 @@ try {
     $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.RedirectStandardError=$true
     $self=[Diagnostics.Process]::Start($start)
     try { $null=$self.StandardError.ReadToEnd(); $self.WaitForExit(); Assert ($self.ExitCode -eq 1059) 'A copied shim resolves its original through uninstall information and rejects it as a target' }
-    finally { $self.Dispose(); & $cli shim remove pm-registry-self|Out-Null }
+    finally { $self.Dispose(); Remove-TestShim $userData 'pm-registry-self' }
     $workspace=Get-Content $data -Raw|ConvertFrom-Json
     $workspace.monitoringEnabled=$true
     $workspace|Add-Member -NotePropertyName trackChangeOrigins -NotePropertyValue $false -Force
     $workspace|ConvertTo-Json -Depth 30|Set-Content $data -Encoding UTF8
-    & $cli startup enable | Out-Null
-    if($LASTEXITCODE -ne 0) {throw 'Could not enable login startup for the background maintenance fixture.'}
-    & $cli background start | Out-Null
-    if($LASTEXITCODE -ne 0) {throw 'Could not start background with both required switches enabled.'}
+    $run=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
+    try{$run.SetValue('PathMan',('"'+(Join-Path $InstallDirectory 'internal\PathMan.Service.exe')+'"'))}finally{$run.Dispose()}
+    $backgroundFixture=Start-Process (Join-Path $InstallDirectory 'internal\PathMan.Service.exe') -PassThru -WindowStyle Hidden
+    Start-Sleep -Seconds 2
     try {
         Install 1602
         $currentSession=(Get-Process -Id $PID).SessionId
         $running=@(Get-Process PathMan.Service -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $InstallDirectory 'internal\PathMan.Service.exe') -and $_.SessionId -eq $currentSession })
         Assert ($running.Count -eq 1) 'Silent maintenance preserves a running background process'
-    } finally { & $cli background stop | Out-Null }
-    & $cli shim add pm-maintenance-lock $env:ComSpec | Out-Null
+    } finally {Stop-TestBackground $InstallDirectory;$null=$backgroundFixture.WaitForExit(10000);$backgroundFixture.Dispose()}
+    $null=New-TestShim $InstallDirectory $userData 'pm-maintenance-lock' $env:ComSpec
     $alias=Join-Path $env:LOCALAPPDATA 'PathMan\shims\pm-maintenance-lock.exe'
     $command=Start-Process $alias -ArgumentList '/d /c ping -n 12 127.0.0.1 >nul' -PassThru -WindowStyle Hidden
     try {
         Start-Sleep -Milliseconds 300; Install 1602
         Assert (!$command.HasExited) 'A running hard-link alias is detected under its own executable name'
         Assert ($command.WaitForExit(20000)) 'The alias command finishes normally after installer cancellation'
-    } finally { $command.Dispose(); & $cli shim remove pm-maintenance-lock | Out-Null }
+    } finally { $command.Dispose();Remove-TestShim $userData 'pm-maintenance-lock' }
     Install 87 ($InstallDirectory+'-different')
     Assert (!(Test-Path ($InstallDirectory+'-different\PathMan.exe'))) 'Upgrade cannot silently change its owned directory'
     @{Passed=$true;Checks=$checks} | ConvertTo-Json -Depth 5

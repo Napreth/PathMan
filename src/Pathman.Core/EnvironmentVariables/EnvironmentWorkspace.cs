@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Pathman.Core.Models;
+using Pathman.Core.Versions;
 
 namespace Pathman.Core.EnvironmentVariables;
 
@@ -23,6 +24,8 @@ public sealed record VariableChange(DateTime Time, VariableScope Scope, string N
 
 public sealed class EnvironmentWorkspace
 {
+    public List<VersionProject> VersionProjects {get;set;}=[];
+    public bool AllowBuiltInVersionTargets {get;set;}
     public List<VariableGroupDefinition> Groups { get; set; } = [];
     public Dictionary<string, string> Assignments { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<VariableScope, List<string>> GroupOrder { get; set; } = [];
@@ -158,6 +161,8 @@ public sealed class EnvironmentWorkspaceStore
     {
         var state = File.Exists(FilePath) ? JsonSerializer.Deserialize<EnvironmentWorkspace>(File.ReadAllText(FilePath), JsonOptions)
             ?? throw new InvalidDataException("环境变量配置为空。") : ReadDefault<EnvironmentWorkspace>("groups");
+        foreach(var project in state.VersionProjects) project.Versions=new(project.Versions,StringComparer.OrdinalIgnoreCase);
+        VersionCatalog.Validate(state.VersionProjects);
         state.Assignments = new(state.Assignments, StringComparer.OrdinalIgnoreCase);
         state.ExternalVariables = new(state.ExternalVariables, StringComparer.OrdinalIgnoreCase);
         if(state.LegacyAutoArrangePath is {} enabled)

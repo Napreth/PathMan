@@ -21,6 +21,7 @@ foreach(var (name,raw,list,entries) in cases)
 PathCleanupTests.Run(Assert);
 MonitoringTests.Run(Assert);
 LiveMonitoringTests.Run(Assert);
+VersionManagementTests.Run(Assert);
 RecursivePathsTests.Run(Assert);
     HealthActionsTests.Run(Assert);
     AliasAndHealthTests.Run(Assert);

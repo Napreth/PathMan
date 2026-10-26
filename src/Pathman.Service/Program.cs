@@ -1,9 +1,16 @@
 using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
+using Pathman.Core.Shims;
 using Pathman.Service;
 
 // A normal user-session background process, with no SCM registration or elevation.
 if(args.FirstOrDefault()=="--registry-origin-worker") return RegistryOriginTracker.RunWorker(args);
+// Installer maintenance is independent of the user's background monitoring switches.
+if(args is ["--installer-refresh-shims",var dataDirectory])
+{
+    try {new ShimManager(PathmanLayout.Discover(dataDirectory),ensureUserPath:false).Refresh();return 0;}
+    catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) {return 1;}
+}
 if (args.Length != 0 && (args.Length != 2 || args[0] != "--data-root")) return 2;
 var layout = PathmanLayout.Discover(args.Length == 2 ? args[1] : null);
 var background = new BackgroundProcess(layout);

@@ -113,7 +113,6 @@ public partial class VariablesView : UserControl
     {
         updating=true;
         if(temporaryCleanup && temporaryCleanupKey!=node?.Key) {temporaryCleanup=false;temporaryCleanupKey=null;TemporaryCleanupButton.IsChecked=false;}
-        reviewIncoming=false;
         if (selected!=node && selected is not null) selected.IsSelected=false;
         selected=node; if(node is not null) node.IsSelected=true;
         VariableTitle.Text=node?.Title ?? "环境变量";
@@ -163,6 +162,7 @@ public partial class VariablesView : UserControl
         UndoExternalButton.IsEnabled=editingSession?.HasExternalChanges==true && !busy;
         CleanExternalButton.IsEnabled=editingSession?.HasExternalChanges==true && CanCleanSelected && !busy;
         TemporaryCleanupButton.IsEnabled=CanCleanSelected && !busy;
+        ExternalActions.Visibility=editingSession?.IsReviewMode==true ? Visibility.Visible : Visibility.Collapsed;
         var current=SelectedPathItem();
         MoveUpButton.IsEnabled=current is {} up && up.Index>0 && !busy;
         MoveDownButton.IsEnabled=current is {} down && down.Index<down.Count-1 && !busy;

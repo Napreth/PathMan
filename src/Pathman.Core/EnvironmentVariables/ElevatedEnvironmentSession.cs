@@ -12,12 +12,12 @@ using System.Text.Json;
 using Microsoft.Win32.SafeHandles;
 using Pathman.Core.EnvironmentVariables;
 
-namespace Pathman.Gui;
+namespace Pathman.Core.EnvironmentVariables;
 
 internal sealed record EnvironmentSessionRequest(EnvironmentMutation[] Mutations,VariableSnapshot[] Preconditions);
 internal sealed record EnvironmentSessionResult(string? Error);
-internal sealed class EnvironmentOperationException(string message) : IOException(message);
-internal sealed class ElevatedEnvironmentSession : IDisposable
+public sealed class EnvironmentOperationException(string message) : IOException(message);
+public sealed class ElevatedEnvironmentSession : IDisposable
 {
     private readonly NamedPipeServerStream pipe;
     private readonly Process worker;
@@ -72,7 +72,8 @@ internal sealed class ElevatedEnvironmentSession : IDisposable
     {
         try
         {
-            if(arguments.Length!=5 || !int.TryParse(arguments[1],out var parentId) || !long.TryParse(arguments[2],out var startTicks) || !arguments[3].StartsWith("PathMan.Environment.",StringComparison.Ordinal) || arguments[3].Length>100 || arguments[4].Length!=44 || !EnvironmentEditHost.IsAdministrator) return 1;
+            using var identity=WindowsIdentity.GetCurrent();
+            if(arguments.Length!=5 || !int.TryParse(arguments[1],out var parentId) || !long.TryParse(arguments[2],out var startTicks) || !arguments[3].StartsWith("PathMan.Environment.",StringComparison.Ordinal) || arguments[3].Length>100 || arguments[4].Length!=44 || !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) return 1;
             using var parent=Process.GetProcessById(parentId);
             if(parent.StartTime.ToUniversalTime().Ticks!=startTicks || !ImagePath(parent).Equals(Environment.ProcessPath,StringComparison.OrdinalIgnoreCase)) return 1;
             using var client=new NamedPipeClientStream(".",arguments[3],PipeDirection.InOut,PipeOptions.Asynchronous,TokenImpersonationLevel.Identification);

@@ -17,6 +17,7 @@ public sealed class InlineEditRegionEventArgs(bool isDetail) : EventArgs {public
 public partial class EditableRow : UserControl
 {
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(nameof(Text), typeof(string), typeof(EditableRow), new PropertyMetadata(""));
+    public static readonly DependencyProperty EmptyPlaceholderProperty=DependencyProperty.Register(nameof(EmptyPlaceholder),typeof(string),typeof(EditableRow),new PropertyMetadata("（空条目）"));
     public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(nameof(Detail), typeof(string), typeof(EditableRow), new PropertyMetadata("", UpdateDetail));
     public static readonly DependencyProperty NameWidthProperty=DependencyProperty.Register(nameof(NameWidth),typeof(double),typeof(EditableRow),new PropertyMetadata(double.NaN,UpdateDetail));
     public static readonly DependencyProperty CanEditProperty=DependencyProperty.Register(nameof(CanEdit),typeof(bool),typeof(EditableRow),new PropertyMetadata(true));
@@ -32,6 +33,7 @@ public partial class EditableRow : UserControl
     public static readonly DependencyProperty ShowJumpProperty = DependencyProperty.Register(nameof(ShowJump), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdateActions));
     public static readonly DependencyProperty JumpToolTipProperty = DependencyProperty.Register(nameof(JumpToolTip), typeof(string), typeof(EditableRow), new PropertyMetadata("转到引用变量"));
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
+    public string EmptyPlaceholder {get=>(string)GetValue(EmptyPlaceholderProperty);set=>SetValue(EmptyPlaceholderProperty,value);}
     public string Detail { get => (string)GetValue(DetailProperty); set => SetValue(DetailProperty, value); }
     public double NameWidth {get=>(double)GetValue(NameWidthProperty);set=>SetValue(NameWidthProperty,value);}
     public bool CanEdit {get=>(bool)GetValue(CanEditProperty);set=>SetValue(CanEditProperty,value);}
@@ -52,7 +54,7 @@ public partial class EditableRow : UserControl
     public string EditingValue {get=>Input.Text;set=>Input.Text=value;}
     public bool IsInputTarget(DependencyObject? source)=>FindParent<TextBox>(source)==Input;
     public void FocusEditor() {if(IsEditing) Input.Focus();}
-    private bool inputChanged,editingDetail;
+    private bool inputChanged,editingDetail,pendingDoubleClick;
     private Task<bool>? pending;
     public event EventHandler<InlineEditEventArgs>? EditRequested;
     public event EventHandler? DeleteRequested;
@@ -145,6 +147,12 @@ public partial class EditableRow : UserControl
     private void Jump(object sender, RoutedEventArgs e) { e.Handled = true; JumpRequested?.Invoke(this, EventArgs.Empty); }
     private void SingleClick(object sender,MouseButtonEventArgs e)
     {
+        if(pendingDoubleClick)
+        {
+            pendingDoubleClick=false;
+            if(CanEdit && IsEnabled && !IsEditing) RegionEditRequested?.Invoke(this,new(e.GetPosition(Label).X>=NameColumn.ActualWidth));
+            return;
+        }
         if(!EditOnSingleClick || !CanEdit || !IsEnabled || FindParent<Button>(e.OriginalSource as DependencyObject) is not null || FindParent<TextBox>(e.OriginalSource as DependencyObject) is not null) return;
         var detail=e.GetPosition(Label).X>=NameColumn.ActualWidth;
         if(IsEditing && detail==editingDetail) {Input.Focus();return;}
@@ -154,7 +162,13 @@ public partial class EditableRow : UserControl
     {
         if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing || !CanEdit) return;
         e.Handled = true;
-        if (EditOnDoubleClick) BeginEdit(); else Activated?.Invoke(this, EventArgs.Empty);
+        if (EditOnDoubleClick)
+        {
+            // Begin after mouse-up, once the list item has finished taking focus.
+            if(SeparateEditors && RegionEditRequested is not null) pendingDoubleClick=true;
+            else BeginEdit();
+        }
+        else Activated?.Invoke(this, EventArgs.Empty);
     }
     private void RowKeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.F2 && !IsEditing && CanEdit) { e.Handled = true; BeginEdit(); } }
     private async void InputKeyDown(object sender, KeyEventArgs e)

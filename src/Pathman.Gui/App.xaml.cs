@@ -1,4 +1,5 @@
 using System.Windows;
+using Pathman.Core.EnvironmentVariables;
 namespace Pathman.Gui;
 public partial class App : Application
 {

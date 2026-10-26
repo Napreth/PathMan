@@ -30,6 +30,7 @@ function SelectNode($element){$element.GetCurrentPattern([Windows.Automation.Sel
 function Go([string]$name){SelectNode (Find (Id 'Navigation') $name ([Windows.Automation.ControlType]::ListItem))}
 function Toggle([string]$name){WaitFor {$null -ne (Id $name) -and (Id $name).Current.IsEnabled} ('Toggle is not enabled: '+$name);(Id $name).GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Toggle();Start-Sleep -Milliseconds 250}
 function Checked([string]$name){(Id $name).GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -eq [Windows.Automation.ToggleState]::On}
+function Visible([string]$name){$element=Id $name;$null -ne $element -and !$element.Current.IsOffscreen}
 function Key([byte]$code){[LiveInput]::keybd_event($code,0,0,[UIntPtr]::Zero);[LiveInput]::keybd_event($code,0,2,[UIntPtr]::Zero);Start-Sleep -Milliseconds 180}
 function Input{Find $window '行内编辑' ([Windows.Automation.ControlType]::Edit)}
 function Node([string]$name){Find (Id 'UserVariablesTree') $name ([Windows.Automation.ControlType]::TreeItem)}
@@ -56,6 +57,12 @@ try{
  WaitFor {$null -eq (Startup)} 'A startup registration without background permission was not removed'
  Assert (!(State).monitoringEnabled -and !(Get-Process PathMan.Service -ErrorAction SilentlyContinue)) 'Foreground observation does not start the background'
  SelectNode (Node 'PATHMAN_LIVE_PATH')
+ Assert (!(Visible 'UndoExternalButton') -and !(Visible 'TemporaryCleanupButton')) 'External actions are hidden when no edit is in progress'
+ SetUser 'PATHMAN_LIVE_PATH' 'C:\Live\Fresh;C:\Live\Two'
+ WaitFor {$null -ne (Row 'C:\Live\Fresh')} 'An idle variable did not update immediately'
+ Assert (!(Visible 'UndoExternalButton') -and $null -eq (Row '+C:\Live\Fresh')) 'Idle external changes update directly without a diff or external actions'
+ SetUser 'PATHMAN_LIVE_PATH' 'C:\Live\One;C:\Live\Two'
+ WaitFor {$null -ne (Row 'C:\Live\One')} 'Idle fixture reset did not arrive'
  EditRow 'C:\Live\Two' 'D:\Live\Mine'
  SetUser 'PATHMAN_LIVE_PATH' 'X:\Live\Incoming;C:\Live\Two;E:\Live\External'
  WaitFor {$null -ne (Row '+E:\Live\External') -and $null -ne (Row '+D:\Live\Mine')} 'Live external/local diff did not appear'
@@ -66,14 +73,15 @@ try{
  Invoke (Id 'UndoExternalButton');Save
  Assert ((Raw 'PATHMAN_LIVE_PATH') -eq 'C:\Live\One;D:\Live\Mine') 'Reverting external changes and saving retains the user draft'
  SelectNode (Node 'Path')
- Toggle 'TemporaryCleanupButton'
  EditRow 'C:\Live\Base' 'C:\Live\UserMine'
  SetUser 'Path' 'C:\Live\Base;C:\Live\Keep;F:\Live\External;C:\Live\Keep'
+ WaitFor {$null -ne (Row '+F:\Live\External')} 'An edited variable did not enter diff mode'
+ Toggle 'TemporaryCleanupButton'
  WaitFor {$null -ne (Row '+%EXTERNEL_USER_PATH%')} 'Temporary external cleanup did not stage a reference'
  Assert ((Raw 'Path') -eq 'C:\Live\Base;C:\Live\Keep;F:\Live\External;C:\Live\Keep' -and $null -eq (Raw 'EXTERNEL_USER_PATH')) 'Temporary cleanup modifies only the draft until Save'
+ Toggle 'TemporaryCleanupButton'
  Save
  Assert ((Raw 'Path') -eq 'C:\Live\UserMine;C:\Live\Keep;%EXTERNEL_USER_PATH%' -and (Raw 'EXTERNEL_USER_PATH') -eq 'F:\Live\External') 'Temporary cleanup saves the user edit and only the external additions'
- Toggle 'TemporaryCleanupButton'
  EditRow 'C:\Live\UserMine' 'C:\Live\SecondMine'
  SetUser 'Path' ((Raw 'Path')+';G:\Live\Manual;C:\Live\Keep')
  WaitFor {$null -ne (Row '+G:\Live\Manual')} 'Second external edit was not observed'
