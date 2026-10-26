@@ -3,8 +3,10 @@
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
     <AssemblyName>PathMan</AssemblyName>
+    <ApplicationIcon>Assets/PathMan.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets/PathMan.ico" />
     <ProjectReference Include="../Pathman.Core/Pathman.Core.csproj" />
   </ItemGroup>
 </Project>

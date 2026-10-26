@@ -98,7 +98,7 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
             var executable = Path.Combine(layout.ShimsDirectory, alias.Name + ".exe");
             var temporary = Path.Combine(layout.ShimsDirectory, Guid.NewGuid() + ".tmp");
             CreateLink(temporary);
-            try { File.Move(temporary, executable, overwrite: true); }
+            try { ShimFiles.Replace(temporary, executable); }
             finally { File.Delete(temporary); }
         }
         if (aliases.Count > 0 && ensureUserPath) EnsureUserShimsPath();
@@ -145,9 +145,9 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
             }
             if (!current)
             {
-                // Replace the cache atomically; running aliases may still use the old file.
+                // Move the mapped cache aside before publishing its replacement.
                 var temporary = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                try { File.Copy(layout.ShimExecutable, temporary); File.Move(temporary, cached, overwrite: true); }
+                try { File.Copy(layout.ShimExecutable, temporary); ShimFiles.Replace(temporary, cached); }
                 finally { File.Delete(temporary); }
             }
             if (CreateHardLink(executable, cached, IntPtr.Zero)) return;

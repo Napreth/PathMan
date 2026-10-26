@@ -1,4 +1,11 @@
 # Fixture helpers for disposable-VM tests; these are not application command-line entries.
+function Read-TestWorkspace([string]$DataFile) {
+ if(Test-Path $DataFile){return Get-Content $DataFile -Raw -Encoding UTF8|ConvertFrom-Json}
+ $defaults=Join-Path $PSScriptRoot 'groups.json'
+ if(!(Test-Path $defaults)){$defaults=Join-Path $PSScriptRoot '../src/Pathman.Core/EnvironmentVariables/Defaults/groups.json'}
+ New-Item -ItemType Directory -Path (Split-Path $DataFile) -Force|Out-Null
+ Get-Content $defaults -Raw -Encoding UTF8|ConvertFrom-Json
+}
 function New-TestShim([string]$Installation,[string]$DataDirectory,[string]$Name,[string]$Target) {
  if([IO.Path]::GetFileName($Name) -ne $Name -or $Name -in '.','..'){throw 'Invalid fixture name'}
  $directory=Join-Path $DataDirectory 'shims';New-Item -ItemType Directory -Path $directory -Force|Out-Null

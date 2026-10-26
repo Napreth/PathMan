@@ -5,6 +5,7 @@ $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine') { throw 'Run maintenance tests only in the disposable Windows VM.' }
 . (Join-Path $PSScriptRoot 'shim-fixtures.ps1')
 $checks=[Collections.Generic.List[string]]::new()
+Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
 function Assert($condition,[string]$message) { if(!$condition) { throw $message }; $checks.Add($message) }
 function Install([int]$expected=0,[string]$directory=$InstallDirectory) {
     $process=Start-Process -FilePath $Installer -ArgumentList "/S /CurrentUser /LANG=1033 /D=$directory" -PassThru -Wait -WindowStyle Hidden
@@ -21,8 +22,9 @@ function HasShimPath {
 function CheckSetupMutex {
     $wizard=Start-Process -FilePath $Installer -ArgumentList '/CurrentUser /LANG=1033' -PassThru
     try {
-        for($i=0;$i -lt 100;$i++) { $wizard.Refresh(); if($wizard.MainWindowHandle -ne 0 -or $wizard.HasExited){break}; Start-Sleep -Milliseconds 100 }
-        Assert (!$wizard.HasExited -and $wizard.MainWindowHandle -ne 0) 'The first installer reaches its wizard before copying files'
+        $condition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty,$wizard.Id)
+        for($i=0;$i -lt 600;$i++) { $window=@([Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,$condition)|Where-Object {$_.Current.Name.Trim() -eq 'PathMan Setup'});if($window.Count -gt 0 -or $wizard.HasExited){break};Start-Sleep -Milliseconds 100 }
+        Assert (!$wizard.HasExited -and $window) 'The first installer reaches its wizard before copying files'
         Install 1618
         if($OtherInstaller) {
             $second=Start-Process $OtherInstaller -ArgumentList '/S /CurrentUser /LANG=1033' -PassThru -Wait -WindowStyle Hidden
@@ -79,8 +81,8 @@ try {
     $self=[Diagnostics.Process]::Start($start)
     try { $null=$self.StandardError.ReadToEnd(); $self.WaitForExit(); Assert ($self.ExitCode -eq 1059) 'A copied shim resolves its original through uninstall information and rejects it as a target' }
     finally { $self.Dispose(); Remove-TestShim $userData 'pm-registry-self' }
-    $workspace=Get-Content $data -Raw|ConvertFrom-Json
-    $workspace.monitoringEnabled=$true
+    $workspace=Read-TestWorkspace $data
+    $workspace|Add-Member -NotePropertyName monitoringEnabled -NotePropertyValue $true -Force
     $workspace|Add-Member -NotePropertyName trackChangeOrigins -NotePropertyValue $false -Force
     $workspace|ConvertTo-Json -Depth 30|Set-Content $data -Encoding UTF8
     $run=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
@@ -95,12 +97,12 @@ try {
     } finally {Stop-TestBackground $InstallDirectory;$null=$backgroundFixture.WaitForExit(10000);$backgroundFixture.Dispose()}
     $null=New-TestShim $InstallDirectory $userData 'pm-maintenance-lock' $env:ComSpec
     $alias=Join-Path $env:LOCALAPPDATA 'PathMan\shims\pm-maintenance-lock.exe'
-    $command=Start-Process $alias -ArgumentList '/d /c ping -n 12 127.0.0.1 >nul' -PassThru -WindowStyle Hidden
+    $command=Start-Process $alias -ArgumentList '/d /c "ping -n 41 127.0.0.1 >nul & exit /b 23"' -PassThru -WindowStyle Hidden
     try {
-        Start-Sleep -Milliseconds 300; Install 1602
-        Assert (!$command.HasExited) 'A running hard-link alias is detected under its own executable name'
-        Assert ($command.WaitForExit(20000)) 'The alias command finishes normally after installer cancellation'
-    } finally { $command.Dispose();Remove-TestShim $userData 'pm-maintenance-lock' }
+        Start-Sleep -Milliseconds 300; Install
+        Assert (!$command.HasExited) 'A running alias does not block reinstallation and is left running'
+        Assert ($command.WaitForExit(50000) -and $command.ExitCode -eq 23) 'The old shim finishes normally and forwards the target exit code after reinstallation'
+    } finally { if(!$command.HasExited){$command.Kill()};$command.Dispose();Remove-TestShim $userData 'pm-maintenance-lock' }
     Install 87 ($InstallDirectory+'-different')
     Assert (!(Test-Path ($InstallDirectory+'-different\PathMan.exe'))) 'Upgrade cannot silently change its owned directory'
     @{Passed=$true;Checks=$checks} | ConvertTo-Json -Depth 5

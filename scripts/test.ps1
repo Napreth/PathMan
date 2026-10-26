@@ -24,6 +24,7 @@ function Invoke-Program([string]$Executable, [string[]]$Arguments, [string]$Inpu
     $start.StandardErrorEncoding = [Text.Encoding]::UTF8
     $start.WorkingDirectory = $testRoot
     $start.Environment['PATHMAN_TEST_SENTINEL'] = 'PathMan-测试'
+    $start.Environment['PATH'] = (Join-Path $testRoot 'search path') + ';' + $env:PATH
     # Use the SDK's runtime for isolated framework-dependent tests, without modifying system registration.
     $sdkRuntime = Split-Path -Parent (Get-Command dotnet).Source
     $start.Environment['DOTNET_ROOT'] = $sdkRuntime
@@ -90,6 +91,16 @@ try {
     Assert ($observed.WorkingDirectory -eq $testRoot) 'Working directory was not inherited.'
     Assert ($observed.Environment -ceq 'PathMan-测试') 'Environment was not inherited.'
     Assert ($observed.StandardInput -ceq "stdin-data`n") 'Redirected stdin was not inherited.'
+    New-Item -ItemType Directory -Path (Join-Path $testRoot 'search path') -Force | Out-Null
+    Copy-Item -LiteralPath $env:ComSpec -Destination (Join-Path $testRoot 'search path/renamed tool.exe')
+    $null=$manager.Add('path-name','renamed tool.exe')
+    $resolved=Invoke-Program (Join-Path $dataRoot 'shims/path-name.exe') @('/d','/c','exit 19')
+    Assert ($resolved.Code -eq 19) "A bare filename must resolve through the caller's PATH, including paths and filenames with spaces: $($resolved.Error)"
+    # A hard link allows identity-based recursion detection after PATH resolution.
+    New-Item -ItemType HardLink -Path (Join-Path $testRoot 'search path/loop.exe') -Target $template | Out-Null
+    $null=$manager.Add('path-loop','loop.exe')
+    $resolved=Invoke-Program (Join-Path $dataRoot 'shims/path-loop.exe') @()
+    Assert ($resolved.Code -eq 1059) 'PATH lookup must not bypass shim recursion protection.'
     Assert-Rejected {$manager.Add($name,$pwsh)}
     foreach ($invalid in @('../escape', 'NUL', 'COM1.txt', 'LPT¹', 'trailing.')) {
         Assert-Rejected {$manager.Add($invalid,$pwsh)}
@@ -110,8 +121,21 @@ try {
     $maintenance = Invoke-Program $layout.BackgroundExecutable @('--installer-refresh-shims',$dataRoot)
     Assert ($maintenance.Code -eq 0) 'Installer shim maintenance must work independently of monitoring preferences.'
     $links = & fsutil hardlink list $alias
-    Assert (($links -join "`n").Contains('internal\PathMan.Shim.exe')) 'Refresh must link aliases to the new template.'
+    Assert (($links -join "`n").Contains('internal\PathMan.Shim.exe')) "Refresh must link aliases to the new template: $($links -join '; ') $($maintenance.Error)"
     Assert (@($manager.List() | Where-Object Name -eq $name).Count -eq 1) 'Alias listing failed.'
+    $active=Start-Process -FilePath $alias -ArgumentList '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 6; exit 29"' -WindowStyle Hidden -PassThru
+    try {
+        Start-Sleep -Milliseconds 500
+        $replacement=$template+'.new'
+        Copy-Item -LiteralPath $template -Destination $replacement
+        [IO.File]::AppendAllText($replacement,'PathMan-live-update')
+        $replace=[Pathman.Core.Shims.ShimManager].Assembly.GetType('Pathman.Core.Shims.ShimFiles').GetMethod('Replace')
+        $null=$replace.Invoke($null,[object[]]@([string]$replacement,[string]$template))
+        $null=$manager.Refresh()
+        Assert (!$active.HasExited) 'Updating and refreshing shims must leave running alias commands alive.'
+        Assert ((Get-FileHash $alias).Hash -eq (Get-FileHash $template).Hash) 'New alias launches must use the updated template.'
+        Assert ($active.WaitForExit(15000) -and $active.ExitCode -eq 29) 'The old shim must finish normally and retain the target exit code.'
+    } finally {if(!$active.HasExited){$active.Kill($true)};$active.Dispose()}
     $manager.Remove($name)
     Assert (!(Test-Path -LiteralPath $alias)) 'Removing an alias left its EXE behind.'
     Assert (!(Test-Path -LiteralPath (Join-Path $dataRoot "shims/$name.shim"))) 'Removing an alias left its manifest behind.'
@@ -140,18 +164,24 @@ try {
         Assert ($links.Count -eq 3 -and ($links -join "`n").Contains('cross-volume-two.exe')) 'Both aliases must share the same cached file.'
         $result = Invoke-Program $crossAlias (@('-NoProfile', '-NonInteractive', '-File', $probe) + $samples) "stdin-data`n"
         Assert ($result.Code -eq 37 -and (($result.Out|ConvertFrom-Json).Arguments|ConvertTo-Json -Compress) -ceq ($samples|ConvertTo-Json -Compress)) 'Copied shims must preserve arguments and exit codes.'
+        $activeCross=Start-Process -FilePath $crossAlias -ArgumentList '-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 6; exit 27"' -WindowStyle Hidden -PassThru
+        Start-Sleep -Milliseconds 500
         $updatedTemplate=$template+'.updated'
         Copy-Item -LiteralPath $template -Destination $updatedTemplate
         [IO.File]::AppendAllText($updatedTemplate, 'PathMan-test-update')
         Move-Item -LiteralPath $updatedTemplate -Destination $template -Force
-        $refreshed=$crossManager.Refresh()
+        try {
+            $refreshed=$crossManager.Refresh()
+            Assert (!$activeCross.HasExited) 'A cross-volume cache refresh must leave the running alias alive.'
+            Assert ($activeCross.WaitForExit(15000) -and $activeCross.ExitCode -eq 27) 'A retired copied shim must preserve the target exit code.'
+        } finally {if(!$activeCross.HasExited){$activeCross.Kill($true)};$activeCross.Dispose()}
         $cachedHash=(Get-FileHash $cached).Hash; $templateHash=(Get-FileHash $template).Hash
         Assert ($refreshed -eq 2 -and $cachedHash -eq $templateHash) "Refresh must update a changed cached template. Count=$refreshed; cached=$cachedHash; template=$templateHash"
         Assert (@(& fsutil hardlink list $crossAlias).Count -eq 3) 'Refresh must relink both aliases to the updated copy.'
         $result = Invoke-Program $crossAlias @('-NoProfile', '-NonInteractive', '-Command', 'exit 23')
         Assert ($result.Code -eq 23) 'A refreshed copied shim must remain executable.'
     }
-    Write-Host 'PASS: version-only CLI, rejected legacy commands, direct Core alias APIs, arguments, stdio, exit codes, installer maintenance, disabled background and cross-volume cache updates.'
+    Write-Host 'PASS: version-only CLI, direct Core alias APIs, PATH filename lookup, recursion guards, arguments, stdio, exit codes, live same/cross-volume shim replacement, installer maintenance and disabled background.'
 }
 finally {
     if ($background) {$background.Stop()}

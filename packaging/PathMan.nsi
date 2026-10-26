@@ -6,6 +6,8 @@ ManifestSupportedOS all
 !include FileFunc.nsh
 !include x64.nsh
 !include WordFunc.nsh
+!define MUI_ICON "${__FILEDIR__}\..\src\Pathman.Gui\Assets\PathMan.ico"
+!define MUI_UNICON "${MUI_ICON}"
 !define APPKEY "Software\PathMan"
 !define UNINSTALLKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\PathMan"
 
@@ -51,7 +53,13 @@ Var SetupMutex
 Var RestartBackground
 Var Worker
 Var WorkerConfig
+Var ApplicationsApproved
+Var ApplicationsDialog
+Var ApplicationsStatus
+Var WaitingApplications
 
+!define MUI_CUSTOMFUNCTION_ABORT RestoreBackground
+!define MUI_CUSTOMFUNCTION_UNABORT un.RestoreBackground
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_PRE ScopePre
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_SHOW ScopeShow
 !define MULTIUSER_PAGE_CUSTOMFUNCTION_LEAVE ScopeLeave
@@ -64,6 +72,7 @@ Var WorkerConfig
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "StartMenuFolder"
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW ReadyShow
 !insertmacro MUI_PAGE_STARTMENU Application $StartMenuFolder
+Page custom ApplicationsPage ApplicationsLeave
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "$(DesktopShortcut)"
@@ -75,6 +84,7 @@ Var WorkerConfig
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishShow
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
+UninstPage custom un.ApplicationsPage un.ApplicationsLeave
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_UNPAGE_FINISH
 !insertmacro MUI_LANGUAGE "English"
@@ -100,18 +110,23 @@ LangString MaintenanceFailed ${LANG_ENGLISH} "PathMan setup could not complete a
 LangString MaintenanceFailed ${LANG_SIMPCHINESE} "安装程序未能完成维护操作（Windows 错误 $0）。请关闭 PathMan 后重试。"
 LangString AlreadyInstalling ${LANG_ENGLISH} "Another PathMan setup is running. Close it and try again."
 LangString AlreadyInstalling ${LANG_SIMPCHINESE} "另一个 PathMan 安装程序正在运行。请关闭后重试。"
-LangString CloseApplications ${LANG_ENGLISH} "PathMan or its background/alias commands are running. Save your work, then click OK to close PathMan and continue. Running alias commands must be closed manually."
-LangString CloseApplications ${LANG_SIMPCHINESE} "PathMan、后台程序或别名命令正在运行。请保存工作，单击“确定”关闭 PathMan 后继续。正在运行的别名命令需手动关闭。"
-LangString ApplicationsStillRunning ${LANG_ENGLISH} "PathMan is still running. Finish or cancel any unsaved edits, close running CLI/alias commands, then click OK to retry. No files have been replaced."
-LangString ApplicationsStillRunning ${LANG_SIMPCHINESE} "PathMan 仍在运行。请处理未保存的更改，关闭 CLI/别名命令，然后单击“确定”重试。程序文件尚未替换。"
 LangString DowngradeBlocked ${LANG_ENGLISH} "A newer version of PathMan ($1) is installed. Uninstall it before installing ${VERSION}. Your user data will be preserved."
 LangString DowngradeBlocked ${LANG_SIMPCHINESE} "已安装更高版本的 PathMan（$1）。请先卸载，再安装 ${VERSION}。用户数据会保留。"
-LangString UpgradeInstall ${LANG_ENGLISH} "Upgrade PathMan from $1 to ${VERSION}? Settings, groups, aliases and the installation folder will be preserved."
-LangString UpgradeInstall ${LANG_SIMPCHINESE} "将 PathMan 从 $1 升级到 ${VERSION}？设置、分组、别名及安装目录会保留。"
-LangString OverwriteInstall ${LANG_ENGLISH} "PathMan ${VERSION} is already installed. Reinstall it using this package (${ARCH}, ${PACKAGE_TYPE})? User data will be preserved."
-LangString OverwriteInstall ${LANG_SIMPCHINESE} "已安装 PathMan ${VERSION}。是否用此安装包（${ARCH}，${PACKAGE_TYPE}）覆盖安装？用户数据会保留。"
 LangString UnownedDirectory ${LANG_ENGLISH} "This folder contains an unregistered PathMan installation. Choose another folder or uninstall the previous copy first."
 LangString UnownedDirectory ${LANG_SIMPCHINESE} "此目录包含未登记的 PathMan 程序。请选择其他目录，或先卸载原有副本。"
+
+LangString ApplicationsTitle ${LANG_ENGLISH} "Close running applications"
+LangString ApplicationsTitle ${LANG_SIMPCHINESE} "关闭正在运行的程序"
+LangString ApplicationsSubtitle ${LANG_ENGLISH} "PathMan needs to close before setup can continue."
+LangString ApplicationsSubtitle ${LANG_SIMPCHINESE} "请先关闭 PathMan，再继续安装。"
+LangString ApplicationsDescription ${LANG_ENGLISH} "Save your work in PathMan. Click Continue to terminate the PathMan window and background program. Any unsaved changes will be lost.$\r$\n$\r$\nSetup waits for CLI commands to finish. Programs launched through aliases can keep running."
+LangString ApplicationsDescription ${LANG_SIMPCHINESE} "请先保存 PathMan 中的工作。单击“继续”将终止主窗口和后台程序，未保存的更改会丢失。$\r$\n$\r$\n安装器会等待命令行任务结束。通过别名启动的程序可以继续运行。"
+LangString ApplicationsContinue ${LANG_ENGLISH} "&Continue"
+LangString ApplicationsContinue ${LANG_SIMPCHINESE} "继续(&C)"
+LangString ApplicationsWaiting ${LANG_ENGLISH} "Waiting for command-line tasks to finish..."
+LangString ApplicationsWaiting ${LANG_SIMPCHINESE} "正在等待命令行任务结束……"
+LangString ApplicationsError ${LANG_ENGLISH} "Unable to close PathMan (Windows error $0). Close it manually, then click Continue to retry."
+LangString ApplicationsError ${LANG_SIMPCHINESE} "无法关闭 PathMan（Windows 错误 $0）。请手动关闭后单击“继续”重试。"
 
 Function GetScope
   StrCpy $Machine 0
@@ -141,6 +156,8 @@ Function ${Prefix}InitializeSetup
   System::Call 'shell32::IsUserAnAdmin() i.r0'
   StrCpy $Elevated $0
   StrCpy $Worker 0
+  StrCpy $ApplicationsApproved 0
+  StrCpy $RestartBackground 0
   ClearErrors
   ${GetOptions} $Parameters "/SetupWorker=" $0
   ${IfNot} ${Errors}
@@ -152,6 +169,7 @@ Function ${Prefix}InitializeSetup
         Quit
       StrCpy $Worker 1
       ${GetOptions} $Parameters "/SetupConfig=" $WorkerConfig
+      ReadINIStr $ApplicationsApproved "$WorkerConfig" "Setup" "ApplicationsApproved"
       ReadINIStr $LANGUAGE "$WorkerConfig" "Setup" "Language"
       ReadINIStr $CommandDirectory "$WorkerConfig" "Setup" "Directory"
       ReadINIStr $StartMenuFolder "$WorkerConfig" "Setup" "StartMenuFolder"
@@ -171,6 +189,7 @@ Function ${Prefix}InitializeSetup
 FunctionEnd
 Function ${Prefix}WriteWorkerConfiguration
   StrCpy $WorkerConfig "$PLUGINSDIR\worker.ini"
+  WriteINIStr "$WorkerConfig" "Setup" "ApplicationsApproved" "$ApplicationsApproved"
   WriteINIStr "$WorkerConfig" "Setup" "Language" "$LANGUAGE"
   WriteINIStr "$WorkerConfig" "Setup" "Directory" "$INSTDIR"
   WriteINIStr "$WorkerConfig" "Setup" "StartMenuFolder" "$StartMenuFolder"
@@ -350,9 +369,10 @@ Function DirectoryLeave
     SetErrorLevel 87
     Abort
   ${EndIf}
+  Call CheckInstalledVersion
 FunctionEnd
 
-Function ConfirmMaintenance
+Function CheckInstalledVersion
   ReadRegStr $OldDirectory SHCTX "${APPKEY}" "InstallDirectory"
   ${If} $OldDirectory == ""
     Return
@@ -366,32 +386,96 @@ Function ConfirmMaintenance
     MessageBox MB_OK|MB_ICONSTOP "$(DowngradeBlocked)" /SD IDOK
     SetErrorLevel 1638
     Abort
-  ${ElseIf} $0 == 0
-    MessageBox MB_OKCANCEL|MB_ICONQUESTION "$(OverwriteInstall)" /SD IDOK IDOK MaintenanceConfirmed
-  ${Else}
-    MessageBox MB_OKCANCEL|MB_ICONQUESTION "$(UpgradeInstall)" /SD IDOK IDOK MaintenanceConfirmed
   ${EndIf}
-  SetErrorLevel 1602
-  Abort
-  MaintenanceConfirmed:
 FunctionEnd
 
 !macro EnsureApplicationsClosed Prefix
+Function ${Prefix}ApplicationsPage
+  StrCpy $ApplicationsApproved 0
+  StrCpy $WaitingApplications 0
+  System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
+  ${If} $0 == 0
+    Abort
+  ${EndIf}
+  System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
+  ${If} $0 == 1
+    StrCpy $RestartBackground 1
+  ${EndIf}
+  !insertmacro MUI_HEADER_TEXT "$(ApplicationsTitle)" "$(ApplicationsSubtitle)"
+  nsDialogs::Create 1018
+  Pop $ApplicationsDialog
+  ${If} $ApplicationsDialog == error
+    Abort
+  ${EndIf}
+  ${NSD_CreateLabel} 0 0 100% 90u "$(ApplicationsDescription)"
+  Pop $0
+  ${NSD_CreateLabel} 0 100u 100% 35u ""
+  Pop $ApplicationsStatus
+  GetDlgItem $1 $HWNDPARENT 1
+  EnableWindow $1 1
+  SendMessage $1 ${WM_SETTEXT} 0 "STR:$(ApplicationsContinue)"
+  ${If} $Machine == 1
+  ${AndIf} $Elevated == 0
+    SendMessage $1 0x160C 0 1
+  ${EndIf}
+  GetFunctionAddress $0 ${Prefix}ApplicationsPoll
+  nsDialogs::CreateTimer $0 500
+  nsDialogs::Show
+  GetFunctionAddress $0 ${Prefix}ApplicationsPoll
+  nsDialogs::KillTimer $0
+FunctionEnd
+Function ${Prefix}ApplicationsPoll
+  ${If} $WaitingApplications == 1
+    System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
+    ${If} $0 == 0
+      StrCpy $WaitingApplications 0
+      GetDlgItem $1 $HWNDPARENT 1
+      EnableWindow $1 1
+      System::Call 'user32::PostMessageW(p r1, i ${BM_CLICK}, p 0, p 0)'
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+Function ${Prefix}ApplicationsLeave
+  StrCpy $ApplicationsApproved 1
+  ${If} $Machine == 1
+  ${AndIf} $Elevated == 0
+    Return ; The authorized silent worker closes elevated processes.
+  ${EndIf}
+  System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
+  ${If} $0 == 170
+    StrCpy $WaitingApplications 1
+    ${NSD_SetText} $ApplicationsStatus "$(ApplicationsWaiting)"
+    GetDlgItem $1 $HWNDPARENT 1
+    EnableWindow $1 0
+    Abort
+  ${ElseIf} $0 != 0
+    ${NSD_SetText} $ApplicationsStatus "$(ApplicationsError)"
+    Abort
+  ${EndIf}
+FunctionEnd
 Function ${Prefix}EnsureApplicationsClosed
   System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
   ${If} $0 == 0
     Return
   ${EndIf}
-  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(CloseApplications)" /SD IDCANCEL IDOK CloseApplicationsTry
-  SetErrorLevel 1602
-  Abort
-  CloseApplicationsTry:
-  System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
-  ${If} $0 == 0
-    Return
+  ; Silent installs require explicit authorization from the visible wizard.
+  ${If} $ApplicationsApproved != 1
+    SetErrorLevel 1602
+    Abort
   ${EndIf}
-  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(ApplicationsStillRunning)" /SD IDCANCEL IDOK CloseApplicationsTry
-  SetErrorLevel 1602
+  StrCpy $2 0
+  ${Do}
+    System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
+    ${If} $0 == 0
+      Return
+    ${EndIf}
+    ${If} $0 != 170
+      ${ExitDo}
+    ${EndIf}
+    Sleep 100
+    IntOp $2 $2 + 1
+  ${LoopWhile} $2 < 300
+  SetErrorLevel 1603
   Abort
 FunctionEnd
 Function ${Prefix}RestoreBackground
@@ -416,11 +500,16 @@ Section "PathMan" Main
   SectionIn RO
   Call DirectoryLeave
   ${If} $Worker == 0
-    Call ConfirmMaintenance
+    Call CheckInstalledVersion
     System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
-    StrCpy $RestartBackground $0
+    ${If} $0 == 1
+      StrCpy $RestartBackground 1
+    ${EndIf}
   ${EndIf}
-  Call EnsureApplicationsClosed
+  ${If} $Machine != 1
+  ${OrIf} $Elevated != 0
+    Call EnsureApplicationsClosed
+  ${EndIf}
   ${If} $Machine == 1
   ${AndIf} $Elevated == 0
     Call WriteWorkerConfiguration
@@ -435,8 +524,16 @@ Section "PathMan" Main
     Goto InstallUserFinalization
   ${EndIf}
   SetOutPath "$INSTDIR"
-  File /r "${PUBLISH_DIR}\*"
+  File /r /x PathMan.Shim.exe "${PUBLISH_DIR}\*"
   SetOutPath "$INSTDIR\internal"
+  File /oname=PathMan.Shim.new.exe "${PUBLISH_DIR}\internal\PathMan.Shim.exe"
+  System::Call '$Helper::ReplaceShim(w "$INSTDIR\internal\PathMan.Shim.new.exe", w "$INSTDIR\internal\PathMan.Shim.exe") i.r0'
+  ${If} $0 != 0
+    Delete "$INSTDIR\internal\PathMan.Shim.new.exe"
+    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+    SetErrorLevel 1603
+    Abort
+  ${EndIf}
   File "${HELPER_DLL}"
   WriteUninstaller "$INSTDIR\internal\Uninstall.exe"
   WriteINIStr "$INSTDIR\internal\install.ini" "PathMan" "Scope" "$MultiUser.InstallMode"
@@ -463,8 +560,8 @@ Section "PathMan" Main
   ${EndIf}
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\PathMan.lnk" "$INSTDIR\PathMan.exe"
-    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\Uninstall PathMan.lnk" "$INSTDIR\internal\Uninstall.exe" "/$MultiUser.InstallMode"
+    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\PathMan.lnk" "$INSTDIR\PathMan.exe" "" "$INSTDIR\PathMan.exe" 0
+    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\Uninstall PathMan.lnk" "$INSTDIR\internal\Uninstall.exe" "/$MultiUser.InstallMode" "$INSTDIR\internal\Uninstall.exe" 0
   !insertmacro MUI_STARTMENU_WRITE_END
   System::Call '$Helper::ConfigureInstall(w "$INSTDIR", i $Machine) i.r0'
   ${If} $0 != 0
@@ -484,7 +581,7 @@ Section "PathMan" Main
 SectionEnd
 
 Function CreateDesktopShortcut
-  CreateShortcut "$OriginalDesktop\PathMan.lnk" "$INSTDIR\PathMan.exe"
+  CreateShortcut "$OriginalDesktop\PathMan.lnk" "$INSTDIR\PathMan.exe" "" "$INSTDIR\PathMan.exe" 0
 FunctionEnd
 Function LaunchPathMan
   ; Explorer launches the desktop app at the desktop user's integrity level.
@@ -527,9 +624,14 @@ FunctionEnd
 Section "Uninstall"
   ${If} $Worker == 0
     System::Call '$Helper::BackgroundRunning(w "$INSTDIR") i.r0'
-    StrCpy $RestartBackground $0
+    ${If} $0 == 1
+      StrCpy $RestartBackground 1
+    ${EndIf}
   ${EndIf}
-  Call un.EnsureApplicationsClosed
+  ${If} $Machine != 1
+  ${OrIf} $Elevated != 0
+    Call un.EnsureApplicationsClosed
+  ${EndIf}
   ${If} $Machine == 1
   ${AndIf} $Elevated == 0
     Call un.WriteWorkerConfiguration
@@ -560,7 +662,7 @@ Section "Uninstall"
   !insertmacro DeleteInstalledFile "LICENSE"
   !insertmacro DeleteInstalledFile "bin\pathman.exe"
   !insertmacro DeleteInstalledFile "internal\PathMan.Service.exe"
-  !insertmacro DeleteInstalledFile "internal\PathMan.Shim.exe"
+  System::Call '$Helper::RemoveShim(w "$INSTDIR") i.r0'
   !insertmacro DeleteInstalledFile "internal\PathMan.SetupActions.dll"
   !insertmacro DeleteInstalledFile "internal\install.ini"
   !insertmacro DeleteInstalledFile "internal\Uninstall.exe"

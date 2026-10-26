@@ -75,6 +75,22 @@ int fail(const wchar_t* message, DWORD code) {
     return code == 0 ? 1 : static_cast<int>(code);
 }
 
+std::wstring resolve_target(const std::wstring& target) {
+    // A name with no directory is searched in the caller's PATH. Keep the
+    // extension literal so scripts and associated files follow the same rule.
+    if (std::filesystem::path(target).is_absolute()) return target;
+    if (target.empty() || target.find_first_of(L"\\/:") != std::wstring::npos) return {};
+    const auto size = GetEnvironmentVariableW(L"PATH", nullptr, 0);
+    if (!size || size > 32768) return {};
+    std::vector<wchar_t> paths(size);
+    if (!GetEnvironmentVariableW(L"PATH", paths.data(), size)) return {};
+    std::vector<wchar_t> resolved(32768);
+    const auto length = SearchPathW(paths.data(), target.c_str(), nullptr,
+                                    static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
+    if (!length || length >= resolved.size()) return {};
+    return {resolved.data(), length};
+}
+
 class console_title {
     std::wstring previous_;
     bool restore_ = false;
@@ -172,8 +188,8 @@ int wmain() {
     if (format == 2) {
         if (!decode_target({buffer.data(), length}, target)) return fail(L"Invalid target", ERROR_INVALID_DATA);
     } else target.assign(buffer.data(), length);
-    if (!std::filesystem::path(target).is_absolute())
-        return fail(L"Target must be an absolute path", ERROR_BAD_PATHNAME);
+    target = resolve_target(target);
+    if (target.empty()) return fail(L"Target file was not found in PATH", ERROR_FILE_NOT_FOUND);
     const auto original = installed_shim();
     if (same_file(executable, target) || (!original.empty() && same_file(original, target)))
         return fail(L"Alias cannot launch a PathMan shim", ERROR_CIRCULAR_DEPENDENCY);

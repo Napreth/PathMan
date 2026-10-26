@@ -16,11 +16,16 @@ function Run([string]$exe,[string[]]$arguments){
 function Alias([string]$name,[string]$target){New-TestShim 'C:\PathManTestApp' $data $name $target}
 try{
  New-Item -ItemType Directory -Path $root -Force|Out-Null
+ $savedPath=$env:PATH;$env:PATH=$root+';'+$env:PATH
+ $alias=Alias 'path-exe' 'powershell.exe';$code=Run $alias @('-NoProfile','-NonInteractive','-Command','exit 31')
+ Assert ($code -eq 31) 'A bare executable name resolves through PATH and returns its exit code'
  foreach($suffix in '.cmd','.bat'){
   $script=Join-Path $root ('batch target'+$suffix);$marker=Join-Path $root ('batch'+$suffix+'.observed')
   [IO.File]::WriteAllText($script,"@echo off`r`n> `"$marker`" echo associated-file-opened`r`nexit /b 39`r`n",[Text.Encoding]::ASCII)
   $alias=Alias ('batch-'+$suffix.Substring(1)) $script;$code=Run $alias @()
   Assert ($code -eq 39 -and (Get-Content $marker -Raw).Trim() -eq 'associated-file-opened') "$suffix opens as an ordinary associated file and returns the launched process exit code (actual $code)"
+  $alias=Alias ('path-'+$suffix.Substring(1)) ([IO.Path]::GetFileName($script));$code=Run $alias @()
+  Assert ($code -eq 39) "$suffix resolves through PATH and opens through its ordinary file association"
  }
  $handler=Join-Path $root 'document-handler.cmd';$marker=Join-Path $root 'document.observed'
  [IO.File]::WriteAllText($handler,"@echo off`r`n> `"$marker`" echo %~1`r`n>> `"$marker`" echo %~2`r`nexit /b 47`r`n",[Text.Encoding]::ASCII)
@@ -30,9 +35,12 @@ try{
  $document=Join-Path $root ('ordinary document'+$extension);[IO.File]::WriteAllText($document,'ordinary associated file')
  $alias=Alias 'document' $document;$code=Run $alias @('"document argument"');$observed=Get-Content $marker
  Assert ($code -eq 47 -and $observed[0] -eq $document -and $observed[1] -eq 'document argument') 'An arbitrary non-executable extension opens its registered handler with the file and alias arguments'
+ $alias=Alias 'path-document' ([IO.Path]::GetFileName($document));$code=Run $alias @('"document argument"')
+ Assert ($code -eq 47 -and (Get-Content $marker)[0] -eq $document) 'An arbitrary associated file resolves through PATH without extension-specific handling'
  @{Passed=$true;Checks=$checks}|ConvertTo-Json -Depth 4|Set-Content $ResultPath -Encoding UTF8
 }catch{@{Passed=$false;Error=$_.Exception.Message;Stack=$_.ScriptStackTrace;Checks=$checks}|ConvertTo-Json -Depth 4|Set-Content $ResultPath -Encoding UTF8;throw}
 finally{
+ if($null -ne $savedPath){$env:PATH=$savedPath}
  [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree('Software\Classes\'+$extension,$false)
  [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree('Software\Classes\'+$class,$false)
 }
