@@ -190,6 +190,15 @@ PathMan\
 
 `Pathman.Service` 以用户会话中的普通后台进程运行。
 
+## 开发计划
+
+v1.0.0 前的主要功能已经全部完成，少许优化之后将发布 beta 版本。
+
+还有以下 post-v1 功能：
+
+- 添加 `PATH` 变量卡片视图（参考 Dify）
+- 新增 `PowerShell` 模块与 `CMD` 脚本，支持终端临时环境变量版本切换。
+
 ## 构建与测试
 
 构建环境为 Windows、PowerShell 7、.NET 10 SDK、CMake 3.24+、Visual Studio C++ 桌面工具集、Windows SDK 和 [NSIS 3.12+](https://nsis.sourceforge.io/Download)。ARM64 构建需要对应的 C++ 工具集；`-Test` 需要 PowerShell 7.6+。
