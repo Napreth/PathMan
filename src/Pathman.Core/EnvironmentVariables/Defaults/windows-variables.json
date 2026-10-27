@@ -5,7 +5,8 @@
     "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/set_1",
     "https://devblogs.microsoft.com/oldnewthing/20231212-00/?p=109137"
   ],
-  "notes": "Persisted Windows-owned names normally left unchanged. USMT-only CSIDL macros and cmd.exe dynamic pseudo-variables are excluded. Frequently edited PATH, PATHEXT, TEMP, TMP and PSModulePath are not treated as built-ins by this display rule.",
+  "notes": "Windows-owned names in either user or machine scope. USMT-only CSIDL macros and cmd.exe dynamic pseudo-variables are excluded. PATH follows path classification; PSModulePath defaults to the other group. Manual assignments take precedence.",
+  "defaultOtherNames": ["PSModulePath"],
   "userOnlyNames": ["APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH", "LOGONSERVER", "USERDOMAIN", "USERDOMAIN_ROAMINGPROFILE", "USERDNSDOMAIN", "USERNAME", "USERPROFILE"],
   "names": [
     "ALLUSERSPROFILE", "APPDATA", "CommonProgramFiles", "CommonProgramFiles(x86)",
@@ -13,6 +14,7 @@
     "LOCALAPPDATA", "LOGONSERVER", "NUMBER_OF_PROCESSORS", "OS", "ProgramData", "ProgramFiles",
     "ProgramFiles(x86)", "ProgramW6432", "PUBLIC", "SystemDrive", "SystemRoot", "USERDOMAIN",
     "USERDOMAIN_ROAMINGPROFILE", "USERDNSDOMAIN", "USERNAME", "USERPROFILE", "windir", "PROCESSOR_ARCHITECTURE",
-    "PROCESSOR_ARCHITEW6432", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION"
+    "PROCESSOR_ARCHITEW6432", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+    "TEMP", "TMP", "PATHEXT"
   ]
 }

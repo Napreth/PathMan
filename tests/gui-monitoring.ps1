@@ -10,9 +10,9 @@ $data=Join-Path $env:LOCALAPPDATA 'PathMan'
 if($PrepareFixture){
  Get-Process PathMan,PathMan.Service -ErrorAction SilentlyContinue|Stop-Process -Force
  $user=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment',$true)
- try{$user.SetValue('Path','C:\UserBase;C:\Keep;;C:\UserBase',[Microsoft.Win32.RegistryValueKind]::String);foreach($name in @('EXTERNEL_PATH','EXTERNEL_USER_PATH','PATHMAN_EXTERNAL','PATHMAN_KEEP','PATHMAN_CLOSED','PATHMAN_STOPPED')){$user.DeleteValue($name,$false)};$user.SetValue('PATHMAN_KEEP','before',[Microsoft.Win32.RegistryValueKind]::String)}finally{$user.Dispose()}
+ try{$user.SetValue('Path','C:\UserBase;C:\Keep;;C:\UserBase',[Microsoft.Win32.RegistryValueKind]::String);foreach($name in @('EXTERNAL_PATH','EXTERNAL_USER_PATH','PATHMAN_EXTERNAL','PATHMAN_KEEP','PATHMAN_CLOSED','PATHMAN_STOPPED')){$user.DeleteValue($name,$false)};$user.SetValue('PATHMAN_KEEP','before',[Microsoft.Win32.RegistryValueKind]::String)}finally{$user.Dispose()}
  $machine=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment',$true)
- try{$machine.SetValue('Path','C:\MachineTool;C:\Windows\System32;D:\MachineTool',[Microsoft.Win32.RegistryValueKind]::String);$machine.DeleteValue('EXTERNEL_PATH',$false)}finally{$machine.Dispose()}
+ try{$machine.SetValue('Path','C:\MachineTool;C:\Windows\System32;D:\MachineTool',[Microsoft.Win32.RegistryValueKind]::String);$machine.DeleteValue('EXTERNAL_PATH',$false)}finally{$machine.Dispose()}
  New-Item -ItemType Directory -Path $data -Force|Out-Null
  @{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin'},@{id='other';name='其他变量';rule='fallback'},@{id='external';name='外部变量';rule='external';requiresMonitoring=$true});revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 10|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
  return
@@ -65,20 +65,20 @@ try{
  Toggle 'AutoArrangeUser'
  Assert ((Checked 'AutoArrangeUser') -and !(Checked 'AutoArrangeMachine') -and (Id 'RemoveUserDuplicates').Current.IsEnabled -and !(Id 'RemoveMachineDuplicates').Current.IsEnabled) 'Each card enables only its own PATH suboptions'
  SetUser 'Path' 'C:\UserBase;C:\Keep;;C:\UserBase;D:\NewTool;c:\USERBASE\;D:\NewTool'
- WaitFor {(Raw 'Path') -eq 'C:\UserBase;C:\Keep;;C:\UserBase;%EXTERNEL_USER_PATH%'} 'User PATH was not automatically arranged'
- Assert ((Raw 'EXTERNEL_USER_PATH') -eq 'D:\NewTool') 'New duplicate entries are removed and unique additions move into EXTERNEL_USER_PATH'
+ WaitFor {(Raw 'Path') -eq 'C:\UserBase;C:\Keep;;C:\UserBase;%EXTERNAL_USER_PATH%'} 'User PATH was not automatically arranged'
+ Assert ((Raw 'EXTERNAL_USER_PATH') -eq 'D:\NewTool') 'New duplicate entries are removed and unique additions move into EXTERNAL_USER_PATH'
  Assert ((Get-ChildItem (Join-Path $data 'backups') -Filter 'path-monitor-*.json').Count -ge 1) 'Automatic registry writes have original-value backups'
  Start-Sleep -Seconds 2
  Assert (@((State).changes|Where-Object {$_.name -eq 'Path' -and $_.source -eq '外部程序'}).Count -eq 1) 'Automatic own writes do not feed back into external history'
  Toggle 'MoveUserEntries'
  SetUser 'Path' ((Raw 'Path')+';E:\LeftInPath;c:\keep\')
- WaitFor {(Raw 'Path') -eq 'C:\UserBase;C:\Keep;;C:\UserBase;%EXTERNEL_USER_PATH%;E:\LeftInPath'} 'Duplicate-only suboption failed'
- Assert ((Raw 'EXTERNEL_USER_PATH') -eq 'D:\NewTool') 'Disabling migration keeps new unique paths in PATH'
+ WaitFor {(Raw 'Path') -eq 'C:\UserBase;C:\Keep;;C:\UserBase;%EXTERNAL_USER_PATH%;E:\LeftInPath'} 'Duplicate-only suboption failed'
+ Assert ((Raw 'EXTERNAL_USER_PATH') -eq 'D:\NewTool') 'Disabling migration keeps new unique paths in PATH'
  Toggle 'MoveUserEntries';Toggle 'RemoveUserDuplicates'
  Assert (!(State).removeUserPathDuplicates -and (State).removeMachinePathDuplicates -and (State).moveExternalMachinePathEntries) 'Changing user cleanup suboptions preserves the system card settings'
  SetUser 'Path' ((Raw 'Path')+';c:\KEEP\')
- WaitFor {(Raw 'EXTERNEL_USER_PATH') -eq 'D:\NewTool;c:\KEEP\'} 'Migration-only suboption failed'
- Assert ((Raw 'EXTERNEL_USER_PATH') -eq 'D:\NewTool;c:\KEEP\') 'Disabling deduplication preserves new duplicate entries while migrating'
+ WaitFor {(Raw 'EXTERNAL_USER_PATH') -eq 'D:\NewTool;c:\KEEP\'} 'Migration-only suboption failed'
+ Assert ((Raw 'EXTERNAL_USER_PATH') -eq 'D:\NewTool;c:\KEEP\') 'Disabling deduplication preserves new duplicate entries while migrating'
  Toggle 'RemoveUserDuplicates'
  Stage 'ready-machine-disabled'
  WaitFor {@((State).changes|Where-Object {$_.scope -eq 'Machine' -and $_.name -eq 'Path' -and $_.after -like '*F:\IgnoredBeforeEnabling'}).Count -eq 1} 'Disabled system scope did not record its external change'
@@ -90,7 +90,7 @@ try{
  SetUser 'Path' ((Raw 'Path')+';H:\UserLeftAlone')
  WaitFor {@((State).snapshot|Where-Object {$_.scope -eq 'User' -and $_.name -eq 'Path' -and $_.value -like '*H:\UserLeftAlone'}).Count -eq 1} 'Disabled user scope was not observed'
  Start-Sleep -Seconds 2
- Assert ((Raw 'Path').EndsWith(';H:\UserLeftAlone') -and (Raw 'EXTERNEL_USER_PATH') -eq 'D:\NewTool;c:\KEEP\') 'A disabled user PATH switch leaves new user entries untouched while system cleanup is enabled'
+ Assert ((Raw 'Path').EndsWith(';H:\UserLeftAlone') -and (Raw 'EXTERNAL_USER_PATH') -eq 'D:\NewTool;c:\KEEP\') 'A disabled user PATH switch leaves new user entries untouched while system cleanup is enabled'
  Stage 'ready-machine'
  WaitFor {@((State).pendingPathOrganizations|Where-Object {$_.scope -eq 'Machine'}).Count -eq 1} 'System additions were not queued'
  WaitFor {$null -ne (Id 'ApplyPending') -and $null -ne (Id 'MonitorStatus')} 'System authorization action missing'
@@ -100,13 +100,13 @@ try{
  Click (Id 'ApplyPending');Stage 'awaiting-uac'
  WaitFor {@((State).pendingPathOrganizations|Where-Object {$_.scope -eq 'Machine'}).Count -eq 0} 'Authorized system organization did not finish'
  Assert ($window.Current.Name -eq 'PathMan · 管理员操作已授权') 'Reusable authorization updates the title'
- Assert ((Raw 'Path' $true) -eq 'C:\MachineTool;C:\Windows\System32;D:\MachineTool;F:\IgnoredBeforeEnabling;%EXTERNEL_PATH%' -and (Raw 'EXTERNEL_PATH' $true) -eq 'F:\ExternalTool') 'Authorized system organization writes the expected PATH while preserving additions made before that scope was enabled'
+ Assert ((Raw 'Path' $true) -eq 'C:\MachineTool;C:\Windows\System32;D:\MachineTool;F:\IgnoredBeforeEnabling;%EXTERNAL_PATH%' -and (Raw 'EXTERNAL_PATH' $true) -eq 'F:\ExternalTool') 'Authorized system organization writes the expected PATH while preserving additions made before that scope was enabled'
  Stage 'ready-machine-second'
- WaitFor {@((State).changes|Where-Object {$_.source -eq 'PathMan' -and $_.scope -eq 'Machine' -and $_.name -eq 'EXTERNEL_PATH'}).Count -ge 2} 'Subsequent system writes did not reuse authorization'
+ WaitFor {@((State).changes|Where-Object {$_.source -eq 'PathMan' -and $_.scope -eq 'Machine' -and $_.name -eq 'EXTERNAL_PATH'}).Count -ge 2} 'Subsequent system writes did not reuse authorization'
  Start-Sleep -Seconds 2
  Assert (@((State).changes|Where-Object {$_.source -eq '外部程序' -and $_.scope -eq 'Machine' -and $_.name -eq 'Path'}).Count -eq 3) 'Elevated own writes are excluded from external monitoring'
  Assert (@((State).pendingPathOrganizations).Count -eq 0) 'Both scopes finish without pending work'
- Assert ((Raw 'EXTERNEL_PATH' $true) -eq 'F:\ExternalTool;G:\AnotherExternalTool') 'Subsequent system additions append to the existing external group'
+ Assert ((Raw 'EXTERNAL_PATH' $true) -eq 'F:\ExternalTool;G:\AnotherExternalTool') 'Subsequent system additions append to the existing external group'
  [void]$app.CloseMainWindow();WaitFor {$app.HasExited} 'GUI did not close'
  SetUser 'PATHMAN_CLOSED' 'while-gui-closed'
  WaitFor {@((State).changes|Where-Object {$_.name -eq 'PATHMAN_CLOSED'}).Count -eq 1} 'Background stopped with the GUI'

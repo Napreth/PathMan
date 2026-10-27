@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$AppDirectory='C:\PathManTestApp',[string]$ResultPath='C:\PathManVersionTest\results.json',[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine'){throw 'Disposable VM only; restore the initial checkpoint afterwards.'}
@@ -26,7 +26,7 @@ function Invoke($element){WaitFor {$null -ne $element -and $element.Current.IsEn
 function SelectNode($element){$element.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();Start-Sleep -Milliseconds 200}
 function Go([string]$name){SelectNode (Find (Id 'Navigation') $name ([Windows.Automation.ControlType]::ListItem))}
 function Project([string]$name){Find (Id 'ProjectsList') $name ([Windows.Automation.ControlType]::ListItem)}
-function SelectProject([string]$name){WaitFor {$null -ne (Project $name)} 'Project list is not ready';SelectNode (Project $name)}
+function SelectProject([string]$name){WaitFor {$row=Project $name;if($null -eq $row -or $row.Current.BoundingRectangle.Width -le 0){return $false};try{$row.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select();return $true}catch [Windows.Automation.ElementNotAvailableException]{return $false}} 'Project list is not ready';Start-Sleep -Milliseconds 200}
 function Version([string]$name){Find (Id 'VersionsList') $name ([Windows.Automation.ControlType]::ListItem)}
 function Dialog([string]$name){Find ([Windows.Automation.AutomationElement]::RootElement) $name ([Windows.Automation.ControlType]::Window)}
 function InputBox{Find $window '行内编辑' ([Windows.Automation.ControlType]::Edit)}
@@ -47,7 +47,7 @@ function ClipboardText([string]$value,[switch]$Read){
  try{$null=$shell.AddScript({param($text,$read)Add-Type -AssemblyName System.Windows.Forms;if($read){[Windows.Forms.Clipboard]::GetText()}else{[Windows.Forms.Clipboard]::SetText($text)}}.ToString()).AddArgument($value).AddArgument([bool]$Read);$result=$shell.Invoke();if($shell.HadErrors){throw ($shell.Streams.Error|Out-String)};if($Read){[string]$result[0]}}
  finally{$shell.Dispose();$runspace.Dispose()}
 }
-function Browse([string]$project){ClickCell (Project $project) 0.7 -Double;WaitFor {$null -ne (Dialog '选择环境变量')} 'Double-click did not open the target picker'}
+function Browse([string]$project){WaitFor {$row=Project $project;$null -ne $row -and $row.Current.BoundingRectangle.Width -gt 0} 'Project row is not visible';ClickCell (Project $project) 0.7 -Double;WaitFor {$null -ne (Dialog '选择环境变量')} 'Double-click did not open the target picker'}
 function Target([string]$name,[string]$scope){Find (Id $scope (Dialog '选择环境变量')) $name ([Windows.Automation.ControlType]::TreeItem)}
 function Choose([string]$name,[string]$scope){SelectNode (Target $name $scope);Invoke (Id 'ChooseTargetButton' (Dialog '选择环境变量'))}
 function CancelPicker{Invoke (Find (Dialog '选择环境变量') '取消' ([Windows.Automation.ControlType]::Button))}

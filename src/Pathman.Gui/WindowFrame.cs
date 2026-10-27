@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace Pathman.Gui;
 
@@ -20,7 +21,7 @@ internal static class WindowFrame
         Apply(window, handle);
         HwndSource.FromHwnd(handle)?.AddHook((IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled) =>
         {
-            if (message is 0x001A or 0x031A)
+            if (message is 0x001A or 0x031A or 0x0320)
                 window.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => Apply(window, hwnd)));
             return IntPtr.Zero;
         });
@@ -37,8 +38,17 @@ internal static class WindowFrame
         var caption = 0xFFFFFFFEu;
         var backdrop = 2u; // DWMSBT_MAINWINDOW
         var corners = 2u; // DWMWCP_ROUND
+        var dark = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int light && light == 0 ? 1u : 0u;
+        DwmSetWindowAttribute(handle, 20, ref dark, sizeof(uint));
         DwmSetWindowAttribute(handle, 35, ref caption, sizeof(uint));
         DwmSetWindowAttribute(handle, 33, ref corners, sizeof(uint));
+        if (SystemParameters.HighContrast)
+        {
+            backdrop = 1; // Let the accessibility theme supply an opaque backdrop.
+            DwmSetWindowAttribute(handle, 38, ref backdrop, sizeof(uint));
+            window.SetResourceReference(Window.BackgroundProperty, "ApplicationBackgroundBrush");
+            return;
+        }
         if (DwmSetWindowAttribute(handle, 38, ref backdrop, sizeof(uint)) == 0)
         {
             window.Background = Brushes.Transparent;

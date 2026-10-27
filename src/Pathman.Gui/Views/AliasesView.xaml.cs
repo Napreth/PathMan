@@ -30,6 +30,7 @@ public partial class AliasesView : UserControl
     public AliasesView(PathmanLayout layout,EnvironmentWorkspaceStore store)
     {
         this.layout=layout;this.store=store;manager=new(layout,ensureUserPath:false);InitializeComponent();Aliases.ItemsSource=rows;
+        PreviewKeyDown+=AliasKeyDown;
         Loaded+=(_,_)=> {
             owner=Window.GetWindow(this);owner.PreviewMouseUp+=SaveAfterClick;owner.LostKeyboardFocus+=SaveAfterKeyboardFocus;owner.Deactivated+=SaveAfterDeactivation;
             statePoll.Start();Refresh(this,new());
@@ -53,8 +54,9 @@ public partial class AliasesView : UserControl
     private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or ArgumentException or Win32Exception or InvalidOperationException;
     private void UpdateActions()
     {
-        var editable=enabled && !IsBusy;var selected=Aliases.SelectedItem is AliasRow;
-        NewAliasButton.IsEnabled=editable;RenameAliasButton.IsEnabled=EditAliasButton.IsEnabled=BrowseAliasButton.IsEnabled=CopyAliasButton.IsEnabled=DeleteAliasButton.IsEnabled=editable && selected;
+        var editable=enabled && !IsBusy;var count=Aliases.SelectedItems.Count;
+        NewAliasButton.IsEnabled=editable;RenameAliasButton.IsEnabled=EditAliasButton.IsEnabled=BrowseAliasButton.IsEnabled=editable && count==1;
+        CopyAliasButton.IsEnabled=DeleteAliasButton.IsEnabled=editable && count>0;
         RefreshAliasesButton.IsEnabled=EnableAliases.IsEnabled=!IsBusy;
         foreach(var row in rows) row.CanEdit=editable;
     }
@@ -171,6 +173,7 @@ public partial class AliasesView : UserControl
     private async Task<string?> CommitRow(AliasRow row,string value,bool detail)
     {
         if(busy) return "别名正在保存，请稍后重试。";
+        var before=row.IsDraft ? null : new ShimAlias(row.Name,row.Target);
         try
         {
             if(!CheckEnabled()) return "程序别名未启用，请先打开开关。";
@@ -192,6 +195,7 @@ public partial class AliasesView : UserControl
                 var alias=await Task.Run(()=>row.IsDraft ? manager.Add(row.Name,target) : manager.Update(row.Name,target,row.Target));
                 row.Name=alias.Name;row.Target=alias.Target;row.IsDraft=false;
             }
+            RememberAlias(before,new(row.Name,row.Target));
             AliasStatus.Text="已保存。";SnapshotChanged?.Invoke(this,EventArgs.Empty);return null;
         }
         catch(Exception error) when(Expected(error)) {AliasStatus.Text=error.Message;return error.Message;}
@@ -220,16 +224,18 @@ public partial class AliasesView : UserControl
     private async void CopyTarget(object sender,RoutedEventArgs e)=>await Copy(true);
     private async Task Copy(bool target)
     {
-        if(!await CommitActive() || busy || !CheckEnabled() || Aliases.SelectedItem is not AliasRow row) return;
-        try {Clipboard.SetDataObject(target ? row.Target : row.Name,true);AliasStatus.Text="已复制。";}
+        if(!await CommitActive() || busy || !CheckEnabled() || Aliases.SelectedItems.Count==0) return;
+        try {Clipboard.SetDataObject(string.Join(Environment.NewLine,Aliases.SelectedItems.OfType<AliasRow>().OrderBy(rows.IndexOf).Select(row=>target ? row.Target : row.Name)),true);AliasStatus.Text="已复制。";}
         catch(System.Runtime.InteropServices.ExternalException) {AliasStatus.Text="剪贴板暂时不可用。";}
     }
     private async void DeleteAlias(object sender,RoutedEventArgs e)
     {
-        if(busy || !CheckEnabled() || Aliases.SelectedItem is not AliasRow row) return;
+        if(busy || !CheckEnabled() || Aliases.SelectedItems.Count==0) return;
+        var selected=Aliases.SelectedItems.OfType<AliasRow>().ToArray();
         autoSaveEpoch++;advanceToTarget=null;activeEditor?.CancelEdit();
-        try {busy=true;UpdateActions();if(!row.IsDraft) await Task.Run(()=>manager.Remove(row.Name,row.Target));rows.Remove(row);AliasStatus.Text="已删除。";SnapshotChanged?.Invoke(this,EventArgs.Empty);}
+        var removed=new List<ShimAlias>();
+        try {busy=true;UpdateActions();foreach(var row in selected) {if(!row.IsDraft) {await Task.Run(()=>manager.Remove(row.Name,row.Target));removed.Add(new(row.Name,row.Target));}rows.Remove(row);}AliasStatus.Text="已删除。";SnapshotChanged?.Invoke(this,EventArgs.Empty);}
         catch(Exception error) when(Expected(error)) {AliasStatus.Text=error.Message;}
-        finally {busy=false;UpdateActions();}
+        finally {if(removed.Count>0) RememberDeletedAliases(removed.ToArray());busy=false;UpdateActions();}
     }
 }

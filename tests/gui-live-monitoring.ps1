@@ -9,7 +9,7 @@ if($PrepareFixture){
  $user=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment',$true)
  try{
   foreach($pair in @{Path='C:\Live\Base;C:\Live\Keep';PATHMAN_LIVE_PATH='C:\Live\One;C:\Live\Two';PATHMAN_LIVE_SCALAR='before'}.GetEnumerator()){$user.SetValue($pair.Key,$pair.Value,[Microsoft.Win32.RegistryValueKind]::String)}
-  foreach($name in @('EXTERNEL_USER_PATH','EXTERNEL_PATH','SOFTWARE_PATH')){$user.DeleteValue($name,$false)}
+  foreach($name in @('EXTERNAL_USER_PATH','EXTERNAL_PATH','SOFTWARE_PATH')){$user.DeleteValue($name,$false)}
  }finally{$user.Dispose()}
  $run=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run',$true)
  try{$run.SetValue('PathMan','"C:\PathManTestApp\internal\PathMan.Service.exe"')}finally{$run.Dispose()}
@@ -77,18 +77,18 @@ try{
  SetUser 'Path' 'C:\Live\Base;C:\Live\Keep;F:\Live\External;C:\Live\Keep'
  WaitFor {$null -ne (Row '+F:\Live\External')} 'An edited variable did not enter diff mode'
  Toggle 'TemporaryCleanupButton'
- WaitFor {$null -ne (Row '+%EXTERNEL_USER_PATH%')} 'Temporary external cleanup did not stage a reference'
- Assert ((Raw 'Path') -eq 'C:\Live\Base;C:\Live\Keep;F:\Live\External;C:\Live\Keep' -and $null -eq (Raw 'EXTERNEL_USER_PATH')) 'Temporary cleanup modifies only the draft until Save'
+ WaitFor {$null -ne (Row '+%EXTERNAL_USER_PATH%')} 'Temporary external cleanup did not stage a reference'
+ Assert ((Raw 'Path') -eq 'C:\Live\Base;C:\Live\Keep;F:\Live\External;C:\Live\Keep' -and $null -eq (Raw 'EXTERNAL_USER_PATH')) 'Temporary cleanup modifies only the draft until Save'
  Toggle 'TemporaryCleanupButton'
  Save
- Assert ((Raw 'Path') -eq 'C:\Live\UserMine;C:\Live\Keep;%EXTERNEL_USER_PATH%' -and (Raw 'EXTERNEL_USER_PATH') -eq 'F:\Live\External') 'Temporary cleanup saves the user edit and only the external additions'
+ Assert ((Raw 'Path') -eq 'C:\Live\UserMine;C:\Live\Keep;%EXTERNAL_USER_PATH%' -and (Raw 'EXTERNAL_USER_PATH') -eq 'F:\Live\External') 'Temporary cleanup saves the user edit and only the external additions'
  EditRow 'C:\Live\UserMine' 'C:\Live\SecondMine'
  SetUser 'Path' ((Raw 'Path')+';G:\Live\Manual;C:\Live\Keep')
  WaitFor {$null -ne (Row '+G:\Live\Manual')} 'Second external edit was not observed'
  Invoke (Id 'CleanExternalButton')
  Assert ((Raw 'Path').EndsWith(';G:\Live\Manual;C:\Live\Keep')) 'The explicit external cleanup button also stages its changes'
  Save
- Assert ((Raw 'Path').StartsWith('C:\Live\SecondMine;') -and (Raw 'EXTERNEL_USER_PATH').Contains('G:\Live\Manual')) 'Explicit external cleanup preserves local content and migrates the external item'
+ Assert ((Raw 'Path').StartsWith('C:\Live\SecondMine;') -and (Raw 'EXTERNAL_USER_PATH').Contains('G:\Live\Manual')) 'Explicit external cleanup preserves local content and migrates the external item'
  Go '变量监控'
  Assert (!(Id 'StartupEnabled').Current.IsEnabled -and !(Id 'AutoArrangeUser').Current.IsEnabled -and (Checked 'AutoArrangeUser')) 'Background-off settings are greyed out while retaining their saved values'
  $direct=Start-Process C:\PathManTestApp\internal\PathMan.Service.exe -PassThru -Wait -WindowStyle Hidden
@@ -107,8 +107,8 @@ try{
  Assert ((Raw 'Path') -eq $value) 'PowerToys-origin edits are recorded but not automatically organized'
  $idle=Start-Process C:\PathManLiveTest\PowerToys.EnvironmentVariables.exe -ArgumentList '--idle' -PassThru -WindowStyle Hidden
  $value=(Raw 'Path')+';T:\FromPowerShell';SetUser 'Path' $value
- WaitFor {(Raw 'EXTERNEL_USER_PATH').Contains('T:\FromPowerShell')} 'A nonexcluded write was incorrectly blocked by an open PowerToys process'
- Assert ((Raw 'Path').Contains('T:\FromPowerToys') -and !(Raw 'EXTERNEL_USER_PATH').Contains('T:\FromPowerToys')) 'The exclusion is based on the actual writer rather than process presence'
+ WaitFor {(Raw 'EXTERNAL_USER_PATH').Contains('T:\FromPowerShell')} 'A nonexcluded write was incorrectly blocked by an open PowerToys process'
+ Assert ((Raw 'Path').Contains('T:\FromPowerToys') -and !(Raw 'EXTERNAL_USER_PATH').Contains('T:\FromPowerToys')) 'The exclusion is based on the actual writer rather than process presence'
  $idle.Kill();$idle.WaitForExit()
  $value=(Raw 'Path')+';S:\FromSystemEditor';$writer=Probe 'SystemPropertiesAdvanced.exe' $value
  WaitFor {@((State).changes|Where-Object {$_.after -eq $value -and @($_.origins|Where-Object processId -eq $writer).Count -gt 0}).Count -gt 0} 'System editor identity was not captured'
@@ -119,8 +119,8 @@ try{
  Start-Sleep -Seconds 2
  Assert ((Raw 'Path') -eq $value) 'The sysdm environment-variable entry point is excluded using its command line'
  $value=(Raw 'Path')+';R:\OtherRundll';$writer=Probe 'rundll32.exe' $value 'shell32.dll,Control_RunDLL'
- WaitFor {(Raw 'EXTERNEL_USER_PATH').Contains('R:\OtherRundll')} 'Unrelated rundll32 writes were incorrectly excluded'
- Assert ((Raw 'EXTERNEL_USER_PATH').Contains('R:\OtherRundll')) 'Other rundll32 entry points remain eligible for cleanup'
+ WaitFor {(Raw 'EXTERNAL_USER_PATH').Contains('R:\OtherRundll')} 'Unrelated rundll32 writes were incorrectly excluded'
+ Assert ((Raw 'EXTERNAL_USER_PATH').Contains('R:\OtherRundll')) 'Other rundll32 entry points remain eligible for cleanup'
  SetUser 'PATHMAN_LIVE_ORIGIN_DELETE' 'temporary'
  WaitFor {@((State).changes|Where-Object {$_.name -eq 'PATHMAN_LIVE_ORIGIN_DELETE' -and $_.action -eq 'create'}).Count -gt 0} 'The deletion fixture was not observed'
  $deleting=Start-Process C:\PathManLiveTest\OriginProbe.exe -ArgumentList '--delete PATHMAN_LIVE_ORIGIN_DELETE' -PassThru -Wait -WindowStyle Hidden

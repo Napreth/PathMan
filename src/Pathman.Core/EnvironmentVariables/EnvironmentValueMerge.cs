@@ -62,6 +62,12 @@ public sealed class EnvironmentLiveValue(string ancestor)
     public bool HasConflicts {get;private set;}
     public bool HasExternalChanges=>External!=Ancestor;
     public bool HasLocalChanges=>Local!=Ancestor || rejectedAdditions.Count>0;
+    internal EnvironmentLiveValue Copy()
+    {
+        var copy=new EnvironmentLiveValue(Ancestor) {Local=Local,External=External,Working=Working,HasConflicts=HasConflicts};
+        foreach(var pair in rejectedAdditions) copy.rejectedAdditions.Add(pair.Key,pair.Value);
+        return copy;
+    }
     public void Edit(string value)
     {
         if(value==Working) return;

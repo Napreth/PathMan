@@ -93,7 +93,7 @@ public partial class EditableRow : UserControl
     public void BeginEdit(bool detail=false)
     {
         if (IsEditing || !IsEnabled || !CanEdit) return;
-        EditVersion++;editingDetail=detail;IsEditing = true; Input.Text = detail ? Detail : Text; inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
+        EditVersion++;editingDetail=detail;IsEditing = true;Input.IsUndoEnabled=false;Input.Text = detail ? Detail : Text;Input.IsUndoEnabled=true;inputChanged=false; Input.ClearValue(BorderBrushProperty); Input.ToolTip = null;
         Input.Margin=detail ? new(NameColumn.ActualWidth+12,0,0,0) : new(0);
         Input.Width=SeparateEditors && !detail ? NameColumn.ActualWidth : double.NaN;
         Input.HorizontalAlignment=SeparateEditors && !detail ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
@@ -136,8 +136,10 @@ public partial class EditableRow : UserControl
     }
     private void EndEdit()
     {
+        var restoreFocus=Input.IsKeyboardFocusWithin;
         IsEditing = false; Input.Visibility = Visibility.Collapsed; Label.Visibility = NameLabel.Visibility = DetailLabel.Visibility = Visibility.Visible; Actions.Visibility = Visibility.Visible;
         EditingChanged?.Invoke(this, EventArgs.Empty);
+        if(restoreFocus) {if(FindParent<ListBoxItem>(this) is {} item) item.Focus();else FindParent<TreeViewItem>(this)?.Focus();}
     }
     public void CancelEdit()
     {if(IsEditing && pending is null) {EndEdit();EditingCanceled?.Invoke(this,EventArgs.Empty);}}
@@ -147,6 +149,7 @@ public partial class EditableRow : UserControl
     private void Jump(object sender, RoutedEventArgs e) { e.Handled = true; JumpRequested?.Invoke(this, EventArgs.Empty); }
     private void SingleClick(object sender,MouseButtonEventArgs e)
     {
+        if(EditingKeys.SelectionModifier) {pendingDoubleClick=false;return;}
         if(pendingDoubleClick)
         {
             pendingDoubleClick=false;
@@ -160,6 +163,7 @@ public partial class EditableRow : UserControl
     }
     private void DoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if(EditingKeys.SelectionModifier) return;
         if (FindParent<Button>(e.OriginalSource as DependencyObject) is not null || IsEditing || !CanEdit) return;
         e.Handled = true;
         if (EditOnDoubleClick)

@@ -22,7 +22,7 @@
                         <CheckBox x:Name="AutoArrangeUser" Content="自动整理PATH环境变量" AutomationProperties.Name="自动整理用户 PATH 环境变量" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                         <StackPanel x:Name="UserArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveUserDuplicates" Content="删除外部添加的重复PATH项" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
-                            <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNEL_USER_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNEL_USER_PATH"/></CheckBox>
+                            <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNAL_USER_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNAL_USER_PATH"/></CheckBox>
                             <StackPanel x:Name="UserEditorExclusions" Margin="0,14,0,0">
                                 <CheckBox x:Name="IgnoreSystemEditorUser" Content="不整理系统编辑器修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
                                 <CheckBox x:Name="IgnorePowerToysUser" Content="不整理PowerToys修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
@@ -39,7 +39,7 @@
                         <CheckBox x:Name="AutoArrangeMachine" Content="自动整理PATH环境变量" AutomationProperties.Name="自动整理系统 PATH 环境变量" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                         <StackPanel x:Name="MachineArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveMachineDuplicates" Content="删除外部添加的重复PATH项" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
-                            <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNEL_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNEL_PATH"/></CheckBox>
+                            <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNAL_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNAL_PATH"/></CheckBox>
                             <StackPanel x:Name="MachineEditorExclusions" Margin="0,14,0,0">
                                 <CheckBox x:Name="IgnoreSystemEditorMachine" Content="不整理系统编辑器修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
                                 <CheckBox x:Name="IgnorePowerToysMachine" Content="不整理PowerToys修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions"/>

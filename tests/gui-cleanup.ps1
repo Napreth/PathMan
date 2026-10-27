@@ -69,12 +69,13 @@ try {
     WaitFor { $script:window=Find ([Windows.Automation.AutomationElement]::RootElement) 'PathMan · 以非管理员身份运行' ([Windows.Automation.ControlType]::Window); $null -ne $window } 'Window did not open'
     [void][CleanupInput]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle)
     WaitFor { $null -ne (Node '工作') } 'Variables did not load'
-    Assert ($null -eq (Node '系统变量')) 'User scope has no built-in system category'
+    Assert ($null -ne (Node '系统变量')) 'User scope includes its built-in system category'
     Assert ($null -ne (Find (Id 'SystemVariablesTree') '系统变量' ([Windows.Automation.ControlType]::TreeItem))) 'Machine scope retains its built-in system category'
     SelectNode (Find (Id 'SystemVariablesTree') 'SDK_PATH' ([Windows.Automation.ControlType]::TreeItem))
     Assert ((Rows).Count -eq 1 -and $null -ne (Find (Rows)[0] '转到引用变量' ([Windows.Automation.ControlType]::Button))) 'Single-entry path variables also show a list row with reference navigation'
     Invoke (Find (Rows)[0] '转到引用变量' ([Windows.Automation.ControlType]::Button))
     Assert ((Id 'VariableTitle').Current.Name -eq 'SDK_HOME') 'A single-entry path reference jumps to its variable'
+    (Node '系统变量').GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
     SelectNode (Node 'PATHEXT')
     DoubleClick (Find (Rows)[0] '.EXE' ([Windows.Automation.ControlType]::Text)); SetInput ''; Key 13
     Assert ((Rows).Count -eq 0) 'Clearing the only list item leaves an empty list'

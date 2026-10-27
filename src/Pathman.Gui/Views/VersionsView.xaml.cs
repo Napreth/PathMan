@@ -59,6 +59,7 @@ public partial class VersionsView : UserControl
     public VersionsView(PathmanLayout layout,EnvironmentWorkspaceStore store)
     {
         this.layout=layout;this.store=store;InitializeComponent();ProjectsList.ItemsSource=projects;VersionsList.ItemsSource=versions;
+        PreviewKeyDown+=VersionKeyDown;
         Loaded+=async(_,_)=>
         {
             owner=Window.GetWindow(this);owner.PreviewMouseUp+=SaveAfterClick;owner.LostKeyboardFocus+=SaveAfterFocus;owner.Deactivated+=SaveAfterDeactivation;
@@ -67,7 +68,7 @@ public partial class VersionsView : UserControl
         Unloaded+=(_,_)=> {if(owner is not null) {owner.PreviewMouseUp-=SaveAfterClick;owner.LostKeyboardFocus-=SaveAfterFocus;owner.Deactivated-=SaveAfterDeactivation;owner=null;}};
         UpdateActions();
     }
-    private static bool Expected(Exception error)=>error is IOException or ArgumentException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException or System.Security.SecurityException;
+    private static bool Expected(Exception error)=>error is IOException or ArgumentException or InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException or System.Security.SecurityException;
     public async Task ReloadAsync()
     {
         if(IsBusy || HasInlineEditor) {refreshPending=true;return;}
@@ -77,10 +78,17 @@ public partial class VersionsView : UserControl
             var snapshot=await Task.Run(()=>VersionCatalog.Describe(store.Read(),EnvironmentMonitor.ReadAll()));
             if(IsBusy || HasInlineEditor || request!=reloadRequest) {refreshPending=true;return;}
             var name=Selected?.Name;var version=(VersionsList.SelectedItem as VersionRow)?.Name;
+            var selectedProjects=ProjectsList.SelectedItems.OfType<ProjectRow>().Select(row=>row.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var selectedVersions=VersionsList.SelectedItems.OfType<VersionRow>().Select(row=>row.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var focus=ProjectsList.IsKeyboardFocusWithin ? ProjectsList : VersionsList.IsKeyboardFocusWithin ? VersionsList : null;
             updating=true;projects.Clear();
             foreach(var item in snapshot) projects.Add(new() {Name=item.Name,VariableName=item.VariableName,Scope=item.Type,Status=item});
             ProjectsList.SelectedItem=projects.FirstOrDefault(row=>row.Name.Equals(name,StringComparison.OrdinalIgnoreCase)) ?? projects.FirstOrDefault();
-            ShowProject(version);refreshPending=false;
+            foreach(var row in projects.Where(row=>selectedProjects.Contains(row.Name))) if(!ProjectsList.SelectedItems.Contains(row)) ProjectsList.SelectedItems.Add(row);
+            ShowProject(version);
+            foreach(var row in versions.Where(row=>selectedVersions.Contains(row.Name))) if(!VersionsList.SelectedItems.Contains(row)) VersionsList.SelectedItems.Add(row);
+            refreshPending=false;
+            if(IsVisible) focus?.Focus();
         }
         catch(Exception error) when(Expected(error)) {VersionStatus.Text=error.Message;}
         finally {updating=false;UpdateActions();}
@@ -100,7 +108,7 @@ public partial class VersionsView : UserControl
     }
     private async void ProjectSelected(object sender,SelectionChangedEventArgs e)
     {
-        if(updating) return;
+        if(updating || IsBusy) return;
         if(!await CommitActive())
         {
             if(activeEditor?.DataContext is ProjectRow previous) {updating=true;ProjectsList.SelectedItem=previous;updating=false;}
@@ -111,18 +119,18 @@ public partial class VersionsView : UserControl
     private void UpdateActions()
     {
         if(NewProjectButton is null) return;
-        NewProjectButton.IsEnabled=!IsBusy;AddVersionButton.IsEnabled=Selected is {IsDraft:false} && !IsBusy;
-        ProjectsList.IsEnabled=VersionsList.IsEnabled=!busy;
+        NewProjectButton.IsEnabled=!IsBusy;AddVersionButton.IsEnabled=ProjectsList.SelectedItems.Count==1 && Selected is {IsDraft:false} && !IsBusy;
         var allow=Selected is {VariableName.Length:>0} selected && VersionTargetPolicy.Restriction(selected.VariableName,store.Read().AllowBuiltInVersionTargets) is null;
         foreach(var row in projects) {row.CanEdit=!IsBusy;row.Refresh();}
         foreach(var row in versions) {row.CanEdit=!IsBusy;row.Refresh();}
         var selectedVersion=SelectedVersion;
-        RenameVersionButton.IsEnabled=EditVersionButton.IsEnabled=BrowseVersionButton.IsEnabled=CopyVersionButton.IsEnabled=DeleteVersionButton.IsEnabled=selectedVersion is not null && !IsBusy;
-        SwitchVersionButton.IsEnabled=allow && selectedVersion is {IsDraft:false} && !IsBusy;
+        RenameVersionButton.IsEnabled=EditVersionButton.IsEnabled=BrowseVersionButton.IsEnabled=VersionsList.SelectedItems.Count==1 && selectedVersion is not null && !IsBusy;
+        CopyVersionButton.IsEnabled=DeleteVersionButton.IsEnabled=VersionsList.SelectedItems.Count>0 && !IsBusy;
+        SwitchVersionButton.IsEnabled=allow && ProjectsList.SelectedItems.Count==1 && VersionsList.SelectedItems.Count==1 && selectedVersion is {IsDraft:false} && !IsBusy;
     }
     private async void VersionSelected(object sender,SelectionChangedEventArgs e)
     {
-        if(updating) return;
+        if(updating || IsBusy) return;
         if(activeEditor is {DataContext:VersionRow previous,IsEditing:true} && !await CommitActive())
         {updating=true;VersionsList.SelectedItem=previous;updating=false;}
         UpdateActions();
@@ -179,7 +187,13 @@ public partial class VersionsView : UserControl
     private async Task<string?> Metadata(Action<EnvironmentWorkspace> change,Action applied)
     {
         if(busy) return "正在保存，请稍候。";busy=true;UpdateActions();
-        try {await Task.Run(()=>store.Update(change));applied();refreshPending=true;VersionStatus.Text="";return null;}
+        try {
+            string before="",after="";
+            await Task.Run(()=>store.Update(state=> {before=VersionConfig(state);change(state);after=VersionConfig(state);}));
+            if(before!=after) history.Record(()=>RestoreVersionConfig(after,before),()=>RestoreVersionConfig(before,after));
+            var wasUpdating=updating;updating=true;try {applied();} finally {updating=wasUpdating;}
+            refreshPending=true;VersionStatus.Text="";return null;
+        }
         catch(Exception error) when(Expected(error)) {VersionStatus.Text=error.Message;return error.Message;}
         finally {busy=false;UpdateActions();}
     }
@@ -250,7 +264,7 @@ public partial class VersionsView : UserControl
     }
     private async void BindingMouseDown(object sender,MouseButtonEventArgs e)
     {
-        if(e.ClickCount!=2 || IsBusy || sender is not FrameworkElement {DataContext:ProjectRow row}) return;
+        if(e.ClickCount!=2 || EditingKeys.SelectionModifier || IsBusy || sender is not FrameworkElement {DataContext:ProjectRow row}) return;
         e.Handled=true;
         autoSaveEpoch++;
         if(!await CommitActive()) return;
@@ -275,10 +289,10 @@ public partial class VersionsView : UserControl
     }
     private async void DeleteVersion(object sender,RoutedEventArgs e)
     {
-        if(IsBusy || SelectedVersion is not {} row) return;autoSaveEpoch++;
-        if(activeEditor?.DataContext==row) activeEditor.CancelEdit();else if(!await CommitActive()) return;
-        if(row.IsDraft) {versions.Remove(row);return;}
-        await Metadata(state=>VersionCatalog.Delete(state,row.Project.Name,row.Name),()=>versions.Remove(row));await ReloadAsync();
+        if(IsBusy || VersionsList.SelectedItems.Count==0) return;autoSaveEpoch++;
+        var selected=VersionsList.SelectedItems.OfType<VersionRow>().ToArray();
+        if(activeEditor?.DataContext is VersionRow editing && selected.Contains(editing)) activeEditor.CancelEdit();else if(!await CommitActive()) return;
+        await Metadata(state=> {foreach(var row in selected.Where(row=>!row.IsDraft)) VersionCatalog.Delete(state,row.Project.Name,row.Name);},()=> {foreach(var row in selected) versions.Remove(row);});await ReloadAsync();
     }
     private async void RenameVersion(object sender,RoutedEventArgs e)=>await EditSelectedVersion(false);
     private async void EditVersion(object sender,RoutedEventArgs e)=>await EditSelectedVersion(true);
@@ -306,8 +320,8 @@ public partial class VersionsView : UserControl
     }
     private async void CopyVersion(object sender,RoutedEventArgs e)
     {
-        if(IsBusy || !await CommitActive() || SelectedVersion is not {} row) return;
-        try {Clipboard.SetDataObject(row.Value,true);VersionStatus.Text="已复制变量值。";}
+        if(IsBusy || !await CommitActive() || VersionsList.SelectedItems.Count==0) return;
+        try {Clipboard.SetDataObject(string.Join(Environment.NewLine,VersionsList.SelectedItems.OfType<VersionRow>().OrderBy(versions.IndexOf).Select(row=>row.Value)),true);VersionStatus.Text="已复制变量值。";}
         catch(System.Runtime.InteropServices.ExternalException) {VersionStatus.Text="剪贴板暂时不可用。";}
     }
     private async void SwitchVersion(object sender,RoutedEventArgs e)

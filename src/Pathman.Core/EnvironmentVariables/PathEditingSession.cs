@@ -4,7 +4,7 @@ namespace Pathman.Core.EnvironmentVariables;
 
 public sealed class PathEditorItem(string value,bool draft=false)
 {
-    public Guid Id { get; }=Guid.NewGuid();
+    public Guid Id { get; internal set; }=Guid.NewGuid();
     public string Value { get; internal set; }=value;
     public bool IsDraft { get; internal set; }=draft;
 }
@@ -16,6 +16,32 @@ public sealed record PathEditorRow(PathEditorItem Item,VariableScope OwnerScope,
 // entry; expanding it never copies or flattens the referenced variable's value.
 public sealed class PathEditingSession
 {
+    private sealed record EditState(Dictionary<string,EnvironmentVariableInfo> Originals,Dictionary<string,List<PathEditorItem>> Lists,
+        Dictionary<string,EnvironmentLiveValue> Live,HashSet<string> Missing,Dictionary<string,VariableSnapshot> Guards,bool Review);
+    private readonly List<EditState> undo=[],redo=[];
+    private int historyBatch;
+    public bool CanUndo=>undo.Count>0;
+    public bool CanRedo=>redo.Count>0;
+    private EditState CaptureState()=>new(new(originals,StringComparer.OrdinalIgnoreCase),
+        lists.ToDictionary(pair=>pair.Key,pair=>pair.Value.Where(item=>!item.IsDraft).Select(item=>new PathEditorItem(item.Value) {Id=item.Id}).ToList(),StringComparer.OrdinalIgnoreCase),
+        live.ToDictionary(pair=>pair.Key,pair=>pair.Value.Copy(),StringComparer.OrdinalIgnoreCase),new(missing,StringComparer.OrdinalIgnoreCase),new(extraGuards,StringComparer.OrdinalIgnoreCase),IsReviewMode);
+    private void Remember()
+    {
+        if(historyBatch>0) return;
+        undo.Add(CaptureState());if(undo.Count>128) undo.RemoveAt(0);redo.Clear();
+    }
+    private void Restore(EditState state)
+    {
+        originals.Clear();foreach(var pair in state.Originals) originals.Add(pair.Key,pair.Value);
+        lists.Clear();foreach(var pair in state.Lists) lists.Add(pair.Key,pair.Value.Select(item=>new PathEditorItem(item.Value) {Id=item.Id}).ToList());
+        live.Clear();foreach(var pair in state.Live) live.Add(pair.Key,pair.Value.Copy());
+        missing.Clear();missing.UnionWith(state.Missing);extraGuards.Clear();foreach(var pair in state.Guards) extraGuards.Add(pair.Key,pair.Value);
+        IsReviewMode=state.Review;Root=originals[Key(Root.Scope,Root.Name)];
+    }
+    public bool Undo()
+    {if(!CanUndo) return false;redo.Add(CaptureState());var state=undo[^1];undo.RemoveAt(undo.Count-1);Restore(state);return true;}
+    public bool Redo()
+    {if(!CanRedo) return false;undo.Add(CaptureState());var state=redo[^1];redo.RemoveAt(redo.Count-1);Restore(state);return true;}
     private readonly Dictionary<string,EnvironmentVariableInfo> originals;
     private readonly Dictionary<string,List<PathEditorItem>> lists=new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string,EnvironmentLiveValue> live=new(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +77,7 @@ public sealed class PathEditingSession
     public void SetRaw(VariableScope scope,string name,string raw)
     {
         if(Raw(scope,name)==raw) return;
+        Remember();
         lists[Key(scope,name)]=raw.Length==0 ? [] : raw.Split(';',StringSplitOptions.None).Select(value=>new PathEditorItem(value)).ToList();
         Capture(scope,name);
     }
@@ -63,6 +90,7 @@ public sealed class PathEditingSession
         .DistinctBy(item=>Key(item.Scope,item.Name),StringComparer.OrdinalIgnoreCase).ToArray();
     public void Accept(VariableScope scope)
     {
+        undo.Clear();redo.Clear();
         foreach(var original in originals.Values.Where(item=>item.Scope==scope && Raw(scope,item.Name)!=item.RawValue).ToArray())
             originals[Key(scope,original.Name)]=new(original.Name,Raw(scope,original.Name),scope,EnvironmentPathResolver.ReferenceNames(Raw(scope,original.Name)).Count>0 ? Microsoft.Win32.RegistryValueKind.ExpandString : original.Kind);
         Root=originals[Key(Root.Scope,Root.Name)];
@@ -83,6 +111,7 @@ public sealed class PathEditingSession
     }
     public void Observe(IReadOnlyList<EnvironmentVariableInfo> current)
     {
+        undo.Clear();redo.Clear();
         var values=current.ToDictionary(item=>Key(item.Scope,item.Name),StringComparer.OrdinalIgnoreCase);
         foreach(var key in originals.Keys.ToArray())
         {
@@ -97,12 +126,15 @@ public sealed class PathEditingSession
         extraGuards.Clear();
     }
     public void UndoExternal()
-    {foreach(var pair in live) {pair.Value.UndoExternal();ReplaceWorking(pair.Key,pair.Value.Working);}}
+    {Remember();foreach(var pair in live) {pair.Value.UndoExternal();ReplaceWorking(pair.Key,pair.Value.Working);}}
     public void FinishReview()
     {foreach(var value in live.Values) value.Accept();IsReviewMode=false;}
     public string UserBranch(VariableScope scope,string name)=>live.TryGetValue(Key(scope,name),out var value) ? value.Local : Raw(scope,name);
     public void Stage(IReadOnlyList<EnvironmentMutation> mutations,IReadOnlyList<VariableSnapshot> guards)
     {
+        if(mutations.Count==0) return;
+        Remember();historyBatch++;
+        try {
         foreach(var mutation in mutations)
         {
             var key=Key(mutation.Scope,mutation.Name);
@@ -110,18 +142,27 @@ public sealed class PathEditingSession
             SetRaw(mutation.Scope,mutation.Name,mutation.Value ?? "");
         }
         foreach(var guard in guards) if(!lists.ContainsKey(Key(guard.Scope,guard.Name))) extraGuards[Key(guard.Scope,guard.Name)]=guard;
+        } finally {historyBatch--;}
     }
     public PathEditorItem Append(VariableScope scope,string name,string value="",bool draft=false)
-    { var item=new PathEditorItem(value,draft); Items(scope,name).Add(item);Capture(scope,name);return item; }
+    { if(!draft) Remember();var item=new PathEditorItem(value,draft); Items(scope,name).Add(item);Capture(scope,name);return item; }
     public void Update(Guid id,string value,bool wasChanged=true)
     {
         if(value.IndexOfAny([';','\0','\r','\n'])>=0) throw new ArgumentException("单个条目不能包含分号、空字符或换行。");
         var source=Locate(id);
+        if((!source.Item.IsDraft || value.Length>0) && (source.Item.Value!=value || value.Length==0 && wasChanged)) Remember();
         if(value.Length==0 && (source.Item.IsDraft || source.Item.Value.Length>0 || wasChanged)) source.Items.Remove(source.Item);
         else {source.Item.Value=value; source.Item.IsDraft=false;}
         Capture(source.Scope,source.Name);
     }
-    public void Remove(Guid id) {var source=Locate(id); source.Items.Remove(source.Item);Capture(source.Scope,source.Name);}
+    public void Remove(Guid id) {var source=Locate(id);if(!source.Item.IsDraft) Remember();source.Items.Remove(source.Item);Capture(source.Scope,source.Name);}
+    public void RemoveMany(IEnumerable<Guid> ids)
+    {
+        var items=ids.Distinct().ToArray();if(items.Length==0) return;
+        foreach(var id in items) Locate(id);
+        Remember();historyBatch++;
+        try {foreach(var id in items) Remove(id);} finally {historyBatch--;}
+    }
     public (VariableScope Scope,string Name,List<PathEditorItem> Items,PathEditorItem Item) Locate(Guid id)
     {
         foreach(var pair in lists) if(pair.Value.FirstOrDefault(item=>item.Id==id) is {} item)
@@ -156,6 +197,7 @@ public sealed class PathEditingSession
         if(ValidateMove(itemId,targetScope,targetName,beforeId) is {} error) throw new ArgumentException(error);
         if(beforeId==itemId) return;
         var source=Locate(itemId); var target=Items(targetScope,targetName);
+        Remember();
         source.Items.Remove(source.Item);
         var index=beforeId is null ? target.Count : target.FindIndex(item=>item.Id==beforeId);
         target.Insert(index,source.Item);

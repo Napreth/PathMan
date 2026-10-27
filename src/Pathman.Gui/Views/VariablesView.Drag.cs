@@ -39,6 +39,8 @@ public partial class VariablesView
             EditableRow.FindParent<TextBox>(e.OriginalSource as DependencyObject) is not null) return;
         var row=EditableRow.FindParent<EditableRow>(e.OriginalSource as DependencyObject);
         if(row?.DataContext is not EnvironmentTreeNode node) return;
+        if(SelectTreeRange(tree,node)) {e.Handled=true;tree.Focus();return;}
+        MarkSingleNode(node);
         if(e.ClickCount>1) { e.Handled=true; row.BeginEdit(); return; }
         dragNode=node; dragTree=tree; dragRow=row; dragStart=e.GetPosition(this); dragOffset=e.GetPosition(row);
     }
@@ -77,7 +79,7 @@ public partial class VariablesView
     private async void DragUnloaded(object sender, RoutedEventArgs e) { if(dragging) await FinishDrag(false); }
     private void TreeKeyDown(object sender, KeyEventArgs e)
     {
-        if(e.Key!=Key.F2 || sender is not TreeView tree || tree.SelectedItem is not EnvironmentTreeNode node) return;
+        if(EditingKeys.InTextInput(e) || e.Key!=Key.F2 || sender is not TreeView tree || tree.SelectedItem is not EnvironmentTreeNode node) return;
         if(Container(tree,node) is {} item && FindVisual<EditableRow>((DependencyObject)item.Template.FindName("PART_Header",item)) is {} row)
         { e.Handled=true; row.BeginEdit(); }
     }

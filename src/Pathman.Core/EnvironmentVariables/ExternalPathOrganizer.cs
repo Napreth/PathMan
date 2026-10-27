@@ -13,7 +13,7 @@ public sealed record ExternalPathOrganizationPlan(VariableScope Scope,VariableSn
 
 public static class ExternalPathOrganizer
 {
-    public static string GroupName(VariableScope scope)=>scope==VariableScope.User ? "EXTERNEL_USER_PATH" : "EXTERNEL_PATH";
+    public static string GroupName(VariableScope scope)=>scope==VariableScope.User ? "EXTERNAL_USER_PATH" : "EXTERNAL_PATH";
     public static string Policy(EnvironmentWorkspace state,VariableScope scope)=>$"{scope}:{state.IsPathOrganizationEnabled(scope)}:{state.ShouldRemovePathDuplicates(scope)}:{state.ShouldMovePathEntries(scope)}:{state.TrackChangeOrigins}:{state.ShouldIgnoreSystemEditor(scope)}:{state.ShouldIgnorePowerToys(scope)}";
     public static ExternalPathOrganizationPlan Plan(VariableScope scope,VariableSnapshot? beforePath,
         IReadOnlyList<EnvironmentVariableInfo> current,EnvironmentWorkspace state,IReadOnlyDictionary<string,string>? runtime=null,string pathName="Path")

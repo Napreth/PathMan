@@ -26,6 +26,9 @@ public partial class VariablesView
     private void RefreshPathEntries(Guid? selectedId=null,string? selectedKey=null)
     {
         if(editingSession is not {} session) {entries.Clear(); return;}
+        var preserveSelection=selectedId is null && selectedKey is null;
+        var restoreFocus=ValuesList.IsKeyboardFocusWithin;
+        var selectedKeys=ValuesList.SelectedItems.OfType<EnvironmentEntry>().Select(item=>item.ViewKey).ToHashSet();
         var old=ValuesList.SelectedItem as EnvironmentEntry;
         selectedKey ??= old?.ViewKey;
         selectedId ??= old?.ItemId;
@@ -38,6 +41,8 @@ public partial class VariablesView
             entries.Add(new(row.Item.Value,row.Item.IsDraft,links,row,pathDragging && row.ViewKey==pathDragSource?.ViewKey));
         }
         ValuesList.SelectedItem=entries.FirstOrDefault(item=>item.ViewKey==selectedKey) ?? entries.FirstOrDefault(item=>item.ItemId==selectedId);
+        if(preserveSelection) foreach(var entry in entries.Where(item=>selectedKeys.Contains(item.ViewKey))) if(!ValuesList.SelectedItems.Contains(entry)) ValuesList.SelectedItems.Add(entry);
+        if(restoreFocus) ValuesList.Focus();
         updating=previousUpdating;
         dirty=session.HasChanges;
         UpdateActions();

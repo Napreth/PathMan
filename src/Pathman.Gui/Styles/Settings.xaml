@@ -146,6 +146,7 @@
         </Setter>
     </Style>
     <Style x:Key="CompactTreeItem" TargetType="TreeViewItem">
+        <Setter Property="AutomationProperties.ItemStatus" Value="{Binding SelectionStatus}"/>
         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
         <Setter Property="AutomationProperties.Name" Value="{Binding Title}"/>
@@ -186,6 +187,7 @@
                             <Setter TargetName="Row" Property="Background" Value="{StaticResource ListSelectionBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource ListSelectionTextBrush}"/>
                         </Trigger>
+                    <DataTrigger Binding="{Binding IsMarked}" Value="True"><Setter TargetName="Row" Property="Background" Value="{StaticResource ListSelectionBrush}"/><Setter Property="Foreground" Value="{StaticResource ListSelectionTextBrush}"/></DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

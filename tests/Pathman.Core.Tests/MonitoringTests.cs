@@ -17,7 +17,7 @@ internal static class MonitoringTests
 
         var basic=Plan(@"C:\old;C:\old",V("Path",@"C:\old;C:\old;C:\NEW;c:\old\;D:\new"));
         assert(basic.RemovedDuplicates==1 && basic.MovedEntries==2,"Only newly added duplicates and software entries may be arranged");
-        assert(basic.Mutations.Single(item=>item.Name=="Path").Value==@"C:\old;C:\old;%EXTERNEL_USER_PATH%" && basic.Mutations.Single(item=>item.Name==ExternalPathOrganizer.GroupName(VariableScope.User)).Value==@"C:\NEW;D:\new","Existing duplicates must remain untouched and new paths retain their text");
+        assert(basic.Mutations.Single(item=>item.Name=="Path").Value==@"C:\old;C:\old;%EXTERNAL_USER_PATH%" && basic.Mutations.Single(item=>item.Name==ExternalPathOrganizer.GroupName(VariableScope.User)).Value==@"C:\NEW;D:\new","Existing duplicates must remain untouched and new paths retain their text");
         assert(!basic.ChangesPathOrder,"Consecutive new paths can move behind a reference without changing expanded order");
         var current=new[] {V("Path",@"C:\old;C:\old;C:\NEW;c:\old\;D:\new")};
         var applied=Apply(current,basic);
@@ -26,19 +26,19 @@ internal static class MonitoringTests
 
         var interleaved=Plan(@"C:\old;D:\old",V("Path",@"C:\old;C:\new;D:\old;D:\new"));
         assert(interleaved.ChangesPathOrder,"Merging nonconsecutive additions must report changed command precedence");
-        var existing=Plan(@"%EXTERNEL_USER_PATH%;C:\old",V("Path",@"%EXTERNEL_USER_PATH%;C:\old;D:\new"),V("EXTERNEL_USER_PATH",@"C:\external"));
-        assert(existing.Mutations.Single(item=>item.Name=="EXTERNEL_USER_PATH").Value==@"C:\external;D:\new" && existing.Mutations.Single(item=>item.Name=="Path").Value==@"%EXTERNEL_USER_PATH%;C:\old" && existing.ChangesPathOrder,"Append to an existing external group without adding a second reference; report its order impact");
-        var emptyGroup=Plan(@"%EXTERNEL_USER_PATH%;C:\old",V("Path",@"%EXTERNEL_USER_PATH%;C:\old;D:\new"),V("EXTERNEL_USER_PATH",""));
-        assert(emptyGroup.Mutations.Single(item=>item.Name=="EXTERNEL_USER_PATH").Value==@";D:\new","Migration must preserve pre-existing empty entries in an existing external variable");
+        var existing=Plan(@"%EXTERNAL_USER_PATH%;C:\old",V("Path",@"%EXTERNAL_USER_PATH%;C:\old;D:\new"),V("EXTERNAL_USER_PATH",@"C:\external"));
+        assert(existing.Mutations.Single(item=>item.Name=="EXTERNAL_USER_PATH").Value==@"C:\external;D:\new" && existing.Mutations.Single(item=>item.Name=="Path").Value==@"%EXTERNAL_USER_PATH%;C:\old" && existing.ChangesPathOrder,"Append to an existing external group without adding a second reference; report its order impact");
+        var emptyGroup=Plan(@"%EXTERNAL_USER_PATH%;C:\old",V("Path",@"%EXTERNAL_USER_PATH%;C:\old;D:\new"),V("EXTERNAL_USER_PATH",""));
+        assert(emptyGroup.Mutations.Single(item=>item.Name=="EXTERNAL_USER_PATH").Value==@";D:\new","Migration must preserve pre-existing empty entries in an existing external variable");
         var scopes=Plan(@"C:\user",V("Path",@"C:\user;c:\windows\;D:\tool"),V("Path",@"C:\Windows",VariableScope.Machine));
         assert(scopes.RemovedDuplicates==1 && scopes.Preconditions.Any(item=>item.Scope==VariableScope.Machine),"User duplicates must account for the preceding machine PATH with guarded inputs");
 
         var references=Plan(@"%SDK_PATH%",V("Path",@"%SDK_PATH%;C:\sdk;%MORE_PATH%"),V("SDK_PATH",@"C:\sdk"),V("MORE_PATH",@"C:\sdk;D:\unique"));
-        assert(references.RemovedDuplicates==1 && references.Mutations.Single(item=>item.Name=="EXTERNEL_USER_PATH").Value=="%MORE_PATH%","Fully overlapping new entries can be removed; partially overlapping references must retain their unique paths");
+        assert(references.RemovedDuplicates==1 && references.Mutations.Single(item=>item.Name=="EXTERNAL_USER_PATH").Value=="%MORE_PATH%","Fully overlapping new entries can be removed; partially overlapping references must retain their unique paths");
         assert(references.Preconditions.Any(item=>item.Name=="MORE_PATH"),"Referenced input values must be guarded against external races");
         var missing=Plan(@"C:\old",V("Path",@"C:\old;%MISSING%;D:\new"));
         assert(missing.Mutations.Count==0 && missing.Warning is not null,"Unresolved additions must stay in place rather than silently change their binding");
-        var cycle=Plan(@"C:\old",V("Path",@"C:\old;%A_PATH%"),V("A_PATH","%EXTERNEL_USER_PATH%"),V("EXTERNEL_USER_PATH",@"D:\old"));
+        var cycle=Plan(@"C:\old",V("Path",@"C:\old;%A_PATH%"),V("A_PATH","%EXTERNAL_USER_PATH%"),V("EXTERNAL_USER_PATH",@"D:\old"));
         assert(cycle.Mutations.Count==0 && cycle.Warning is not null,"Indirect external-group references must never create a cycle");
         var pathCycle=Plan(@"C:\old",V("Path",@"C:\old;%Path%"));
         assert(pathCycle.Mutations.Count==0,"Self-referencing PATH entries must not be moved");
@@ -78,7 +78,7 @@ internal static class MonitoringTests
         settings.AutoArrangeUserPath=false;settings.AutoArrangeMachinePath=true;
         assert(ExternalPathOrganizer.Plan(VariableScope.User,S(@"C:\user"),machineInput,settings,runtime).Mutations.Count==0 &&
             ExternalPathOrganizer.Plan(VariableScope.Machine,S(@"C:\machine",VariableScope.Machine),machineInput,settings,runtime).MovedEntries==1,"System-only automation must leave the user PATH untouched");
-        assert(ExternalPathOrganizer.GroupName(VariableScope.User)=="EXTERNEL_USER_PATH" && ExternalPathOrganizer.GroupName(VariableScope.Machine)=="EXTERNEL_PATH","User and system migrations must use their own explicit target names");
+        assert(ExternalPathOrganizer.GroupName(VariableScope.User)=="EXTERNAL_USER_PATH" && ExternalPathOrganizer.GroupName(VariableScope.Machine)=="EXTERNAL_PATH","User and system migrations must use their own explicit target names");
         settings.AutoArrangeUserPath=true;settings.RemoveUserPathDuplicates=false;settings.MoveExternalUserPathEntries=false;
         assert(ExternalPathOrganizer.Plan(VariableScope.User,S(@"C:\user"),machineInput,settings,runtime).Mutations.Count==0 &&
             ExternalPathOrganizer.Plan(VariableScope.Machine,S(@"C:\machine",VariableScope.Machine),machineInput,settings,runtime).MovedEntries==1,"Each scope's duplicate and migration suboptions must remain independent");

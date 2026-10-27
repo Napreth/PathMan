@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Windows ${{ matrix.arch }}
+    runs-on: windows-2025
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x64, arm64]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      PATHMAN_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up .NET 10
+        if: ${{ !env.ACT }}
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Prepare build tools
+        run: ./scripts/prepare-ci.ps1
+      - name: Build, test and package
+        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -Test
+      - name: Verify packages
+        run: |
+          $packages = @(Get-ChildItem artifacts/setup -Filter "PathMan-*-$env:PATHMAN_ARCH*.exe")
+          if ($packages.Count -ne 2) { throw 'Expected both installer variants.' }
+          foreach ($package in $packages) {
+            $manifest = Get-Content ($package.FullName + '.json') -Raw | ConvertFrom-Json
+            if ((Get-FileHash $package.FullName).Hash -ne $manifest.SHA256) { throw 'Package checksum mismatch.' }
+          }
+      - name: Upload installers
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: PathMan-${{ matrix.arch }}
+          path: |
+            artifacts/setup/*-${{ matrix.arch }}.exe
+            artifacts/setup/*-${{ matrix.arch }}.exe.json
+            artifacts/setup/*-${{ matrix.arch }}-SelfContained.exe
+            artifacts/setup/*-${{ matrix.arch }}-SelfContained.exe.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

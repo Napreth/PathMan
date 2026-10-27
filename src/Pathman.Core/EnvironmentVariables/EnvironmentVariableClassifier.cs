@@ -5,7 +5,7 @@ namespace Pathman.Core.EnvironmentVariables;
 
 public static partial class EnvironmentVariableClassifier
 {
-    private sealed class BuiltInNames { public string[] Names { get; set; } = []; public string[] UserOnlyNames {get;set;}=[]; }
+    private sealed class BuiltInNames { public string[] Names { get; set; } = []; public string[] UserOnlyNames {get;set;}=[]; public string[] DefaultOtherNames {get;set;}=[]; }
     private static readonly BuiltInNames Defaults=EnvironmentWorkspaceStore.ReadDefault<BuiltInNames>("windows-variables");
     private static readonly HashSet<string> BuiltIns = new(Defaults.Names, StringComparer.OrdinalIgnoreCase);
     internal static bool IsUserOnlyBuiltIn(string name)=>Defaults.UserOnlyNames.Contains(name,StringComparer.OrdinalIgnoreCase);
@@ -45,6 +45,7 @@ public static partial class EnvironmentVariableClassifier
         if (state.Assignments.TryGetValue(key, out var assigned) && groups.Any(group => group.Id == assigned)) return assigned;
         var external = groups.FirstOrDefault(group => group.Rule == "external" && state.MonitoringEnabled && state.ExternalVariables.Contains(key));
         if (external is not null) return external.Id;
+        if (Defaults.DefaultOtherNames.Contains(variable.Name,StringComparer.OrdinalIgnoreCase)) return groups.First(group=>group.Rule=="fallback").Id;
         foreach (var group in state.Groups.Where(group => groups.Contains(group)))
         {
             if (group.Rule == "paths" && IsPathVariable(variable, all, runtime) || group.Rule == "builtin" && BuiltIns.Contains(variable.Name)) return group.Id;

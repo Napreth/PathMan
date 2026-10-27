@@ -51,7 +51,7 @@
             <Grid Margin="0,0,0,6"><TextBlock x:Name="UserTitle" Text="用户变量" Style="{StaticResource SectionTitle}"/><controls:ScopeActions x:Name="UserActions" Scope="User" HorizontalAlignment="Right" VerticalAlignment="Center" ActionRequested="ScopeActionRequested" AutomationProperties.Name="用户变量操作"/></Grid>
             <Grid Grid.Row="1">
                 <Grid.RowDefinitions><RowDefinition Height="*" MinHeight="96"/><RowDefinition Height="16"/><RowDefinition Height="1.5*" MinHeight="132"/></Grid.RowDefinitions>
-                <Border Style="{StaticResource Surface}"><TreeView x:Name="UserVariablesTree" SelectedItemChanged="SelectVariable" AutomationProperties.Name="用户变量"
+                <Border Style="{StaticResource Surface}"><TreeView x:Name="UserVariablesTree" Focusable="True" SelectedItemChanged="SelectVariable" AutomationProperties.Name="用户变量"
                     PreviewMouseLeftButtonDown="TreeMouseDown" PreviewMouseMove="TreeMouseMove" PreviewMouseLeftButtonUp="TreeMouseUp" PreviewKeyDown="TreeKeyDown"/></Border>
                 <GridSplitter x:Name="ScopeSplitter" Grid.Row="1" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" ShowsPreview="False"
                               HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" Cursor="SizeNS" Focusable="True" KeyboardIncrement="8"
@@ -67,7 +67,7 @@
                 <Grid Grid.Row="2">
                     <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid Margin="0,0,0,6"><TextBlock x:Name="SystemTitle" Text="系统变量" Style="{StaticResource SectionTitle}"/><controls:ScopeActions x:Name="SystemActions" Scope="Machine" HorizontalAlignment="Right" VerticalAlignment="Center" ActionRequested="ScopeActionRequested" AutomationProperties.Name="系统变量操作"/></Grid>
-                    <Border Grid.Row="1" Style="{StaticResource Surface}"><TreeView x:Name="SystemVariablesTree" SelectedItemChanged="SelectVariable" AutomationProperties.Name="系统变量"
+                    <Border Grid.Row="1" Style="{StaticResource Surface}"><TreeView x:Name="SystemVariablesTree" Focusable="True" SelectedItemChanged="SelectVariable" AutomationProperties.Name="系统变量"
                         PreviewMouseLeftButtonDown="TreeMouseDown" PreviewMouseMove="TreeMouseMove" PreviewMouseLeftButtonUp="TreeMouseUp" PreviewKeyDown="TreeKeyDown"/></Border>
                 </Grid>
             </Grid>
@@ -75,7 +75,7 @@
             <Border x:Name="ValueSurface" Grid.Row="1" Grid.Column="2" Style="{StaticResource Surface}">
                 <Grid>
                     <TextBlock x:Name="EmptySelection" Text="选择环境变量" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <ListBox x:Name="ValuesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="变量条目"
+                    <ListBox x:Name="ValuesList" SelectionMode="Extended" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" FontSize="13" SelectionChanged="EntrySelected" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False" AutomationProperties.Name="变量条目"
                              PreviewMouseLeftButtonDown="PathMouseDown" PreviewMouseMove="PathMouseMove" PreviewMouseLeftButtonUp="PathMouseUp">
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}"/><Style.Triggers><DataTrigger Binding="{Binding IsDragPlaceholder}" Value="True"><Setter Property="Opacity" Value="0"/></DataTrigger></Style.Triggers></Style></ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate><DataTemplate><Grid Margin="{Binding Indent}"><Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -91,7 +91,7 @@
                             <controls:EditableRow Grid.Column="2" Text="{Binding Value}" CanEdit="{Binding CanEdit}" ShowPin="False" ShowEdit="False" ShowDelete="False" ShowJump="{Binding HasReferences}" JumpToolTip="{Binding ReferenceToolTip}" JumpRequested="EntryJumpRequested" EditRequested="EntryEditRequested" EditingCanceled="EntryEditCanceled" EditingChanged="RowEditingChanged"/>
                         </Grid></DataTemplate></ListBox.ItemTemplate>
                     </ListBox>
-                    <ListBox x:Name="GroupVariablesList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="分组变量">
+                    <ListBox x:Name="GroupVariablesList" SelectionMode="Extended" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="分组变量">
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource CompactListItem}"><Setter Property="AutomationProperties.Name" Value="{Binding Title}"/></Style></ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate><DataTemplate>
                             <controls:EditableRow Text="{Binding Title}" Detail="{Binding Variable.RawValue}" CanDelete="{Binding CanDelete}" IsPinned="{Binding IsPinned}" EditOnDoubleClick="False" Activated="OpenGroupVariable" EditRequested="RowEditRequested" DeleteRequested="RowDeleteRequested" PinRequested="RowPinRequested" EditingChanged="RowEditingChanged"/>

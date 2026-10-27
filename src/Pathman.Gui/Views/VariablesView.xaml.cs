@@ -37,6 +37,7 @@ public partial class VariablesView : UserControl
     public VariablesView(PathmanLayout layout, EnvironmentWorkspaceStore store)
     {
         this.layout=layout; this.store=store; InitializeComponent(); ValuesList.ItemsSource=entries;
+        PreviewKeyDown+=EditorKeyDown;
         Loaded += async (_,_) => { if (userGroups.Count == 0) await ReloadAsync(); };
         Unloaded+=(_,_)=> {updating=true;temporaryCleanup=false;TemporaryCleanupButton.IsChecked=false;updating=false;};
     }
@@ -115,6 +116,7 @@ public partial class VariablesView : UserControl
         if(temporaryCleanup && temporaryCleanupKey!=node?.Key) {temporaryCleanup=false;temporaryCleanupKey=null;TemporaryCleanupButton.IsChecked=false;}
         if (selected!=node && selected is not null) selected.IsSelected=false;
         selected=node; if(node is not null) node.IsSelected=true;
+        MarkSingleNode(node);
         VariableTitle.Text=node?.Title ?? "环境变量";
         var variable=node?.Variable is {} original ? allVariables.FirstOrDefault(item=>item.Scope==original.Scope && item.Name==original.Name) ?? original : null;
         var restoreTargets=editingSession is {} previous && variable is not null && previous.Root.Scope==variable.Scope && previous.Root.Name.Equals(variable.Name,StringComparison.OrdinalIgnoreCase)
@@ -156,16 +158,16 @@ public partial class VariablesView : UserControl
         if (SaveButton is null) return;
         SaveButton.IsEnabled=(dirty || HasInlineEditor || editingSession?.IsReviewMode==true) && !busy; RevertButton.IsEnabled=(dirty || editingSession?.IsReviewMode==true) && !busy;
         System.Windows.Automation.AutomationProperties.SetItemStatus(SaveButton,busy ? "保存中" : dirty || HasInlineEditor || editingSession?.IsReviewMode==true ? "待保存" : "已保存");
-        EditEntryButton.IsEnabled=ValuesList.SelectedItem is EnvironmentEntry {CanEdit:true} && !busy;
-        DeleteEntryButton.IsEnabled=EditEntryButton.IsEnabled;
-        BrowseEntryButton.IsEnabled=ValuesList.SelectedItem is not EnvironmentEntry {IsGhost:true} && !busy;
+        EditEntryButton.IsEnabled=ValuesList.SelectedItems.Count==1 && ValuesList.SelectedItem is EnvironmentEntry {CanEdit:true} && !busy;
+        DeleteEntryButton.IsEnabled=ValuesList.SelectedItems.OfType<EnvironmentEntry>().Any(entry=>entry.CanEdit) && !busy;
+        BrowseEntryButton.IsEnabled=ValuesList.SelectedItems.Count<=1 && ValuesList.SelectedItem is not EnvironmentEntry {IsGhost:true} && !busy;
         UndoExternalButton.IsEnabled=editingSession?.HasExternalChanges==true && !busy;
         CleanExternalButton.IsEnabled=editingSession?.HasExternalChanges==true && CanCleanSelected && !busy;
         TemporaryCleanupButton.IsEnabled=CanCleanSelected && !busy;
         ExternalActions.Visibility=editingSession?.IsReviewMode==true ? Visibility.Visible : Visibility.Collapsed;
         var current=SelectedPathItem();
-        MoveUpButton.IsEnabled=current is {} up && up.Index>0 && !busy;
-        MoveDownButton.IsEnabled=current is {} down && down.Index<down.Count-1 && !busy;
+        MoveUpButton.IsEnabled=ValuesList.SelectedItems.Count==1 && current is {} up && up.Index>0 && !busy;
+        MoveDownButton.IsEnabled=ValuesList.SelectedItems.Count==1 && current is {} down && down.Index<down.Count-1 && !busy;
         foreach (var toolbar in new[] { UserActions, SystemActions })
         {
             toolbar.IsEnabled = !busy;
@@ -246,7 +248,7 @@ public partial class VariablesView : UserControl
     }
     private void CopyValue(object sender,RoutedEventArgs e)
     {
-        var value=listMode && ValuesList.SelectedIndex>=0 ? entries[ValuesList.SelectedIndex].Value : CurrentValue;
+        var value=listMode && ValuesList.SelectedItems.Count>0 ? string.Join(Environment.NewLine,ValuesList.SelectedItems.OfType<EnvironmentEntry>().OrderBy(entries.IndexOf).Select(entry=>entry.Value)) : CurrentValue;
         try { Clipboard.SetDataObject(value,true); StatusText.Text="已复制。"; } catch(ExternalException) { StatusText.Text="剪贴板暂时不可用。"; }
     }
     private async void ScopeActionRequested(object? sender, ScopeActionEventArgs e)
@@ -295,6 +297,7 @@ public partial class VariablesView : UserControl
         { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。"); return; }
         if(editingSession is not {} session) return;
         session.Update(entry.ItemId,e.Value,e.WasChanged); RefreshPathEntries(entry.ItemId); SetDirty();
+        Dispatcher.BeginInvoke(()=>ValuesList.Focus(),DispatcherPriority.Input);
     }
     private void EntryEditCanceled(object? sender, EventArgs e)
     {
@@ -302,9 +305,11 @@ public partial class VariablesView : UserControl
     }
     private void DeleteEntry(object sender, RoutedEventArgs e)
     {
-        if (ValuesList.SelectedItem is not EnvironmentEntry {CanEdit:true} entry) return;
         if(editingSession is not {} session) return;
-        var index=ValuesList.SelectedIndex; session.Remove(entry.ItemId); RefreshPathEntries(); ValuesList.SelectedIndex=Math.Min(index,entries.Count-1); SetDirty();
+        activeEditor?.CancelEdit();
+        var ids=ValuesList.SelectedItems.OfType<EnvironmentEntry>().Where(entry=>entry.CanEdit).Select(entry=>entry.ItemId).Distinct().ToArray();
+        if(ids.Length==0) return;
+        var index=ValuesList.SelectedIndex;session.RemoveMany(ids);RefreshPathEntries();ValuesList.SelectedIndex=Math.Min(index,entries.Count-1);SetDirty();
     }
     private async void RowDeleteRequested(object? sender, EventArgs e)
     { if(sender is EditableRow { DataContext: EnvironmentTreeNode node } && node.CanDelete) await DeleteNode(node); }
