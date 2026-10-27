@@ -31,7 +31,7 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
         Directory.CreateDirectory(layout.ShimsDirectory);
         var executable = Path.Combine(layout.ShimsDirectory, name + ".exe");
         var manifest = Path.Combine(layout.ShimsDirectory, name + ".shim");
-        if (Path.Exists(executable) || Path.Exists(manifest)) throw new IOException($"别名或同名文件已存在：{name}");
+        if (Path.Exists(executable) || Path.Exists(manifest)) throw new IOException(L.Format("别名或同名文件已存在：{0}",name));
         CreateLink(executable);
         try {WriteManifest(manifest,target,false);} catch {File.Delete(executable);throw;}
         if(ensureUserPath) EnsureUserShimsPath();
@@ -46,9 +46,9 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
     }
     private ShimAlias Existing(string name,string? expectedTarget)
     {
-        if(!File.Exists(Path.Combine(layout.ShimsDirectory,name+".shim")) && !File.Exists(Path.Combine(layout.ShimsDirectory,name+".exe"))) throw new IOException("别名已不存在，请刷新后重试。");
+        if(!File.Exists(Path.Combine(layout.ShimsDirectory,name+".shim")) && !File.Exists(Path.Combine(layout.ShimsDirectory,name+".exe"))) throw new IOException(L.Get("别名已不存在，请刷新后重试。"));
         var alias=ReadAlias(Path.Combine(layout.ShimsDirectory,name+".shim"));
-        if(expectedTarget is not null && alias.Target!=expectedTarget) throw new IOException("别名已被其他程序修改，请刷新后重试。");
+        if(expectedTarget is not null && alias.Target!=expectedTarget) throw new IOException(L.Get("别名已被其他程序修改，请刷新后重试。"));
         return alias;
     }
     public ShimAlias Update(string name,string target,string? expectedTarget=null)=>WithLock(()=>
@@ -63,7 +63,7 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
         if(existing.Name==newName) return existing;
         var oldExe=Path.Combine(layout.ShimsDirectory,existing.Name+".exe");var oldManifest=Path.Combine(layout.ShimsDirectory,existing.Name+".shim");
         var newExe=Path.Combine(layout.ShimsDirectory,newName+".exe");var newManifest=Path.Combine(layout.ShimsDirectory,newName+".shim");
-        if(!existing.Name.Equals(newName,StringComparison.OrdinalIgnoreCase) && (Path.Exists(newExe) || Path.Exists(newManifest))) throw new IOException("别名或同名文件已存在。");
+        if(!existing.Name.Equals(newName,StringComparison.OrdinalIgnoreCase) && (Path.Exists(newExe) || Path.Exists(newManifest))) throw new IOException(L.Get("别名或同名文件已存在。"));
         var temporary=Path.Combine(layout.ShimsDirectory,Guid.NewGuid().ToString("N"));var exeAt=oldExe;var manifestAt=oldManifest;
         try
         {
@@ -153,7 +153,7 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
             if (CreateHardLink(executable, cached, IntPtr.Zero)) return;
             error = Marshal.GetLastWin32Error();
         }
-        throw new Win32Exception(error, $"无法创建硬链接：{executable}");
+        throw new Win32Exception(error, L.Format("无法创建硬链接：{0}",executable));
     }
 
     private static ShimAlias ReadAlias(string manifest)
@@ -184,7 +184,7 @@ public sealed class ShimManager(PathmanLayout layout,bool ensureUserPath=true)
             (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
                                  stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
              "123456789¹²³".Contains(stem[3])))
-            throw new ArgumentException("别名必须是有效的 Windows 文件名，最长 250 个字符，不能使用设备保留名或以空格、句点结尾。");
+            throw new ArgumentException(L.Get("别名必须是有效的 Windows 文件名，最长 250 个字符，不能使用设备保留名或以空格、句点结尾。"));
         return name;
     }
 

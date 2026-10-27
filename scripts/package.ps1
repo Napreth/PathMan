@@ -3,9 +3,12 @@ param(
     [ValidateSet('x86', 'x64', 'arm64')][string[]]$Arch = @('x86', 'x64', 'arm64'),
     [ValidateSet('FrameworkDependent', 'SelfContained')][string[]]$PackageType = @('FrameworkDependent', 'SelfContained'),
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.1.0'
+    [string]$Version = ''
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'version.ps1')
+$versionInfo=Get-BuildVersion $Version
+$Version=$versionInfo.Version
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $Arch = @($Arch | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
 $PackageType = @($PackageType | ForEach-Object {
@@ -43,7 +46,7 @@ foreach ($cpu in @($Arch | Select-Object -Unique)) {
             if (!(Test-Path -LiteralPath (Join-Path $publish $file))) { throw "Missing payload: $publish/$file. Run build.ps1 first." }
         }
         if (@(Get-ChildItem -LiteralPath (Join-Path $publish 'bin') -File).Count -ne 1) { throw 'bin must contain only pathman.exe.' }
-        & $compiler /V2 /INPUTCHARSET UTF8 "/DARCH=$cpu" "/DPACKAGE_TYPE=$kind" "/DVERSION=$Version" "/DPUBLISH_DIR=$publish" "/DHELPER_DLL=$helper" "/DOUTPUT_FILE=$output" (Join-Path $projectRoot 'packaging/PathMan.nsi')
+        & $compiler /V2 /INPUTCHARSET UTF8 "/DARCH=$cpu" "/DPACKAGE_TYPE=$kind" "/DVERSION=$Version" "/DVERSION_NUMERIC=$($versionInfo.Numeric)" "/DPUBLISH_DIR=$publish" "/DHELPER_DLL=$helper" "/DOUTPUT_FILE=$output" (Join-Path $projectRoot 'packaging/PathMan.nsi')
         if ($LASTEXITCODE -ne 0) { throw "NSIS packaging failed: $cpu / $kind" }
         $payload = @(Get-ChildItem -LiteralPath $publish -File -Recurse | ForEach-Object {
             [ordered]@{ Path = [IO.Path]::GetRelativePath($publish, $_.FullName); SHA256 = (Get-FileHash -LiteralPath $_.FullName).Hash }

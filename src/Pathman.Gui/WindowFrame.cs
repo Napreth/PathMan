@@ -10,6 +10,8 @@ namespace Pathman.Gui;
 
 internal static class WindowFrame
 {
+    public static void Refresh(Window window)
+    {var handle=new WindowInteropHelper(window).Handle;if(handle!=IntPtr.Zero) Apply(window,handle);}
     private static readonly ConditionalWeakTable<Window, object> installed = new();
 
     public static void Install(Window window)
@@ -38,7 +40,7 @@ internal static class WindowFrame
         var caption = 0xFFFFFFFEu;
         var backdrop = 2u; // DWMSBT_MAINWINDOW
         var corners = 2u; // DWMWCP_ROUND
-        var dark = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int light && light == 0 ? 1u : 0u;
+        var dark = Appearance.Theme=="dark" || Appearance.Theme!="light" && Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int light && light == 0 ? 1u : 0u;
         DwmSetWindowAttribute(handle, 20, ref dark, sizeof(uint));
         DwmSetWindowAttribute(handle, 35, ref caption, sizeof(uint));
         DwmSetWindowAttribute(handle, 33, ref corners, sizeof(uint));

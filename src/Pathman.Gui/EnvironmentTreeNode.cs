@@ -13,7 +13,7 @@ public sealed class EnvironmentTreeNode : INotifyPropertyChanged
     public EnvironmentVariableInfo? Variable { get; }
     public VariableGroupDefinition Group { get; }
     public VariableScope Scope { get; }
-    public string Title => Variable?.Name ?? Group.Name;
+    public string Title => Variable?.Name ?? Group.DisplayName;
     public bool IsGroup => Variable is null;
     public bool IsPinned { get; }
     public bool CanDelete => !IsGroup || Group.Rule != "fallback";
@@ -21,7 +21,7 @@ public sealed class EnvironmentTreeNode : INotifyPropertyChanged
     public bool IsExpanded { get => expanded; set => Set(ref expanded, value); }
     public bool IsSelected { get => selected; set => Set(ref selected, value); }
     public bool IsMarked { get => marked; set {if(marked==value) return;Set(ref marked,value);PropertyChanged?.Invoke(this,new(nameof(SelectionStatus)));} }
-    public string SelectionStatus=>IsMarked ? "已选择" : "";
+    public string SelectionStatus=>IsMarked ? L.Get("已选择") : "";
     public string Key => IsGroup ? $"group:{Scope}:{Group.Id}" : $"variable:{Scope}:{Variable!.Name}";
     public event PropertyChangedEventHandler? PropertyChanged;
     private EnvironmentTreeNode(EnvironmentVariableInfo variable, VariableGroupDefinition group, EnvironmentWorkspace state)

@@ -67,7 +67,7 @@ public static class ExternalPathOrganizer
             var candidate=current.Where(item=>item!=group).Append(new EnvironmentVariableInfo(groupName,newGroup,scope)).ToArray();
             var expanded=new EnvironmentPathResolver(candidate,runtime).Expand(newGroup,scope);
             if(!expanded.IsResolved || EnvironmentPathResolver.ReferenceNames(newGroup).Any(name=>name.Equals("Path",StringComparison.OrdinalIgnoreCase)))
-            {canMove=false;warning="外部新增 PATH 项包含无法安全展开的引用，已保留原位置。";}
+            {canMove=false;warning=L.Get("外部新增 PATH 项包含无法安全展开的引用，已保留原位置。");}
             else mutations.Add(new(group is null ? "create" : "set",scope,groupName,newGroup,ExpectedValue:group?.RawValue,ExpectedKind:group?.Kind));
         }
         var hasReference=path.Entries.Select((entry,index)=>(entry,index)).Any(item=>!removed.Contains(item.index) && EnvironmentPathResolver.PureReference(item.entry)?.Equals(groupName,StringComparison.OrdinalIgnoreCase)==true);

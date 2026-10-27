@@ -26,7 +26,7 @@ public static partial class Osc8Text
 
 public sealed record AppPageLink(string Page,VariableScope? Scope=null,string? Name=null)
 {
-    private static readonly HashSet<string> Pages=new(["variables","health","aliases","versions","monitor","about"],StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> Pages=new(["variables","health","aliases","versions","monitor","settings","about"],StringComparer.OrdinalIgnoreCase);
     public override string ToString()=>"apppage:"+Page+(Scope is null || Name is null ? "" : $"?scope={Scope}&name={Uri.EscapeDataString(Name)}");
     public static AppPageLink? Parse(string value)
     {

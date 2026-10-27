@@ -1,0 +1,1210 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <data name="--type 仅支持 User 或 Machine。" xml:space="preserve">
+    <value>--type 仅支持 User 或 Machine。</value>
+  </data>
+  <data name="CLI 目录：{0}" xml:space="preserve">
+    <value>CLI 目录：{0}</value>
+  </data>
+  <data name="PATH 不能作为多版本管理的目标变量。" xml:space="preserve">
+    <value>PATH 不能作为多版本管理的目标变量。</value>
+  </data>
+  <data name="PathMan — 版本管理&#10;&#10;  pathman list [项目]&#10;  pathman add &lt;项目&gt; &lt;版本&gt; &lt;值&gt; [--variable &lt;变量名&gt;] [--type User|Machine] [--replace]&#10;  pathman switch &lt;项目&gt; &lt;版本&gt;&#10;  pathman delete &lt;项目&gt; [版本]" xml:space="preserve">
+    <value>PathMan — 版本管理
+
+  pathman list [项目]
+  pathman add &lt;项目&gt; &lt;版本&gt; &lt;值&gt; [--variable &lt;变量名&gt;] [--type User|Machine] [--replace]
+  pathman switch &lt;项目&gt; &lt;版本&gt;
+  pathman delete &lt;项目&gt; [版本]</value>
+  </data>
+  <data name="Windows 环境变量与程序别名管理器" xml:space="preserve">
+    <value>Windows 环境变量与程序别名管理器</value>
+  </data>
+  <data name="{0} · {1}，第 {2} 行" xml:space="preserve">
+    <value>{0} · {1}，第 {2} 行</value>
+  </data>
+  <data name="{0} 已变化，请重新检测后再操作。" xml:space="preserve">
+    <value>{0} 已变化，请重新检测后再操作。</value>
+  </data>
+  <data name="{0} 已被其他程序修改，请重新预览清理结果。" xml:space="preserve">
+    <value>{0} 已被其他程序修改，请重新预览清理结果。</value>
+  </data>
+  <data name="{0} 是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。" xml:space="preserve">
+    <value>{0} 是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。</value>
+  </data>
+  <data name="{0}（未列出）" xml:space="preserve">
+    <value>{0}（未列出）</value>
+  </data>
+  <data name="一次保存只支持一种作用域。" xml:space="preserve">
+    <value>一次保存只支持一种作用域。</value>
+  </data>
+  <data name="上一行  " xml:space="preserve">
+    <value>上一行  </value>
+  </data>
+  <data name="上次检测：{0:HH:mm:ss}" xml:space="preserve">
+    <value>上次检测：{0:HH:mm:ss}</value>
+  </data>
+  <data name="上移" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="下一行  " xml:space="preserve">
+    <value>下一行  </value>
+  </data>
+  <data name="下移" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="不支持此批量操作。" xml:space="preserve">
+    <value>不支持此批量操作。</value>
+  </data>
+  <data name="不整理PowerToys修改的变量" xml:space="preserve">
+    <value>不整理PowerToys修改的变量</value>
+  </data>
+  <data name="不整理系统编辑器修改的变量" xml:space="preserve">
+    <value>不整理系统编辑器修改的变量</value>
+  </data>
+  <data name="不能在用户和系统作用域之间拖动路径。" xml:space="preserve">
+    <value>不能在用户和系统作用域之间拖动路径。</value>
+  </data>
+  <data name="临时自动清理" xml:space="preserve">
+    <value>临时自动清理</value>
+  </data>
+  <data name="主题" xml:space="preserve">
+    <value>主题</value>
+  </data>
+  <data name="之前发现的问题已解决。" xml:space="preserve">
+    <value>之前发现的问题已解决。</value>
+  </data>
+  <data name="仅在当前变量编辑期间整理外部新增项；保存时才写入" xml:space="preserve">
+    <value>仅在当前变量编辑期间整理外部新增项；保存时才写入</value>
+  </data>
+  <data name="仍然启用" xml:space="preserve">
+    <value>仍然启用</value>
+  </data>
+  <data name="仍然选择" xml:space="preserve">
+    <value>仍然选择</value>
+  </data>
+  <data name="以管理员身份运行" xml:space="preserve">
+    <value>以管理员身份运行</value>
+  </data>
+  <data name="以非管理员身份运行" xml:space="preserve">
+    <value>以非管理员身份运行</value>
+  </data>
+  <data name="作用域" xml:space="preserve">
+    <value>作用域</value>
+  </data>
+  <data name="作用范围仅支持用户或系统。" xml:space="preserve">
+    <value>作用范围仅支持用户或系统。</value>
+  </data>
+  <data name="保存" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="保存中" xml:space="preserve">
+    <value>保存中</value>
+  </data>
+  <data name="保持原始内容，将注册表类型改为 REG_EXPAND_SZ。" xml:space="preserve">
+    <value>保持原始内容，将注册表类型改为 REG_EXPAND_SZ。</value>
+  </data>
+  <data name="修改" xml:space="preserve">
+    <value>修改</value>
+  </data>
+  <data name="修改前" xml:space="preserve">
+    <value>修改前</value>
+  </data>
+  <data name="修改后" xml:space="preserve">
+    <value>修改后</value>
+  </data>
+  <data name="修改来源识别" xml:space="preserve">
+    <value>修改来源识别</value>
+  </data>
+  <data name="修改来源跟踪尚未就绪。" xml:space="preserve">
+    <value>修改来源跟踪尚未就绪。</value>
+  </data>
+  <data name="修改来源跟踪连接已断开，请重新启用来源识别。" xml:space="preserve">
+    <value>修改来源跟踪连接已断开，请重新启用来源识别。</value>
+  </data>
+  <data name="修改进程" xml:space="preserve">
+    <value>修改进程</value>
+  </data>
+  <data name="修正类型" xml:space="preserve">
+    <value>修正类型</value>
+  </data>
+  <data name="健康检测" xml:space="preserve">
+    <value>健康检测</value>
+  </data>
+  <data name="健康检测通过" xml:space="preserve">
+    <value>健康检测通过</value>
+  </data>
+  <data name="健康问题已忽略" xml:space="preserve">
+    <value>健康问题已忽略</value>
+  </data>
+  <data name="允许选择内置系统变量" xml:space="preserve">
+    <value>允许选择内置系统变量</value>
+  </data>
+  <data name="关于" xml:space="preserve">
+    <value>关于</value>
+  </data>
+  <data name="关闭" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="关闭通知" xml:space="preserve">
+    <value>关闭通知</value>
+  </data>
+  <data name="其他变量" xml:space="preserve">
+    <value>其他变量</value>
+  </data>
+  <data name="内置系统变量的错误值可能导致 Windows 或应用无法正常运行。PATH 始终不可作为版本目标。" xml:space="preserve">
+    <value>内置系统变量的错误值可能导致 Windows 或应用无法正常运行。PATH 始终不可作为版本目标。</value>
+  </data>
+  <data name="减少引用层级或拆分过长的变量内容。" xml:space="preserve">
+    <value>减少引用层级或拆分过长的变量内容。</value>
+  </data>
+  <data name="分组" xml:space="preserve">
+    <value>分组</value>
+  </data>
+  <data name="分组变量" xml:space="preserve">
+    <value>分组变量</value>
+  </data>
+  <data name="分组名不能为空，最长 80 个字符。" xml:space="preserve">
+    <value>分组名不能为空，最长 80 个字符。</value>
+  </data>
+  <data name="分组配置必须包含唯一 ID、有效名称和一个通用默认分组。" xml:space="preserve">
+    <value>分组配置必须包含唯一 ID、有效名称和一个通用默认分组。</value>
+  </data>
+  <data name="切换" xml:space="preserve">
+    <value>切换</value>
+  </data>
+  <data name="列表包含空条目。" xml:space="preserve">
+    <value>列表包含空条目。</value>
+  </data>
+  <data name="创建被引用的变量，或更正引用名称。" xml:space="preserve">
+    <value>创建被引用的变量，或更正引用名称。</value>
+  </data>
+  <data name="删除" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="删除{0} {1} 第 {2} 行" xml:space="preserve">
+    <value>删除{0} {1} 第 {2} 行</value>
+  </data>
+  <data name="删除分组“{0}”？组内环境变量将移到默认分组。" xml:space="preserve">
+    <value>删除分组“{0}”？组内环境变量将移到默认分组。</value>
+  </data>
+  <data name="删除外部添加的重复PATH项" xml:space="preserve">
+    <value>删除外部添加的重复PATH项</value>
+  </data>
+  <data name="删除版本配置，保留当前值" xml:space="preserve">
+    <value>删除版本配置，保留当前值</value>
+  </data>
+  <data name="删除环境变量“{0}”？" xml:space="preserve">
+    <value>删除环境变量“{0}”？</value>
+  </data>
+  <data name="删除空行" xml:space="preserve">
+    <value>删除空行</value>
+  </data>
+  <data name="删除这一行会移除对应的分号位置，其余条目保持原样。" xml:space="preserve">
+    <value>删除这一行会移除对应的分号位置，其余条目保持原样。</value>
+  </data>
+  <data name="删除选中条目" xml:space="preserve">
+    <value>删除选中条目</value>
+  </data>
+  <data name="删除选中的 {0} 个环境变量和 {1} 个分组？分组内未选中的变量会移到默认分组。" xml:space="preserve">
+    <value>删除选中的 {0} 个环境变量和 {1} 个分组？分组内未选中的变量会移到默认分组。</value>
+  </data>
+  <data name="删除项目" xml:space="preserve">
+    <value>删除项目</value>
+  </data>
+  <data name="删除项目配置，保留当前变量" xml:space="preserve">
+    <value>删除项目配置，保留当前变量</value>
+  </data>
+  <data name="别名" xml:space="preserve">
+    <value>别名</value>
+  </data>
+  <data name="别名已不存在，请刷新后重试。" xml:space="preserve">
+    <value>别名已不存在，请刷新后重试。</value>
+  </data>
+  <data name="别名已经存在。" xml:space="preserve">
+    <value>别名已经存在。</value>
+  </data>
+  <data name="别名已被其他程序修改，请刷新后重试。" xml:space="preserve">
+    <value>别名已被其他程序修改，请刷新后重试。</value>
+  </data>
+  <data name="别名必须是有效的 Windows 文件名，最长 250 个字符，不能使用设备保留名或以空格、句点结尾。" xml:space="preserve">
+    <value>别名必须是有效的 Windows 文件名，最长 250 个字符，不能使用设备保留名或以空格、句点结尾。</value>
+  </data>
+  <data name="别名或同名文件已存在。" xml:space="preserve">
+    <value>别名或同名文件已存在。</value>
+  </data>
+  <data name="别名或同名文件已存在：{0}" xml:space="preserve">
+    <value>别名或同名文件已存在：{0}</value>
+  </data>
+  <data name="别名正在保存，请稍后重试。" xml:space="preserve">
+    <value>别名正在保存，请稍后重试。</value>
+  </data>
+  <data name="别名目录：{0}" xml:space="preserve">
+    <value>别名目录：{0}</value>
+  </data>
+  <data name="刷新" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="前往变量监控" xml:space="preserve">
+    <value>前往变量监控</value>
+  </data>
+  <data name="剪贴板暂时不可用。" xml:space="preserve">
+    <value>剪贴板暂时不可用。</value>
+  </data>
+  <data name="单个条目不能包含分号、空字符或换行。" xml:space="preserve">
+    <value>单个条目不能包含分号、空字符或换行。</value>
+  </data>
+  <data name="单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。" xml:space="preserve">
+    <value>单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。</value>
+  </data>
+  <data name="发现 {0} 项错误、{1} 项提醒。&#10;" xml:space="preserve">
+    <value>发现 {0} 项错误、{1} 项提醒。
+</value>
+  </data>
+  <data name="发现 {0} 项错误，{1} 项提醒" xml:space="preserve">
+    <value>发现 {0} 项错误，{1} 项提醒</value>
+  </data>
+  <data name="发现新版本" xml:space="preserve">
+    <value>发现新版本</value>
+  </data>
+  <data name="发现新版本 {0}。" xml:space="preserve">
+    <value>发现新版本 {0}。</value>
+  </data>
+  <data name="取消" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="取消置顶" xml:space="preserve">
+    <value>取消置顶</value>
+  </data>
+  <data name="变量值" xml:space="preserve">
+    <value>变量值</value>
+  </data>
+  <data name="变量值不能包含空字符，且最长为 32767 个字符。" xml:space="preserve">
+    <value>变量值不能包含空字符，且最长为 32767 个字符。</value>
+  </data>
+  <data name="变量名" xml:space="preserve">
+    <value>变量名</value>
+  </data>
+  <data name="变量名不能为空，最长 255 个字符，不能包含等号、空字符或换行。" xml:space="preserve">
+    <value>变量名不能为空，最长 255 个字符，不能包含等号、空字符或换行。</value>
+  </data>
+  <data name="变量名无效" xml:space="preserve">
+    <value>变量名无效</value>
+  </data>
+  <data name="变量条目" xml:space="preserve">
+    <value>变量条目</value>
+  </data>
+  <data name="变量监控" xml:space="preserve">
+    <value>变量监控</value>
+  </data>
+  <data name="变量管理" xml:space="preserve">
+    <value>变量管理</value>
+  </data>
+  <data name="变量（范围）" xml:space="preserve">
+    <value>变量（范围）</value>
+  </data>
+  <data name="只能调整置顶变量之间的顺序。" xml:space="preserve">
+    <value>只能调整置顶变量之间的顺序。</value>
+  </data>
+  <data name="可用版本" xml:space="preserve">
+    <value>可用版本</value>
+  </data>
+  <data name="同一批次不能多次修改一个变量。" xml:space="preserve">
+    <value>同一批次不能多次修改一个变量。</value>
+  </data>
+  <data name="名称" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="后台程序不存在。" xml:space="preserve">
+    <value>后台程序不存在。</value>
+  </data>
+  <data name="后台程序不存在，请先构建或安装 PathMan。" xml:space="preserve">
+    <value>后台程序不存在，请先构建或安装 PathMan。</value>
+  </data>
+  <data name="后台程序拒绝启动，请检查后台运行和登录自启设置。" xml:space="preserve">
+    <value>后台程序拒绝启动，请检查后台运行和登录自启设置。</value>
+  </data>
+  <data name="后台程序未能在 10 秒内启动。" xml:space="preserve">
+    <value>后台程序未能在 10 秒内启动。</value>
+  </data>
+  <data name="后台程序未能在 5 秒内停止。" xml:space="preserve">
+    <value>后台程序未能在 5 秒内停止。</value>
+  </data>
+  <data name="后台运行与登录自启必须同时开启，后台程序才会运行。" xml:space="preserve">
+    <value>后台运行与登录自启必须同时开启，后台程序才会运行。</value>
+  </data>
+  <data name="含引用的值当前为 {0}，不会按可展开字符串处理。" xml:space="preserve">
+    <value>含引用的值当前为 {0}，不会按可展开字符串处理。</value>
+  </data>
+  <data name="启用程序别名" xml:space="preserve">
+    <value>启用程序别名</value>
+  </data>
+  <data name="在后台运行监控程序" xml:space="preserve">
+    <value>在后台运行监控程序</value>
+  </data>
+  <data name="垫片目录位于其他路径之前，或出现了多次。" xml:space="preserve">
+    <value>垫片目录位于其他路径之前，或出现了多次。</value>
+  </data>
+  <data name="垫片目录包含在多路径引用中，请先将它从被引用变量中移出，再切换程序别名。" xml:space="preserve">
+    <value>垫片目录包含在多路径引用中，请先将它从被引用变量中移出，再切换程序别名。</value>
+  </data>
+  <data name="垫片目录已放到用户 Path 末尾，新终端生效。" xml:space="preserve">
+    <value>垫片目录已放到用户 Path 末尾，新终端生效。</value>
+  </data>
+  <data name="垫片目录顺序" xml:space="preserve">
+    <value>垫片目录顺序</value>
+  </data>
+  <data name="复制" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="复制别名" xml:space="preserve">
+    <value>复制别名</value>
+  </data>
+  <data name="复制别名；右键可复制目标路径" xml:space="preserve">
+    <value>复制别名；右键可复制目标路径</value>
+  </data>
+  <data name="复制目标路径" xml:space="preserve">
+    <value>复制目标路径</value>
+  </data>
+  <data name="外部修改与本地草稿重叠；已保留本地内容，请核对红、绿、蓝三种更改。" xml:space="preserve">
+    <value>外部修改与本地草稿重叠；已保留本地内容，请核对红、绿、蓝三种更改。</value>
+  </data>
+  <data name="外部变量" xml:space="preserve">
+    <value>外部变量</value>
+  </data>
+  <data name="外部新增 PATH 项包含无法安全展开的引用，已保留原位置。" xml:space="preserve">
+    <value>外部新增 PATH 项包含无法安全展开的引用，已保留原位置。</value>
+  </data>
+  <data name="外部新增项需要管理员授权。&#10;" xml:space="preserve">
+    <value>外部新增项需要管理员授权。
+</value>
+  </data>
+  <data name="外部更改已合并到草稿；红色删除、绿色新增、蓝色为本地更改。保存后写入。" xml:space="preserve">
+    <value>外部更改已合并到草稿；红色删除、绿色新增、蓝色为本地更改。保存后写入。</value>
+  </data>
+  <data name="外部更改记录" xml:space="preserve">
+    <value>外部更改记录</value>
+  </data>
+  <data name="外部程序" xml:space="preserve">
+    <value>外部程序</value>
+  </data>
+  <data name="多行模式" xml:space="preserve">
+    <value>多行模式</value>
+  </data>
+  <data name="导航" xml:space="preserve">
+    <value>导航</value>
+  </data>
+  <data name="将垫片目录只保留在用户 Path 的最后一行，避免别名遮蔽其他程序。" xml:space="preserve">
+    <value>将垫片目录只保留在用户 Path 的最后一行，避免别名遮蔽其他程序。</value>
+  </data>
+  <data name="将外部新环境变量归入‘外部变量’分类" xml:space="preserve">
+    <value>将外部新环境变量归入‘外部变量’分类</value>
+  </data>
+  <data name="将外部新用户环境变量归入‘外部变量’分类" xml:space="preserve">
+    <value>将外部新用户环境变量归入‘外部变量’分类</value>
+  </data>
+  <data name="将外部新系统环境变量归入‘外部变量’分类" xml:space="preserve">
+    <value>将外部新系统环境变量归入‘外部变量’分类</value>
+  </data>
+  <data name="将外部添加的PATH项移至EXTERNAL_PATH" xml:space="preserve">
+    <value>将外部添加的PATH项移至EXTERNAL_PATH</value>
+  </data>
+  <data name="将外部添加的PATH项移至EXTERNAL_USER_PATH" xml:space="preserve">
+    <value>将外部添加的PATH项移至EXTERNAL_USER_PATH</value>
+  </data>
+  <data name="将选中版本写入目标变量" xml:space="preserve">
+    <value>将选中版本写入目标变量</value>
+  </data>
+  <data name="尚未登记版本项目。使用 pathman add 登记。" xml:space="preserve">
+    <value>尚未登记版本项目。使用 pathman add 登记。</value>
+  </data>
+  <data name="展开 " xml:space="preserve">
+    <value>展开 </value>
+  </data>
+  <data name="展开后出现 {0} 次：{1}" xml:space="preserve">
+    <value>展开后出现 {0} 次：{1}</value>
+  </data>
+  <data name="展开或折叠引用的路径变量" xml:space="preserve">
+    <value>展开或折叠引用的路径变量</value>
+  </data>
+  <data name="已从用户 Path 移除垫片目录，新终端生效。" xml:space="preserve">
+    <value>已从用户 Path 移除垫片目录，新终端生效。</value>
+  </data>
+  <data name="已保存" xml:space="preserve">
+    <value>已保存</value>
+  </data>
+  <data name="已保存{0}；其余更改仍在编辑区。" xml:space="preserve">
+    <value>已保存{0}；其余更改仍在编辑区。</value>
+  </data>
+  <data name="已保存。" xml:space="preserve">
+    <value>已保存。</value>
+  </data>
+  <data name="已保存并重新检测。" xml:space="preserve">
+    <value>已保存并重新检测。</value>
+  </data>
+  <data name="已切换 {0} → {1}。" xml:space="preserve">
+    <value>已切换 {0} → {1}。</value>
+  </data>
+  <data name="已切换 {0} → {1}：{2}={3}" xml:space="preserve">
+    <value>已切换 {0} → {1}：{2}={3}</value>
+  </data>
+  <data name="已删除。" xml:space="preserve">
+    <value>已删除。</value>
+  </data>
+  <data name="已删除版本配置 {0}{1}；环境变量及当前值已保留。" xml:space="preserve">
+    <value>已删除版本配置 {0}{1}；环境变量及当前值已保留。</value>
+  </data>
+  <data name="已取消切换，原值保留。" xml:space="preserve">
+    <value>已取消切换，原值保留。</value>
+  </data>
+  <data name="已取消管理员操作。" xml:space="preserve">
+    <value>已取消管理员操作。</value>
+  </data>
+  <data name="已取消选择。" xml:space="preserve">
+    <value>已取消选择。</value>
+  </data>
+  <data name="已复制。" xml:space="preserve">
+    <value>已复制。</value>
+  </data>
+  <data name="已复制变量值。" xml:space="preserve">
+    <value>已复制变量值。</value>
+  </data>
+  <data name="已忽略此项；来源发生变化后会重新检测。" xml:space="preserve">
+    <value>已忽略此项；来源发生变化后会重新检测。</value>
+  </data>
+  <data name="已恢复提醒。" xml:space="preserve">
+    <value>已恢复提醒。</value>
+  </data>
+  <data name="已撤回外部更改的草稿，本地编辑已保留；保存后写入。" xml:space="preserve">
+    <value>已撤回外部更改的草稿，本地编辑已保留；保存后写入。</value>
+  </data>
+  <data name="已整理外部新增项的草稿，保存后写入。" xml:space="preserve">
+    <value>已整理外部新增项的草稿，保存后写入。</value>
+  </data>
+  <data name="已整理外部新增项的草稿；搜索顺序会改变，请核对后保存。" xml:space="preserve">
+    <value>已整理外部新增项的草稿；搜索顺序会改变，请核对后保存。</value>
+  </data>
+  <data name="已清理{0}；其余未应用。" xml:space="preserve">
+    <value>已清理{0}；其余未应用。</value>
+  </data>
+  <data name="已登记 {0} / {1}；当前环境变量未改动。" xml:space="preserve">
+    <value>已登记 {0} / {1}；当前环境变量未改动。</value>
+  </data>
+  <data name="已选择" xml:space="preserve">
+    <value>已选择</value>
+  </data>
+  <data name="应用清理" xml:space="preserve">
+    <value>应用清理</value>
+  </data>
+  <data name="引用了未定义变量 %{0}%" xml:space="preserve">
+    <value>引用了未定义变量 %{0}%</value>
+  </data>
+  <data name="引用回环" xml:space="preserve">
+    <value>引用回环</value>
+  </data>
+  <data name="引用回环或层级过深，已停止展开" xml:space="preserve">
+    <value>引用回环或层级过深，已停止展开</value>
+  </data>
+  <data name="引用回环：" xml:space="preserve">
+    <value>引用回环：</value>
+  </data>
+  <data name="引用层级" xml:space="preserve">
+    <value>引用层级</value>
+  </data>
+  <data name="引用展开超过安全限制。" xml:space="preserve">
+    <value>引用展开超过安全限制。</value>
+  </data>
+  <data name="引用展开超过限制" xml:space="preserve">
+    <value>引用展开超过限制</value>
+  </data>
+  <data name="当前" xml:space="preserve">
+    <value>当前</value>
+  </data>
+  <data name="当前变量列表中没有 {0}。" xml:space="preserve">
+    <value>当前变量列表中没有 {0}。</value>
+  </data>
+  <data name="当前已是最新版本。" xml:space="preserve">
+    <value>当前已是最新版本。</value>
+  </data>
+  <data name="当前：" xml:space="preserve">
+    <value>当前：</value>
+  </data>
+  <data name="待保存" xml:space="preserve">
+    <value>待保存</value>
+  </data>
+  <data name="待清理的变量" xml:space="preserve">
+    <value>待清理的变量</value>
+  </data>
+  <data name="循环引用 %{0}%" xml:space="preserve">
+    <value>循环引用 %{0}%</value>
+  </data>
+  <data name="忽略" xml:space="preserve">
+    <value>忽略</value>
+  </data>
+  <data name="恢复提醒" xml:space="preserve">
+    <value>恢复提醒</value>
+  </data>
+  <data name="所有文件 (*.*)|*.*" xml:space="preserve">
+    <value>所有文件 (*.*)|*.*</value>
+  </data>
+  <data name="所有检查均已通过" xml:space="preserve">
+    <value>所有检查均已通过</value>
+  </data>
+  <data name="批量保存仅支持同一作用域的创建和修改。" xml:space="preserve">
+    <value>批量保存仅支持同一作用域的创建和修改。</value>
+  </data>
+  <data name="找不到分组。" xml:space="preserve">
+    <value>找不到分组。</value>
+  </data>
+  <data name="找不到变量 {0}，请刷新后重试。" xml:space="preserve">
+    <value>找不到变量 {0}，请刷新后重试。</value>
+  </data>
+  <data name="找不到引用 %{0}%" xml:space="preserve">
+    <value>找不到引用 %{0}%</value>
+  </data>
+  <data name="找不到版本项目：{0}" xml:space="preserve">
+    <value>找不到版本项目：{0}</value>
+  </data>
+  <data name="找不到版本：{0}" xml:space="preserve">
+    <value>找不到版本：{0}</value>
+  </data>
+  <data name="找不到环境变量注册表项。" xml:space="preserve">
+    <value>找不到环境变量注册表项。</value>
+  </data>
+  <data name="找不到目标分组。" xml:space="preserve">
+    <value>找不到目标分组。</value>
+  </data>
+  <data name="找不到系统环境变量注册表项。" xml:space="preserve">
+    <value>找不到系统环境变量注册表项。</value>
+  </data>
+  <data name="折叠 " xml:space="preserve">
+    <value>折叠 </value>
+  </data>
+  <data name="拖动调整用户变量和系统变量的高度" xml:space="preserve">
+    <value>拖动调整用户变量和系统变量的高度</value>
+  </data>
+  <data name="按分号拆分为多行编辑" xml:space="preserve">
+    <value>按分号拆分为多行编辑</value>
+  </data>
+  <data name="授权并整理系统 PATH" xml:space="preserve">
+    <value>授权并整理系统 PATH</value>
+  </data>
+  <data name="插入位置已变化。" xml:space="preserve">
+    <value>插入位置已变化。</value>
+  </data>
+  <data name="撤回外部更改" xml:space="preserve">
+    <value>撤回外部更改</value>
+  </data>
+  <data name="撤销" xml:space="preserve">
+    <value>撤销</value>
+  </data>
+  <data name="操作" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="操作未完成" xml:space="preserve">
+    <value>操作未完成</value>
+  </data>
+  <data name="操作请求过大。" xml:space="preserve">
+    <value>操作请求过大。</value>
+  </data>
+  <data name="改用系统作用域中的变量，或将这个引用移到用户变量。" xml:space="preserve">
+    <value>改用系统作用域中的变量，或将这个引用移到用户变量。</value>
+  </data>
+  <data name="放弃" xml:space="preserve">
+    <value>放弃</value>
+  </data>
+  <data name="文本" xml:space="preserve">
+    <value>文本</value>
+  </data>
+  <data name="文本模式" xml:space="preserve">
+    <value>文本模式</value>
+  </data>
+  <data name="新名称已经存在。" xml:space="preserve">
+    <value>新名称已经存在。</value>
+  </data>
+  <data name="新增" xml:space="preserve">
+    <value>新增</value>
+  </data>
+  <data name="新建" xml:space="preserve">
+    <value>新建</value>
+  </data>
+  <data name="新建分组" xml:space="preserve">
+    <value>新建分组</value>
+  </data>
+  <data name="新建条目" xml:space="preserve">
+    <value>新建条目</value>
+  </data>
+  <data name="新建版本" xml:space="preserve">
+    <value>新建版本</value>
+  </data>
+  <data name="新建环境变量" xml:space="preserve">
+    <value>新建环境变量</value>
+  </data>
+  <data name="新建用户环境变量" xml:space="preserve">
+    <value>新建用户环境变量</value>
+  </data>
+  <data name="新建系统环境变量" xml:space="preserve">
+    <value>新建系统环境变量</value>
+  </data>
+  <data name="新建项目" xml:space="preserve">
+    <value>新建项目</value>
+  </data>
+  <data name="新版本名已经存在。" xml:space="preserve">
+    <value>新版本名已经存在。</value>
+  </data>
+  <data name="无法创建硬链接：{0}" xml:space="preserve">
+    <value>无法创建硬链接：{0}</value>
+  </data>
+  <data name="无法启动 PathMan" xml:space="preserve">
+    <value>无法启动 PathMan</value>
+  </data>
+  <data name="无法启动修改来源跟踪。" xml:space="preserve">
+    <value>无法启动修改来源跟踪。</value>
+  </data>
+  <data name="无法启动后台程序。" xml:space="preserve">
+    <value>无法启动后台程序。</value>
+  </data>
+  <data name="无法启动管理员操作。" xml:space="preserve">
+    <value>无法启动管理员操作。</value>
+  </data>
+  <data name="无法检查更新，请稍后重试。" xml:space="preserve">
+    <value>无法检查更新，请稍后重试。</value>
+  </data>
+  <data name="无法读取程序别名" xml:space="preserve">
+    <value>无法读取程序别名</value>
+  </data>
+  <data name="时间" xml:space="preserve">
+    <value>时间</value>
+  </data>
+  <data name="显示已忽略" xml:space="preserve">
+    <value>显示已忽略</value>
+  </data>
+  <data name="显示已忽略（{0}）" xml:space="preserve">
+    <value>显示已忽略（{0}）</value>
+  </data>
+  <data name="普通变量按名称排序，只能拖到其他分组。" xml:space="preserve">
+    <value>普通变量按名称排序，只能拖到其他分组。</value>
+  </data>
+  <data name="暂无外部更改记录" xml:space="preserve">
+    <value>暂无外部更改记录</value>
+  </data>
+  <data name="更改内置系统变量可能导致 Windows 或应用无法正常运行。确认了解风险后再启用。PATH 仍不可选择。" xml:space="preserve">
+    <value>更改内置系统变量可能导致 Windows 或应用无法正常运行。确认了解风险后再启用。PATH 仍不可选择。</value>
+  </data>
+  <data name="更改前" xml:space="preserve">
+    <value>更改前</value>
+  </data>
+  <data name="更改后" xml:space="preserve">
+    <value>更改后</value>
+  </data>
+  <data name="更新" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="有未保存的更改，是否放弃？" xml:space="preserve">
+    <value>有未保存的更改，是否放弃？</value>
+  </data>
+  <data name="未保存。" xml:space="preserve">
+    <value>未保存。</value>
+  </data>
+  <data name="未保存的更改" xml:space="preserve">
+    <value>未保存的更改</value>
+  </data>
+  <data name="未定义" xml:space="preserve">
+    <value>未定义</value>
+  </data>
+  <data name="未定义变量" xml:space="preserve">
+    <value>未定义变量</value>
+  </data>
+  <data name="未应用清理。" xml:space="preserve">
+    <value>未应用清理。</value>
+  </data>
+  <data name="未知或缺少值的参数：{0}" xml:space="preserve">
+    <value>未知或缺少值的参数：{0}</value>
+  </data>
+  <data name="未知的环境变量操作。" xml:space="preserve">
+    <value>未知的环境变量操作。</value>
+  </data>
+  <data name="未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。" xml:space="preserve">
+    <value>未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。</value>
+  </data>
+  <data name="未识别" xml:space="preserve">
+    <value>未识别</value>
+  </data>
+  <data name="条目已变化，请重新选择。" xml:space="preserve">
+    <value>条目已变化，请重新选择。</value>
+  </data>
+  <data name="来源跟踪未启动，请关闭并重新开启该开关以重试。" xml:space="preserve">
+    <value>来源跟踪未启动，请关闭并重新开启该开关以重试。</value>
+  </data>
+  <data name="来源跟踪消息过长。" xml:space="preserve">
+    <value>来源跟踪消息过长。</value>
+  </data>
+  <data name="来源跟踪连接认证失败。" xml:space="preserve">
+    <value>来源跟踪连接认证失败。</value>
+  </data>
+  <data name="查看健康检测" xml:space="preserve">
+    <value>查看健康检测</value>
+  </data>
+  <data name="查看变量监控" xml:space="preserve">
+    <value>查看变量监控</value>
+  </data>
+  <data name="查看已忽略的问题" xml:space="preserve">
+    <value>查看已忽略的问题</value>
+  </data>
+  <data name="查看新版本" xml:space="preserve">
+    <value>查看新版本</value>
+  </data>
+  <data name="查看详情" xml:space="preserve">
+    <value>查看详情</value>
+  </data>
+  <data name="检查更新" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="检测到外部更改，结束当前行输入后更新。" xml:space="preserve">
+    <value>检测到外部更改，结束当前行输入后更新。</value>
+  </data>
+  <data name="检测未完成" xml:space="preserve">
+    <value>检测未完成</value>
+  </data>
+  <data name="正在保存…" xml:space="preserve">
+    <value>正在保存…</value>
+  </data>
+  <data name="正在保存，请稍候。" xml:space="preserve">
+    <value>正在保存，请稍候。</value>
+  </data>
+  <data name="正在检查更新……" xml:space="preserve">
+    <value>正在检查更新……</value>
+  </data>
+  <data name="正在检测…" xml:space="preserve">
+    <value>正在检测…</value>
+  </data>
+  <data name="此位置会产生引用回环或超出引用层级限制。" xml:space="preserve">
+    <value>此位置会产生引用回环或超出引用层级限制。</value>
+  </data>
+  <data name="此分类仅在本应用内有效" xml:space="preserve">
+    <value>此分类仅在本应用内有效</value>
+  </data>
+  <data name="此功能将在用户PATH中添加垫片目录" xml:space="preserve">
+    <value>此功能将在用户PATH中添加垫片目录</value>
+  </data>
+  <data name="此变量属于内置系统变量。可在“设置 → 高级设置”中解锁，PATH 始终不可选。" xml:space="preserve">
+    <value>此变量属于内置系统变量。可在“设置 → 高级设置”中解锁，PATH 始终不可选。</value>
+  </data>
+  <data name="此变量已被其他程序修改或删除，请刷新后重试。" xml:space="preserve">
+    <value>此变量已被其他程序修改或删除，请刷新后重试。</value>
+  </data>
+  <data name="此环境变量已绑定其他版本项目。" xml:space="preserve">
+    <value>此环境变量已绑定其他版本项目。</value>
+  </data>
+  <data name="此项来自复用的引用，请进入变量编辑调整引用，避免删除全部副本。" xml:space="preserve">
+    <value>此项来自复用的引用，请进入变量编辑调整引用，避免删除全部副本。</value>
+  </data>
+  <data name="每行一个条目（保存为分号分隔）" xml:space="preserve">
+    <value>每行一个条目（保存为分号分隔）</value>
+  </data>
+  <data name="没有未忽略的问题" xml:space="preserve">
+    <value>没有未忽略的问题</value>
+  </data>
+  <data name="没有需要清理的条目" xml:space="preserve">
+    <value>没有需要清理的条目</value>
+  </data>
+  <data name="注册表类型" xml:space="preserve">
+    <value>注册表类型</value>
+  </data>
+  <data name="浅色" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="浏览…" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="深色" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="清理" xml:space="preserve">
+    <value>清理</value>
+  </data>
+  <data name="清理会改变{0}的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。请确认预览后再应用。" xml:space="preserve">
+    <value>清理会改变{0}的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。请确认预览后再应用。</value>
+  </data>
+  <data name="清理外部更改" xml:space="preserve">
+    <value>清理外部更改</value>
+  </data>
+  <data name="清理完成。原始值已备份。" xml:space="preserve">
+    <value>清理完成。原始值已备份。</value>
+  </data>
+  <data name="清理预览" xml:space="preserve">
+    <value>清理预览</value>
+  </data>
+  <data name="源代码" xml:space="preserve">
+    <value>源代码</value>
+  </data>
+  <data name="版本" xml:space="preserve">
+    <value>版本</value>
+  </data>
+  <data name="版本值不能含空字符，且最长为 32767 个字符。" xml:space="preserve">
+    <value>版本值不能含空字符，且最长为 32767 个字符。</value>
+  </data>
+  <data name="版本管理" xml:space="preserve">
+    <value>版本管理</value>
+  </data>
+  <data name="版本配置已被其他程序修改，无法撤销或重做。请重新载入后操作。" xml:space="preserve">
+    <value>版本配置已被其他程序修改，无法撤销或重做。请重新载入后操作。</value>
+  </data>
+  <data name="版本配置已被其他窗口修改，请重新选择。" xml:space="preserve">
+    <value>版本配置已被其他窗口修改，请重新选择。</value>
+  </data>
+  <data name="版本项目" xml:space="preserve">
+    <value>版本项目</value>
+  </data>
+  <data name="版本项目仅支持 User 或 Machine。" xml:space="preserve">
+    <value>版本项目仅支持 User 或 Machine。</value>
+  </data>
+  <data name="环境变量" xml:space="preserve">
+    <value>环境变量</value>
+  </data>
+  <data name="环境变量存在问题" xml:space="preserve">
+    <value>环境变量存在问题</value>
+  </data>
+  <data name="环境变量配置为空。" xml:space="preserve">
+    <value>环境变量配置为空。</value>
+  </data>
+  <data name="环境变量配置正在使用中，请稍后重试。" xml:space="preserve">
+    <value>环境变量配置正在使用中，请稍后重试。</value>
+  </data>
+  <data name="用户" xml:space="preserve">
+    <value>用户</value>
+  </data>
+  <data name="用户 PATH" xml:space="preserve">
+    <value>用户 PATH</value>
+  </data>
+  <data name="用户变量" xml:space="preserve">
+    <value>用户变量</value>
+  </data>
+  <data name="用户变量操作" xml:space="preserve">
+    <value>用户变量操作</value>
+  </data>
+  <data name="用法：pathman add &lt;项目&gt; &lt;版本&gt; &lt;值&gt; [--variable &lt;变量名&gt;] [--type User|Machine] [--replace]" xml:space="preserve">
+    <value>用法：pathman add &lt;项目&gt; &lt;版本&gt; &lt;值&gt; [--variable &lt;变量名&gt;] [--type User|Machine] [--replace]</value>
+  </data>
+  <data name="用法：pathman list [项目]" xml:space="preserve">
+    <value>用法：pathman list [项目]</value>
+  </data>
+  <data name="登录时自动运行后台程序" xml:space="preserve">
+    <value>登录时自动运行后台程序</value>
+  </data>
+  <data name="监控暂时无法读取或保存环境变量：" xml:space="preserve">
+    <value>监控暂时无法读取或保存环境变量：</value>
+  </data>
+  <data name="监控设置或待整理项目已改变，本次整理已跳过。" xml:space="preserve">
+    <value>监控设置或待整理项目已改变，本次整理已跳过。</value>
+  </data>
+  <data name="目标程序" xml:space="preserve">
+    <value>目标程序</value>
+  </data>
+  <data name="目标绑定已被其他窗口修改，请重新选择。" xml:space="preserve">
+    <value>目标绑定已被其他窗口修改，请重新选择。</value>
+  </data>
+  <data name="目标路径变量不存在。" xml:space="preserve">
+    <value>目标路径变量不存在。</value>
+  </data>
+  <data name="直接编辑以分号分隔的原始文本" xml:space="preserve">
+    <value>直接编辑以分号分隔的原始文本</value>
+  </data>
+  <data name="相关环境变量" xml:space="preserve">
+    <value>相关环境变量</value>
+  </data>
+  <data name="确定" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="移到用户 PATH 末尾" xml:space="preserve">
+    <value>移到用户 PATH 末尾</value>
+  </data>
+  <data name="移除或更正其中一个回指引用。" xml:space="preserve">
+    <value>移除或更正其中一个回指引用。</value>
+  </data>
+  <data name="程序别名" xml:space="preserve">
+    <value>程序别名</value>
+  </data>
+  <data name="程序别名 · PathMan" xml:space="preserve">
+    <value>程序别名 · PathMan</value>
+  </data>
+  <data name="程序别名列表" xml:space="preserve">
+    <value>程序别名列表</value>
+  </data>
+  <data name="程序别名未启用。" xml:space="preserve">
+    <value>程序别名未启用。</value>
+  </data>
+  <data name="程序别名未启用，请先打开开关。" xml:space="preserve">
+    <value>程序别名未启用，请先打开开关。</value>
+  </data>
+  <data name="空条目" xml:space="preserve">
+    <value>空条目</value>
+  </data>
+  <data name="第 {0} 行" xml:space="preserve">
+    <value>第 {0} 行</value>
+  </data>
+  <data name="第 {0} 行  " xml:space="preserve">
+    <value>第 {0} 行  </value>
+  </data>
+  <data name="简体中文" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="管理员操作仅支持系统环境变量。" xml:space="preserve">
+    <value>管理员操作仅支持系统环境变量。</value>
+  </data>
+  <data name="管理员操作已授权" xml:space="preserve">
+    <value>管理员操作已授权</value>
+  </data>
+  <data name="管理员请求为空。" xml:space="preserve">
+    <value>管理员请求为空。</value>
+  </data>
+  <data name="管理员请求格式无效。" xml:space="preserve">
+    <value>管理员请求格式无效。</value>
+  </data>
+  <data name="管理员连接已断开，请刷新确认写入结果后重试。" xml:space="preserve">
+    <value>管理员连接已断开，请刷新确认写入结果后重试。</value>
+  </data>
+  <data name="管理员连接认证失败。" xml:space="preserve">
+    <value>管理员连接认证失败。</value>
+  </data>
+  <data name="管理员连接超时，请刷新确认写入结果后重试。" xml:space="preserve">
+    <value>管理员连接超时，请刷新确认写入结果后重试。</value>
+  </data>
+  <data name="精确识别修改来源（需要管理员权限）" xml:space="preserve">
+    <value>精确识别修改来源（需要管理员权限）</value>
+  </data>
+  <data name="系统" xml:space="preserve">
+    <value>系统</value>
+  </data>
+  <data name="系统 PATH" xml:space="preserve">
+    <value>系统 PATH</value>
+  </data>
+  <data name="系统 PATH 有待整理的外部新增项，需要管理员授权。" xml:space="preserve">
+    <value>系统 PATH 有待整理的外部新增项，需要管理员授权。</value>
+  </data>
+  <data name="系统 PATH 未整理" xml:space="preserve">
+    <value>系统 PATH 未整理</value>
+  </data>
+  <data name="系统 PATH 未整理：" xml:space="preserve">
+    <value>系统 PATH 未整理：</value>
+  </data>
+  <data name="系统 PATH 等待整理" xml:space="preserve">
+    <value>系统 PATH 等待整理</value>
+  </data>
+  <data name="系统变量" xml:space="preserve">
+    <value>系统变量</value>
+  </data>
+  <data name="系统变量已保存，但用户记录更新失败。请刷新确认。" xml:space="preserve">
+    <value>系统变量已保存，但用户记录更新失败。请刷新确认。</value>
+  </data>
+  <data name="系统变量引用了仅在用户环境中可用的 %{0}%" xml:space="preserve">
+    <value>系统变量引用了仅在用户环境中可用的 %{0}%</value>
+  </data>
+  <data name="系统变量引用用户变量" xml:space="preserve">
+    <value>系统变量引用用户变量</value>
+  </data>
+  <data name="系统变量操作" xml:space="preserve">
+    <value>系统变量操作</value>
+  </data>
+  <data name="编辑" xml:space="preserve">
+    <value>编辑</value>
+  </data>
+  <data name="置顶" xml:space="preserve">
+    <value>置顶</value>
+  </data>
+  <data name="置顶分组与普通分组只能在各自区域内排序。" xml:space="preserve">
+    <value>置顶分组与普通分组只能在各自区域内排序。</value>
+  </data>
+  <data name="自动整理PATH环境变量" xml:space="preserve">
+    <value>自动整理PATH环境变量</value>
+  </data>
+  <data name="自动整理改变了 PATH 的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。原始值已备份，可在外部更改记录中核对。" xml:space="preserve">
+    <value>自动整理改变了 PATH 的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。原始值已备份，可在外部更改记录中核对。</value>
+  </data>
+  <data name="自动整理未完成：" xml:space="preserve">
+    <value>自动整理未完成：</value>
+  </data>
+  <data name="自动整理用户 PATH 环境变量" xml:space="preserve">
+    <value>自动整理用户 PATH 环境变量</value>
+  </data>
+  <data name="自动整理系统 PATH 环境变量" xml:space="preserve">
+    <value>自动整理系统 PATH 环境变量</value>
+  </data>
+  <data name="自动检测版本更新" xml:space="preserve">
+    <value>自动检测版本更新</value>
+  </data>
+  <data name="行内编辑" xml:space="preserve">
+    <value>行内编辑</value>
+  </data>
+  <data name="许可证" xml:space="preserve">
+    <value>许可证</value>
+  </data>
+  <data name="设置" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="该作用域中已存在同名环境变量。" xml:space="preserve">
+    <value>该作用域中已存在同名环境变量。</value>
+  </data>
+  <data name="该版本已存在；使用 --replace 更新其配置。" xml:space="preserve">
+    <value>该版本已存在；使用 --replace 更新其配置。</value>
+  </data>
+  <data name="该范围内不存在此变量，请浏览选择列出的变量。" xml:space="preserve">
+    <value>该范围内不存在此变量，请浏览选择列出的变量。</value>
+  </data>
+  <data name="语言" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="请先启用“在后台运行监控程序”。" xml:space="preserve">
+    <value>请先启用“在后台运行监控程序”。</value>
+  </data>
+  <data name="请先填写项目名称。" xml:space="preserve">
+    <value>请先填写项目名称。</value>
+  </data>
+  <data name="请先选择目标环境变量。" xml:space="preserve">
+    <value>请先选择目标环境变量。</value>
+  </data>
+  <data name="请稍后重试。" xml:space="preserve">
+    <value>请稍后重试。</value>
+  </data>
+  <data name="调整用户和系统变量区域大小" xml:space="preserve">
+    <value>调整用户和系统变量区域大小</value>
+  </data>
+  <data name="超过限制" xml:space="preserve">
+    <value>超过限制</value>
+  </data>
+  <data name="跟随系统" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="路径变量" xml:space="preserve">
+    <value>路径变量</value>
+  </data>
+  <data name="路径条目" xml:space="preserve">
+    <value>路径条目</value>
+  </data>
+  <data name="转到引用变量" xml:space="preserve">
+    <value>转到引用变量</value>
+  </data>
+  <data name="转到：" xml:space="preserve">
+    <value>转到：</value>
+  </data>
+  <data name="返回" xml:space="preserve">
+    <value>返回</value>
+  </data>
+  <data name="这是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。" xml:space="preserve">
+    <value>这是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。</value>
+  </data>
+  <data name="选择" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="选择内置系统变量" xml:space="preserve">
+    <value>选择内置系统变量</value>
+  </data>
+  <data name="选择变量" xml:space="preserve">
+    <value>选择变量</value>
+  </data>
+  <data name="选择版本目录" xml:space="preserve">
+    <value>选择版本目录</value>
+  </data>
+  <data name="选择环境变量" xml:space="preserve">
+    <value>选择环境变量</value>
+  </data>
+  <data name="选择目录" xml:space="preserve">
+    <value>选择目录</value>
+  </data>
+  <data name="选择目标文件" xml:space="preserve">
+    <value>选择目标文件</value>
+  </data>
+  <data name="选择要删除的来源；保留的来源及其他路径不会改动。" xml:space="preserve">
+    <value>选择要删除的来源；保留的来源及其他路径不会改动。</value>
+  </data>
+  <data name="通知" xml:space="preserve">
+    <value>通知</value>
+  </data>
+  <data name="部分引用无法完整展开，无法确认清理后 PATH 的搜索顺序是否保持不变。请检查预览后再应用。" xml:space="preserve">
+    <value>部分引用无法完整展开，无法确认清理后 PATH 的搜索顺序是否保持不变。请检查预览后再应用。</value>
+  </data>
+  <data name="重命名" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="重复条目" xml:space="preserve">
+    <value>重复条目</value>
+  </data>
+  <data name="重复的参数：{0}" xml:space="preserve">
+    <value>重复的参数：{0}</value>
+  </data>
+  <data name="重新检测" xml:space="preserve">
+    <value>重新检测</value>
+  </data>
+  <data name="链接未打开" xml:space="preserve">
+    <value>链接未打开</value>
+  </data>
+  <data name="问题操作" xml:space="preserve">
+    <value>问题操作</value>
+  </data>
+  <data name="问题详情" xml:space="preserve">
+    <value>问题详情</value>
+  </data>
+  <data name="项目" xml:space="preserve">
+    <value>项目</value>
+  </data>
+  <data name="项目 {0} 没有版本 {1}。" xml:space="preserve">
+    <value>项目 {0} 没有版本 {1}。</value>
+  </data>
+  <data name="项目名不能重复，同一作用域的环境变量只能绑定一个版本项目。" xml:space="preserve">
+    <value>项目名不能重复，同一作用域的环境变量只能绑定一个版本项目。</value>
+  </data>
+  <data name="项目名和版本名须为 1–128 个字符，只能含字母、数字、点、加号、下划线或连字符。" xml:space="preserve">
+    <value>项目名和版本名须为 1–128 个字符，只能含字母、数字、点、加号、下划线或连字符。</value>
+  </data>
+  <data name="项目名已经存在。" xml:space="preserve">
+    <value>项目名已经存在。</value>
+  </data>
+  <data name="项目已绑定其他变量或作用域，请使用现有绑定。" xml:space="preserve">
+    <value>项目已绑定其他变量或作用域，请使用现有绑定。</value>
+  </data>
+  <data name="首次登记项目需要 --variable &lt;环境变量名&gt;；--type 默认为 User。" xml:space="preserve">
+    <value>首次登记项目需要 --variable &lt;环境变量名&gt;；--type 默认为 User。</value>
+  </data>
+  <data name="高级设置" xml:space="preserve">
+    <value>高级设置</value>
+  </data>
+  <data name="（列表开头）" xml:space="preserve">
+    <value>（列表开头）</value>
+  </data>
+  <data name="（列表结尾）" xml:space="preserve">
+    <value>（列表结尾）</value>
+  </data>
+  <data name="（新建）" xml:space="preserve">
+    <value>（新建）</value>
+  </data>
+  <data name="（空条目）" xml:space="preserve">
+    <value>（空条目）</value>
+  </data>
+  <data name="（问题）" xml:space="preserve">
+    <value>（问题）</value>
+  </data>
+  <data name="待检测" xml:space="preserve"><value>待检测</value></data>
+  <data name="查看新版" xml:space="preserve"><value>查看新版</value></data>
+  <data name="启动应用时检测版本更新" xml:space="preserve"><value>启动应用时检测版本更新</value></data>
+  <data name="安装更新" xml:space="preserve"><value>安装更新</value></data>
+  <data name="正在下载……" xml:space="preserve"><value>正在下载……</value></data>
+  <data name="更新未完成，请稍后重试。" xml:space="preserve"><value>更新未完成，请稍后重试。</value></data>
+  <data name="安装包信息无效。" xml:space="preserve"><value>安装包信息无效。</value></data>
+  <data name="无法验证安装包，请前往发布页下载。" xml:space="preserve"><value>无法验证安装包，请前往发布页下载。</value></data>
+  <data name="安装包校验失败，请重新下载。" xml:space="preserve"><value>安装包校验失败，请重新下载。</value></data>
+  <data name="更新记录正在使用中，请稍后重试。" xml:space="preserve"><value>更新记录正在使用中，请稍后重试。</value></data>
+  <data name="PathMan v{0} 已发布！" xml:space="preserve"><value>PathMan v{0} 已发布！</value></data>
+  <data name="点击查看新版本内容" xml:space="preserve"><value>点击查看新版本内容</value></data>
+</root>

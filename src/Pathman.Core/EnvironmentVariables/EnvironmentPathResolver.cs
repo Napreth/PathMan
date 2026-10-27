@@ -5,6 +5,7 @@ namespace Pathman.Core.EnvironmentVariables;
 
 public sealed record EnvironmentPathExpansion(IReadOnlyList<string> Paths, string? Error)
 {
+    public bool LimitExceeded {get;init;}
     public bool IsResolved => Error is null;
 }
 
@@ -53,31 +54,32 @@ public sealed partial class EnvironmentPathResolver
     public EnvironmentPathExpansion Expand(string value, VariableScope scope)
     {
         string? error = null;
+        var limitExceeded=false;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var replacements = 0;
         string ExpandValue(string text, int depth)
         {
             if (depth > 32 || text.Length > 262144 || ++replacements > 4096)
-            { error ??= "引用展开超过限制"; return text; }
+            { limitExceeded=true;error ??= L.Get("引用展开超过限制"); return text; }
             return ReferencesPattern().Replace(text, match =>
             {
                 if (error is not null) return match.Value;
                 var name = match.Groups[1].Value;
-                if (!seen.Add(name)) { error = $"循环引用 %{name}%"; return match.Value; }
+                if (!seen.Add(name)) { error = L.Format("循环引用 %{0}%",name); return match.Value; }
                 var variable = Find(name, scope);
                 string? replacement = variable?.RawValue;
                 // A user-defined name must never leak from the runtime into a machine value.
                 if (replacement is null && (scope!=VariableScope.Machine || !EnvironmentVariableClassifier.IsUserOnlyBuiltIn(name)) && EnvironmentVariableClassifier.IsWindowsBuiltIn(name) && !variables.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
                     replacement = runtime.FirstOrDefault(item => item.Key.Equals(name, StringComparison.OrdinalIgnoreCase)).Value;
-                if (replacement is null) { error = $"找不到引用 %{name}%"; seen.Remove(name); return match.Value; }
+                if (replacement is null) { error = L.Format("找不到引用 %{0}%",name); seen.Remove(name); return match.Value; }
                 var expanded = ExpandValue(replacement, depth + 1); seen.Remove(name);
-                if (expanded.Length > 262144) { error ??= "引用展开超过限制"; return match.Value; }
+                if (expanded.Length > 262144) { limitExceeded=true;error ??= L.Get("引用展开超过限制"); return match.Value; }
                 return expanded;
             });
         }
         var expanded = ExpandValue(value, 0);
-        if (expanded.Length > 262144) error ??= "引用展开超过限制";
-        return new(expanded.Split(';', StringSplitOptions.None), error);
+        if (expanded.Length > 262144) {limitExceeded=true;error ??= L.Get("引用展开超过限制");}
+        return new(expanded.Split(';', StringSplitOptions.None), error) {LimitExceeded=limitExceeded};
     }
 
     public static string? Normalize(string path)

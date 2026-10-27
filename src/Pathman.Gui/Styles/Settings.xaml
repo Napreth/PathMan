@@ -2,16 +2,19 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="clr-namespace:Pathman.Gui.Controls">
     <Style TargetType="controls:SettingsLinkCard">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="MinHeight" Value="68"/>
         <Setter Property="Padding" Value="20,16"/>
         <Setter Property="AutomationProperties.Name" Value="{Binding Content,RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="AutomationProperties.HelpText" Value="{Binding Detail,RelativeSource={RelativeSource Self}}"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="controls:SettingsLinkCard">
-            <Border x:Name="Card" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions>
+            <Border x:Name="Card" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}" TextElement.Foreground="{TemplateBinding Foreground}">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions>
                     <TextBlock Text="{TemplateBinding Icon}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center"/>
                     <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{TemplateBinding Detail}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="16,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="3" Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
             </Border>
             <ControlTemplate.Triggers>
@@ -27,12 +30,13 @@
     <FontFamily x:Key="SettingsChineseFont">Microsoft YaHei UI, Segoe UI Variable Text</FontFamily>
 
     <Style x:Key="SettingsToggleSwitch" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource SettingsChineseFont}"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
             <Grid Background="Transparent" MinHeight="24"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <ContentPresenter VerticalAlignment="Center" Margin="0,0,24,0"/>
+                <ContentPresenter VerticalAlignment="Center" Margin="0,0,24,0" TextElement.Foreground="{TemplateBinding Foreground}"/>
                 <Border x:Name="Track" Grid.Column="1" Width="40" Height="20" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource TextFillColorSecondaryBrush}" Background="Transparent">
                     <Ellipse x:Name="Thumb" Width="10" Height="10" Fill="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Left" Margin="4,0,0,0"/>
                 </Border>

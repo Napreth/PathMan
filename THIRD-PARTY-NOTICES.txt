@@ -1,9 +1,10 @@
 PathMan third-party notices
 ==========================
 
-The registry-origin collector uses the following Microsoft libraries:
+The application uses the following Microsoft libraries:
 Microsoft.Diagnostics.Tracing.TraceEvent (https://github.com/microsoft/perfview)
 System.Management and System.CodeDom (https://github.com/dotnet/runtime)
+Microsoft.Windows.SDK.NET and WinRT.Runtime (https://github.com/microsoft/CsWinRT)
 
 These libraries and their Microsoft .NET dependencies use the MIT license.
 Copyright (c) Microsoft Corporation. All rights reserved.

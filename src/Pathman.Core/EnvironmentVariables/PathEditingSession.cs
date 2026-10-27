@@ -148,7 +148,7 @@ public sealed class PathEditingSession
     { if(!draft) Remember();var item=new PathEditorItem(value,draft); Items(scope,name).Add(item);Capture(scope,name);return item; }
     public void Update(Guid id,string value,bool wasChanged=true)
     {
-        if(value.IndexOfAny([';','\0','\r','\n'])>=0) throw new ArgumentException("单个条目不能包含分号、空字符或换行。");
+        if(value.IndexOfAny([';','\0','\r','\n'])>=0) throw new ArgumentException(L.Get("单个条目不能包含分号、空字符或换行。"));
         var source=Locate(id);
         if((!source.Item.IsDraft || value.Length>0) && (source.Item.Value!=value || value.Length==0 && wasChanged)) Remember();
         if(value.Length==0 && (source.Item.IsDraft || source.Item.Value.Length>0 || wasChanged)) source.Items.Remove(source.Item);
@@ -167,15 +167,15 @@ public sealed class PathEditingSession
     {
         foreach(var pair in lists) if(pair.Value.FirstOrDefault(item=>item.Id==id) is {} item)
         { var original=originals[pair.Key]; return(original.Scope,original.Name,pair.Value,item); }
-        throw new ArgumentException("条目已变化，请重新选择。");
+        throw new ArgumentException(L.Get("条目已变化，请重新选择。"));
     }
     public string? ValidateMove(Guid itemId,VariableScope targetScope,string targetName,Guid? beforeId)
     {
         var source=Locate(itemId);
-        if(source.Scope!=targetScope) return "不能在用户和系统作用域之间拖动路径。";
-        if(!originals.ContainsKey(Key(targetScope,targetName))) return "目标路径变量不存在。";
+        if(source.Scope!=targetScope) return L.Get("不能在用户和系统作用域之间拖动路径。");
+        if(!originals.ContainsKey(Key(targetScope,targetName))) return L.Get("目标路径变量不存在。");
         var target=Items(targetScope,targetName);
-        if(beforeId is {} before && !target.Any(item=>item.Id==before)) return "插入位置已变化。";
+        if(beforeId is {} before && !target.Any(item=>item.Id==before)) return L.Get("插入位置已变化。");
         var resolver=new EnvironmentPathResolver(CurrentVariables(),runtime);
         var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         bool Reaches(string value,int depth=0)
@@ -190,7 +190,7 @@ public sealed class PathEditingSession
             }
             return false;
         }
-        return Reaches(source.Item.Value) ? "此位置会产生引用回环或超出引用层级限制。" : null;
+        return Reaches(source.Item.Value) ? L.Get("此位置会产生引用回环或超出引用层级限制。") : null;
     }
     public void Move(Guid itemId,VariableScope targetScope,string targetName,Guid? beforeId=null)
     {

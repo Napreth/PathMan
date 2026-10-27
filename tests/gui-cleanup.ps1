@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$ResultPath='C:\PathManInteractionTest\cleanup-results.json',[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine') { throw 'Run only in the disposable Windows VM, then restore its checkpoint.' }
@@ -26,7 +26,7 @@ if($PrepareFixture) {
         $user.SetValue('PATHEXT','.EXE')
     } finally { $user.Dispose() }
     $data=Join-Path $env:LOCALAPPDATA 'PathMan'; New-Item -ItemType Directory -Force $data | Out-Null
-    @{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'},@{id='work';name='工作';scope='User';rule='manual'});assignments=@{'User:PATHMAN_LIST'='work';'User:PATHMAN_EDIT_PATH'='work';'User:PATHMAN_SCALAR_ORIGIN'='work'};revision=[guid]::NewGuid().ToString('N')} | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
+    @{preferences=@{language='zh-CN';theme='system';autoCheckUpdates=$false};groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'},@{id='work';name='工作';scope='User';rule='manual'});assignments=@{'User:PATHMAN_LIST'='work';'User:PATHMAN_EDIT_PATH'='work';'User:PATHMAN_SCALAR_ORIGIN'='work'};revision=[guid]::NewGuid().ToString('N')} | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
     return
 }
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes

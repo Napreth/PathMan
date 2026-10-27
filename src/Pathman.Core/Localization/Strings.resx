@@ -1,0 +1,1210 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <data name="--type 仅支持 User 或 Machine。" xml:space="preserve">
+    <value>--type supports only User or Machine.</value>
+  </data>
+  <data name="CLI 目录：{0}" xml:space="preserve">
+    <value>CLI directory: {0}</value>
+  </data>
+  <data name="PATH 不能作为多版本管理的目标变量。" xml:space="preserve">
+    <value>PATH cannot be a version-management target.</value>
+  </data>
+  <data name="PathMan — 版本管理&#10;&#10;  pathman list [项目]&#10;  pathman add &lt;项目&gt; &lt;版本&gt; &lt;值&gt; [--variable &lt;变量名&gt;] [--type User|Machine] [--replace]&#10;  pathman switch &lt;项目&gt; &lt;版本&gt;&#10;  pathman delete &lt;项目&gt; [版本]" xml:space="preserve">
+    <value>PathMan — Version management
+
+  pathman list [project]
+  pathman add &lt;project&gt; &lt;version&gt; &lt;value&gt; [--variable &lt;name&gt;] [--type User|Machine] [--replace]
+  pathman switch &lt;project&gt; &lt;version&gt;
+  pathman delete &lt;project&gt; [version]</value>
+  </data>
+  <data name="Windows 环境变量与程序别名管理器" xml:space="preserve">
+    <value>Windows environment variable and program alias manager</value>
+  </data>
+  <data name="{0} · {1}，第 {2} 行" xml:space="preserve">
+    <value>{0} · {1}, line {2}</value>
+  </data>
+  <data name="{0} 已变化，请重新检测后再操作。" xml:space="preserve">
+    <value>{0} has changed. Run the checks again before continuing.</value>
+  </data>
+  <data name="{0} 已被其他程序修改，请重新预览清理结果。" xml:space="preserve">
+    <value>{0} was changed by another program. Preview the cleanup again.</value>
+  </data>
+  <data name="{0} 是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。" xml:space="preserve">
+    <value>{0} is a Windows built-in variable. Switching its value may prevent Windows or applications from working.</value>
+  </data>
+  <data name="{0}（未列出）" xml:space="preserve">
+    <value>{0} (not listed)</value>
+  </data>
+  <data name="一次保存只支持一种作用域。" xml:space="preserve">
+    <value>Only one scope can be saved at a time.</value>
+  </data>
+  <data name="上一行  " xml:space="preserve">
+    <value>Previous line  </value>
+  </data>
+  <data name="上次检测：{0:HH:mm:ss}" xml:space="preserve">
+    <value>Last checked: {0:HH:mm:ss}</value>
+  </data>
+  <data name="上移" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="下一行  " xml:space="preserve">
+    <value>Next line  </value>
+  </data>
+  <data name="下移" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="不支持此批量操作。" xml:space="preserve">
+    <value>This batch operation is not supported.</value>
+  </data>
+  <data name="不整理PowerToys修改的变量" xml:space="preserve">
+    <value>Do not organize variables changed by PowerToys</value>
+  </data>
+  <data name="不整理系统编辑器修改的变量" xml:space="preserve">
+    <value>Do not organize variables changed by the system editor</value>
+  </data>
+  <data name="不能在用户和系统作用域之间拖动路径。" xml:space="preserve">
+    <value>Paths cannot be dragged between user and system scopes.</value>
+  </data>
+  <data name="临时自动清理" xml:space="preserve">
+    <value>Temporarily auto-clean</value>
+  </data>
+  <data name="主题" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="之前发现的问题已解决。" xml:space="preserve">
+    <value>The previously reported issues have been resolved.</value>
+  </data>
+  <data name="仅在当前变量编辑期间整理外部新增项；保存时才写入" xml:space="preserve">
+    <value>Organize new external entries during this edit only; write them when saved</value>
+  </data>
+  <data name="仍然启用" xml:space="preserve">
+    <value>Enable anyway</value>
+  </data>
+  <data name="仍然选择" xml:space="preserve">
+    <value>Select anyway</value>
+  </data>
+  <data name="以管理员身份运行" xml:space="preserve">
+    <value>Running as administrator</value>
+  </data>
+  <data name="以非管理员身份运行" xml:space="preserve">
+    <value>Running without administrator privileges</value>
+  </data>
+  <data name="作用域" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+  <data name="作用范围仅支持用户或系统。" xml:space="preserve">
+    <value>The scope must be User or Machine.</value>
+  </data>
+  <data name="保存" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="保存中" xml:space="preserve">
+    <value>Saving</value>
+  </data>
+  <data name="保持原始内容，将注册表类型改为 REG_EXPAND_SZ。" xml:space="preserve">
+    <value>Keep the raw value and change the registry type to REG_EXPAND_SZ.</value>
+  </data>
+  <data name="修改" xml:space="preserve">
+    <value>Change</value>
+  </data>
+  <data name="修改前" xml:space="preserve">
+    <value>Before</value>
+  </data>
+  <data name="修改后" xml:space="preserve">
+    <value>After</value>
+  </data>
+  <data name="修改来源识别" xml:space="preserve">
+    <value>Change origin tracking</value>
+  </data>
+  <data name="修改来源跟踪尚未就绪。" xml:space="preserve">
+    <value>Change origin tracking is not ready yet.</value>
+  </data>
+  <data name="修改来源跟踪连接已断开，请重新启用来源识别。" xml:space="preserve">
+    <value>Origin tracking disconnected. Enable it again to reconnect.</value>
+  </data>
+  <data name="修改进程" xml:space="preserve">
+    <value>Writing process</value>
+  </data>
+  <data name="修正类型" xml:space="preserve">
+    <value>Fix type</value>
+  </data>
+  <data name="健康检测" xml:space="preserve">
+    <value>Health check</value>
+  </data>
+  <data name="健康检测通过" xml:space="preserve">
+    <value>Health check passed</value>
+  </data>
+  <data name="健康问题已忽略" xml:space="preserve">
+    <value>Health issues ignored</value>
+  </data>
+  <data name="允许选择内置系统变量" xml:space="preserve">
+    <value>Allow built-in system variables</value>
+  </data>
+  <data name="关于" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="关闭" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="关闭通知" xml:space="preserve">
+    <value>Dismiss notification</value>
+  </data>
+  <data name="其他变量" xml:space="preserve">
+    <value>Other variables</value>
+  </data>
+  <data name="内置系统变量的错误值可能导致 Windows 或应用无法正常运行。PATH 始终不可作为版本目标。" xml:space="preserve">
+    <value>Incorrect values for Windows built-in variables can prevent Windows or applications from working. PATH can never be a version target.</value>
+  </data>
+  <data name="减少引用层级或拆分过长的变量内容。" xml:space="preserve">
+    <value>Reduce reference depth or split overly long variable values.</value>
+  </data>
+  <data name="分组" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="分组变量" xml:space="preserve">
+    <value>Group variables</value>
+  </data>
+  <data name="分组名不能为空，最长 80 个字符。" xml:space="preserve">
+    <value>A group name is required and cannot exceed 80 characters.</value>
+  </data>
+  <data name="分组配置必须包含唯一 ID、有效名称和一个通用默认分组。" xml:space="preserve">
+    <value>Groups require unique IDs, valid names and a shared default group.</value>
+  </data>
+  <data name="切换" xml:space="preserve">
+    <value>Switch</value>
+  </data>
+  <data name="列表包含空条目。" xml:space="preserve">
+    <value>The list contains empty entries.</value>
+  </data>
+  <data name="创建被引用的变量，或更正引用名称。" xml:space="preserve">
+    <value>Create the referenced variable or correct its name.</value>
+  </data>
+  <data name="删除" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="删除{0} {1} 第 {2} 行" xml:space="preserve">
+    <value>Delete {0} {1}, line {2}</value>
+  </data>
+  <data name="删除分组“{0}”？组内环境变量将移到默认分组。" xml:space="preserve">
+    <value>Delete group “{0}”? Its variables will move to the default group.</value>
+  </data>
+  <data name="删除外部添加的重复PATH项" xml:space="preserve">
+    <value>Remove duplicate PATH entries added externally</value>
+  </data>
+  <data name="删除版本配置，保留当前值" xml:space="preserve">
+    <value>Delete version configuration and keep the current value</value>
+  </data>
+  <data name="删除环境变量“{0}”？" xml:space="preserve">
+    <value>Delete environment variable “{0}”?</value>
+  </data>
+  <data name="删除空行" xml:space="preserve">
+    <value>Delete empty row</value>
+  </data>
+  <data name="删除这一行会移除对应的分号位置，其余条目保持原样。" xml:space="preserve">
+    <value>Deleting this row removes its semicolon position. Other entries remain unchanged.</value>
+  </data>
+  <data name="删除选中条目" xml:space="preserve">
+    <value>Delete selected entries</value>
+  </data>
+  <data name="删除选中的 {0} 个环境变量和 {1} 个分组？分组内未选中的变量会移到默认分组。" xml:space="preserve">
+    <value>Delete {0} selected variables and {1} groups? Unselected variables in those groups will move to the default group.</value>
+  </data>
+  <data name="删除项目" xml:space="preserve">
+    <value>Delete project</value>
+  </data>
+  <data name="删除项目配置，保留当前变量" xml:space="preserve">
+    <value>Delete project configuration and keep the current variable</value>
+  </data>
+  <data name="别名" xml:space="preserve">
+    <value>Alias</value>
+  </data>
+  <data name="别名已不存在，请刷新后重试。" xml:space="preserve">
+    <value>This alias no longer exists. Reload and try again.</value>
+  </data>
+  <data name="别名已经存在。" xml:space="preserve">
+    <value>The alias already exists.</value>
+  </data>
+  <data name="别名已被其他程序修改，请刷新后重试。" xml:space="preserve">
+    <value>This alias was changed by another program. Reload and try again.</value>
+  </data>
+  <data name="别名必须是有效的 Windows 文件名，最长 250 个字符，不能使用设备保留名或以空格、句点结尾。" xml:space="preserve">
+    <value>An alias must be a valid Windows filename of at most 250 characters. Reserved device names and trailing spaces or periods are not allowed.</value>
+  </data>
+  <data name="别名或同名文件已存在。" xml:space="preserve">
+    <value>An alias or file with this name already exists.</value>
+  </data>
+  <data name="别名或同名文件已存在：{0}" xml:space="preserve">
+    <value>An alias or file with this name already exists: {0}</value>
+  </data>
+  <data name="别名正在保存，请稍后重试。" xml:space="preserve">
+    <value>The alias is being saved. Try again shortly.</value>
+  </data>
+  <data name="别名目录：{0}" xml:space="preserve">
+    <value>Alias directory: {0}</value>
+  </data>
+  <data name="刷新" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="前往变量监控" xml:space="preserve">
+    <value>Open variable monitoring</value>
+  </data>
+  <data name="剪贴板暂时不可用。" xml:space="preserve">
+    <value>The clipboard is temporarily unavailable.</value>
+  </data>
+  <data name="单个条目不能包含分号、空字符或换行。" xml:space="preserve">
+    <value>An entry cannot contain semicolons, null characters or newlines.</value>
+  </data>
+  <data name="单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。" xml:space="preserve">
+    <value>An entry cannot contain semicolons, null characters or newlines. Use text mode for multiple entries.</value>
+  </data>
+  <data name="发现 {0} 项错误、{1} 项提醒。&#10;" xml:space="preserve">
+    <value>Found {0} errors and {1} warnings.
+</value>
+  </data>
+  <data name="发现 {0} 项错误，{1} 项提醒" xml:space="preserve">
+    <value>Found {0} errors and {1} warnings</value>
+  </data>
+  <data name="发现新版本" xml:space="preserve">
+    <value>Update available</value>
+  </data>
+  <data name="发现新版本 {0}。" xml:space="preserve">
+    <value>A new version is available: {0}.</value>
+  </data>
+  <data name="取消" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="取消置顶" xml:space="preserve">
+    <value>Unpin</value>
+  </data>
+  <data name="变量值" xml:space="preserve">
+    <value>Variable value</value>
+  </data>
+  <data name="变量值不能包含空字符，且最长为 32767 个字符。" xml:space="preserve">
+    <value>A variable value cannot contain null characters or exceed 32767 characters.</value>
+  </data>
+  <data name="变量名" xml:space="preserve">
+    <value>Variable name</value>
+  </data>
+  <data name="变量名不能为空，最长 255 个字符，不能包含等号、空字符或换行。" xml:space="preserve">
+    <value>A variable name is required, cannot exceed 255 characters, and cannot contain equals signs, null characters or newlines.</value>
+  </data>
+  <data name="变量名无效" xml:space="preserve">
+    <value>Invalid variable name</value>
+  </data>
+  <data name="变量条目" xml:space="preserve">
+    <value>Variable entries</value>
+  </data>
+  <data name="变量监控" xml:space="preserve">
+    <value>Variable monitoring</value>
+  </data>
+  <data name="变量管理" xml:space="preserve">
+    <value>Variables</value>
+  </data>
+  <data name="变量（范围）" xml:space="preserve">
+    <value>Variable (scope)</value>
+  </data>
+  <data name="只能调整置顶变量之间的顺序。" xml:space="preserve">
+    <value>Only pinned variables can be reordered.</value>
+  </data>
+  <data name="可用版本" xml:space="preserve">
+    <value>Available versions</value>
+  </data>
+  <data name="同一批次不能多次修改一个变量。" xml:space="preserve">
+    <value>A variable cannot be changed more than once in the same batch.</value>
+  </data>
+  <data name="名称" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="后台程序不存在。" xml:space="preserve">
+    <value>The background program does not exist.</value>
+  </data>
+  <data name="后台程序不存在，请先构建或安装 PathMan。" xml:space="preserve">
+    <value>The background program does not exist. Build or install PathMan first.</value>
+  </data>
+  <data name="后台程序拒绝启动，请检查后台运行和登录自启设置。" xml:space="preserve">
+    <value>The background program refused to start. Check background execution and login startup settings.</value>
+  </data>
+  <data name="后台程序未能在 10 秒内启动。" xml:space="preserve">
+    <value>The background program did not start within 10 seconds.</value>
+  </data>
+  <data name="后台程序未能在 5 秒内停止。" xml:space="preserve">
+    <value>The background program did not stop within 5 seconds.</value>
+  </data>
+  <data name="后台运行与登录自启必须同时开启，后台程序才会运行。" xml:space="preserve">
+    <value>Both background execution and login startup must be enabled for the background program to run.</value>
+  </data>
+  <data name="含引用的值当前为 {0}，不会按可展开字符串处理。" xml:space="preserve">
+    <value>This value contains references but is stored as {0}, so its references will not be expanded.</value>
+  </data>
+  <data name="启用程序别名" xml:space="preserve">
+    <value>Enable program aliases</value>
+  </data>
+  <data name="在后台运行监控程序" xml:space="preserve">
+    <value>Run the monitoring program in the background</value>
+  </data>
+  <data name="垫片目录位于其他路径之前，或出现了多次。" xml:space="preserve">
+    <value>The shim directory precedes other paths or appears more than once.</value>
+  </data>
+  <data name="垫片目录包含在多路径引用中，请先将它从被引用变量中移出，再切换程序别名。" xml:space="preserve">
+    <value>The shim directory is inside a reference with multiple paths. Remove it from the referenced variable before changing alias settings.</value>
+  </data>
+  <data name="垫片目录已放到用户 Path 末尾，新终端生效。" xml:space="preserve">
+    <value>The shim directory is now last in user PATH. Open a new terminal to use it.</value>
+  </data>
+  <data name="垫片目录顺序" xml:space="preserve">
+    <value>Shim directory order</value>
+  </data>
+  <data name="复制" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="复制别名" xml:space="preserve">
+    <value>Copy alias</value>
+  </data>
+  <data name="复制别名；右键可复制目标路径" xml:space="preserve">
+    <value>Copy alias; right-click to copy the target path</value>
+  </data>
+  <data name="复制目标路径" xml:space="preserve">
+    <value>Copy target path</value>
+  </data>
+  <data name="外部修改与本地草稿重叠；已保留本地内容，请核对红、绿、蓝三种更改。" xml:space="preserve">
+    <value>External changes overlap local edits. Local content was retained; review the red, green and blue changes.</value>
+  </data>
+  <data name="外部变量" xml:space="preserve">
+    <value>External variables</value>
+  </data>
+  <data name="外部新增 PATH 项包含无法安全展开的引用，已保留原位置。" xml:space="preserve">
+    <value>An externally added PATH entry has a reference that cannot be safely expanded. Its position was retained.</value>
+  </data>
+  <data name="外部新增项需要管理员授权。&#10;" xml:space="preserve">
+    <value>New external entries require administrator authorization.
+</value>
+  </data>
+  <data name="外部更改已合并到草稿；红色删除、绿色新增、蓝色为本地更改。保存后写入。" xml:space="preserve">
+    <value>External changes were merged into the draft: red for deletions, green for additions, blue for local edits. Save to apply.</value>
+  </data>
+  <data name="外部更改记录" xml:space="preserve">
+    <value>External change history</value>
+  </data>
+  <data name="外部程序" xml:space="preserve">
+    <value>External program</value>
+  </data>
+  <data name="多行模式" xml:space="preserve">
+    <value>List mode</value>
+  </data>
+  <data name="导航" xml:space="preserve">
+    <value>Navigation</value>
+  </data>
+  <data name="将垫片目录只保留在用户 Path 的最后一行，避免别名遮蔽其他程序。" xml:space="preserve">
+    <value>Keep the shim directory only as the last user PATH entry so aliases do not shadow other programs.</value>
+  </data>
+  <data name="将外部新环境变量归入‘外部变量’分类" xml:space="preserve">
+    <value>Group new external environment variables under “External variables”</value>
+  </data>
+  <data name="将外部新用户环境变量归入‘外部变量’分类" xml:space="preserve">
+    <value>Group new external user variables under “External variables”</value>
+  </data>
+  <data name="将外部新系统环境变量归入‘外部变量’分类" xml:space="preserve">
+    <value>Group new external system variables under “External variables”</value>
+  </data>
+  <data name="将外部添加的PATH项移至EXTERNAL_PATH" xml:space="preserve">
+    <value>Move externally added PATH entries to EXTERNAL_PATH</value>
+  </data>
+  <data name="将外部添加的PATH项移至EXTERNAL_USER_PATH" xml:space="preserve">
+    <value>Move externally added PATH entries to EXTERNAL_USER_PATH</value>
+  </data>
+  <data name="将选中版本写入目标变量" xml:space="preserve">
+    <value>Write the selected version to the target variable</value>
+  </data>
+  <data name="尚未登记版本项目。使用 pathman add 登记。" xml:space="preserve">
+    <value>No version projects have been registered. Use pathman add to register one.</value>
+  </data>
+  <data name="展开 " xml:space="preserve">
+    <value>Expand </value>
+  </data>
+  <data name="展开后出现 {0} 次：{1}" xml:space="preserve">
+    <value>Appears {0} times after expansion: {1}</value>
+  </data>
+  <data name="展开或折叠引用的路径变量" xml:space="preserve">
+    <value>Expand or collapse the referenced path variable</value>
+  </data>
+  <data name="已从用户 Path 移除垫片目录，新终端生效。" xml:space="preserve">
+    <value>The shim directory was removed from user PATH. The change applies to new terminals.</value>
+  </data>
+  <data name="已保存" xml:space="preserve">
+    <value>Saved</value>
+  </data>
+  <data name="已保存{0}；其余更改仍在编辑区。" xml:space="preserve">
+    <value>Saved {0}; other changes remain in the editor.</value>
+  </data>
+  <data name="已保存。" xml:space="preserve">
+    <value>Saved.</value>
+  </data>
+  <data name="已保存并重新检测。" xml:space="preserve">
+    <value>Saved and checked again.</value>
+  </data>
+  <data name="已切换 {0} → {1}。" xml:space="preserve">
+    <value>Switched {0} → {1}.</value>
+  </data>
+  <data name="已切换 {0} → {1}：{2}={3}" xml:space="preserve">
+    <value>Switched {0} → {1}: {2}={3}</value>
+  </data>
+  <data name="已删除。" xml:space="preserve">
+    <value>Deleted.</value>
+  </data>
+  <data name="已删除版本配置 {0}{1}；环境变量及当前值已保留。" xml:space="preserve">
+    <value>Deleted version configuration {0}{1}; the environment variable and its current value were retained.</value>
+  </data>
+  <data name="已取消切换，原值保留。" xml:space="preserve">
+    <value>Switch canceled. The original value was retained.</value>
+  </data>
+  <data name="已取消管理员操作。" xml:space="preserve">
+    <value>Administrator operation canceled.</value>
+  </data>
+  <data name="已取消选择。" xml:space="preserve">
+    <value>Selection canceled.</value>
+  </data>
+  <data name="已复制。" xml:space="preserve">
+    <value>Copied.</value>
+  </data>
+  <data name="已复制变量值。" xml:space="preserve">
+    <value>Variable value copied.</value>
+  </data>
+  <data name="已忽略此项；来源发生变化后会重新检测。" xml:space="preserve">
+    <value>This issue is ignored until its source changes.</value>
+  </data>
+  <data name="已恢复提醒。" xml:space="preserve">
+    <value>Warning restored.</value>
+  </data>
+  <data name="已撤回外部更改的草稿，本地编辑已保留；保存后写入。" xml:space="preserve">
+    <value>External changes were reverted in the draft; local edits were retained. Save to apply.</value>
+  </data>
+  <data name="已整理外部新增项的草稿，保存后写入。" xml:space="preserve">
+    <value>New external entries were organized in the draft. Save to apply.</value>
+  </data>
+  <data name="已整理外部新增项的草稿；搜索顺序会改变，请核对后保存。" xml:space="preserve">
+    <value>New external entries were organized in the draft. Search order will change; review before saving.</value>
+  </data>
+  <data name="已清理{0}；其余未应用。" xml:space="preserve">
+    <value>Cleaned {0}; other changes were not applied.</value>
+  </data>
+  <data name="已登记 {0} / {1}；当前环境变量未改动。" xml:space="preserve">
+    <value>Registered {0} / {1}; the active environment variable was not changed.</value>
+  </data>
+  <data name="已选择" xml:space="preserve">
+    <value>Selected</value>
+  </data>
+  <data name="应用清理" xml:space="preserve">
+    <value>Apply cleanup</value>
+  </data>
+  <data name="引用了未定义变量 %{0}%" xml:space="preserve">
+    <value>References undefined variable %{0}%</value>
+  </data>
+  <data name="引用回环" xml:space="preserve">
+    <value>Circular reference</value>
+  </data>
+  <data name="引用回环或层级过深，已停止展开" xml:space="preserve">
+    <value>Expansion stopped because of a circular reference or excessive depth</value>
+  </data>
+  <data name="引用回环：" xml:space="preserve">
+    <value>Circular reference: </value>
+  </data>
+  <data name="引用层级" xml:space="preserve">
+    <value>Reference depth</value>
+  </data>
+  <data name="引用展开超过安全限制。" xml:space="preserve">
+    <value>Reference expansion exceeded the safety limit.</value>
+  </data>
+  <data name="引用展开超过限制" xml:space="preserve">
+    <value>Reference expansion limit exceeded</value>
+  </data>
+  <data name="当前" xml:space="preserve">
+    <value>Current</value>
+  </data>
+  <data name="当前变量列表中没有 {0}。" xml:space="preserve">
+    <value>{0} is not in the current variable list.</value>
+  </data>
+  <data name="当前已是最新版本。" xml:space="preserve">
+    <value>You are up to date.</value>
+  </data>
+  <data name="当前：" xml:space="preserve">
+    <value>Current: </value>
+  </data>
+  <data name="待保存" xml:space="preserve">
+    <value>Unsaved</value>
+  </data>
+  <data name="待清理的变量" xml:space="preserve">
+    <value>Variables to clean</value>
+  </data>
+  <data name="循环引用 %{0}%" xml:space="preserve">
+    <value>Circular reference %{0}%</value>
+  </data>
+  <data name="忽略" xml:space="preserve">
+    <value>Ignore</value>
+  </data>
+  <data name="恢复提醒" xml:space="preserve">
+    <value>Restore warning</value>
+  </data>
+  <data name="所有文件 (*.*)|*.*" xml:space="preserve">
+    <value>All files (*.*)|*.*</value>
+  </data>
+  <data name="所有检查均已通过" xml:space="preserve">
+    <value>All checks passed</value>
+  </data>
+  <data name="批量保存仅支持同一作用域的创建和修改。" xml:space="preserve">
+    <value>Batch save supports creation and modification within one scope only.</value>
+  </data>
+  <data name="找不到分组。" xml:space="preserve">
+    <value>Group not found.</value>
+  </data>
+  <data name="找不到变量 {0}，请刷新后重试。" xml:space="preserve">
+    <value>Variable {0} was not found. Reload and try again.</value>
+  </data>
+  <data name="找不到引用 %{0}%" xml:space="preserve">
+    <value>Reference %{0}% was not found</value>
+  </data>
+  <data name="找不到版本项目：{0}" xml:space="preserve">
+    <value>Version project not found: {0}</value>
+  </data>
+  <data name="找不到版本：{0}" xml:space="preserve">
+    <value>Version not found: {0}</value>
+  </data>
+  <data name="找不到环境变量注册表项。" xml:space="preserve">
+    <value>The environment registry key was not found.</value>
+  </data>
+  <data name="找不到目标分组。" xml:space="preserve">
+    <value>Target group not found.</value>
+  </data>
+  <data name="找不到系统环境变量注册表项。" xml:space="preserve">
+    <value>The system environment registry key was not found.</value>
+  </data>
+  <data name="折叠 " xml:space="preserve">
+    <value>Collapse </value>
+  </data>
+  <data name="拖动调整用户变量和系统变量的高度" xml:space="preserve">
+    <value>Drag to resize the user and system variable regions</value>
+  </data>
+  <data name="按分号拆分为多行编辑" xml:space="preserve">
+    <value>Split by semicolons for one entry per row</value>
+  </data>
+  <data name="授权并整理系统 PATH" xml:space="preserve">
+    <value>Authorize and organize system PATH</value>
+  </data>
+  <data name="插入位置已变化。" xml:space="preserve">
+    <value>The insertion position has changed.</value>
+  </data>
+  <data name="撤回外部更改" xml:space="preserve">
+    <value>Revert external changes</value>
+  </data>
+  <data name="撤销" xml:space="preserve">
+    <value>Undo</value>
+  </data>
+  <data name="操作" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="操作未完成" xml:space="preserve">
+    <value>Operation incomplete</value>
+  </data>
+  <data name="操作请求过大。" xml:space="preserve">
+    <value>The operation request is too large.</value>
+  </data>
+  <data name="改用系统作用域中的变量，或将这个引用移到用户变量。" xml:space="preserve">
+    <value>Use a variable from system scope, or move this reference to a user variable.</value>
+  </data>
+  <data name="放弃" xml:space="preserve">
+    <value>Discard</value>
+  </data>
+  <data name="文本" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="文本模式" xml:space="preserve">
+    <value>Text mode</value>
+  </data>
+  <data name="新名称已经存在。" xml:space="preserve">
+    <value>The new name already exists.</value>
+  </data>
+  <data name="新增" xml:space="preserve">
+    <value>Added</value>
+  </data>
+  <data name="新建" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="新建分组" xml:space="preserve">
+    <value>New group</value>
+  </data>
+  <data name="新建条目" xml:space="preserve">
+    <value>New entry</value>
+  </data>
+  <data name="新建版本" xml:space="preserve">
+    <value>New version</value>
+  </data>
+  <data name="新建环境变量" xml:space="preserve">
+    <value>New environment variable</value>
+  </data>
+  <data name="新建用户环境变量" xml:space="preserve">
+    <value>New user environment variable</value>
+  </data>
+  <data name="新建系统环境变量" xml:space="preserve">
+    <value>New system environment variable</value>
+  </data>
+  <data name="新建项目" xml:space="preserve">
+    <value>New project</value>
+  </data>
+  <data name="新版本名已经存在。" xml:space="preserve">
+    <value>The new version name already exists.</value>
+  </data>
+  <data name="无法创建硬链接：{0}" xml:space="preserve">
+    <value>Cannot create hard link: {0}</value>
+  </data>
+  <data name="无法启动 PathMan" xml:space="preserve">
+    <value>Cannot start PathMan</value>
+  </data>
+  <data name="无法启动修改来源跟踪。" xml:space="preserve">
+    <value>Cannot start change origin tracking.</value>
+  </data>
+  <data name="无法启动后台程序。" xml:space="preserve">
+    <value>Cannot start the background program.</value>
+  </data>
+  <data name="无法启动管理员操作。" xml:space="preserve">
+    <value>Cannot start the administrator operation.</value>
+  </data>
+  <data name="无法检查更新，请稍后重试。" xml:space="preserve">
+    <value>Could not check for updates. Try again later.</value>
+  </data>
+  <data name="无法读取程序别名" xml:space="preserve">
+    <value>Cannot read program aliases</value>
+  </data>
+  <data name="时间" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="显示已忽略" xml:space="preserve">
+    <value>Show ignored</value>
+  </data>
+  <data name="显示已忽略（{0}）" xml:space="preserve">
+    <value>Show ignored ({0})</value>
+  </data>
+  <data name="普通变量按名称排序，只能拖到其他分组。" xml:space="preserve">
+    <value>Unpinned variables are sorted by name and can only be moved to another group.</value>
+  </data>
+  <data name="暂无外部更改记录" xml:space="preserve">
+    <value>No external changes recorded</value>
+  </data>
+  <data name="更改内置系统变量可能导致 Windows 或应用无法正常运行。确认了解风险后再启用。PATH 仍不可选择。" xml:space="preserve">
+    <value>Changing Windows built-in variables can prevent Windows or applications from working. Enable this only if you understand the risk. PATH remains unavailable.</value>
+  </data>
+  <data name="更改前" xml:space="preserve">
+    <value>Before</value>
+  </data>
+  <data name="更改后" xml:space="preserve">
+    <value>After</value>
+  </data>
+  <data name="更新" xml:space="preserve">
+    <value>Updates</value>
+  </data>
+  <data name="有未保存的更改，是否放弃？" xml:space="preserve">
+    <value>Discard unsaved changes?</value>
+  </data>
+  <data name="未保存。" xml:space="preserve">
+    <value>Not saved.</value>
+  </data>
+  <data name="未保存的更改" xml:space="preserve">
+    <value>Unsaved changes</value>
+  </data>
+  <data name="未定义" xml:space="preserve">
+    <value>Undefined</value>
+  </data>
+  <data name="未定义变量" xml:space="preserve">
+    <value>Undefined variable</value>
+  </data>
+  <data name="未应用清理。" xml:space="preserve">
+    <value>Cleanup was not applied.</value>
+  </data>
+  <data name="未知或缺少值的参数：{0}" xml:space="preserve">
+    <value>Unknown argument or missing value: {0}</value>
+  </data>
+  <data name="未知的环境变量操作。" xml:space="preserve">
+    <value>Unknown environment variable operation.</value>
+  </data>
+  <data name="未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。" xml:space="preserve">
+    <value>The origin of this PATH change could not be confirmed. External changes were retained without automatic organization.</value>
+  </data>
+  <data name="未识别" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="条目已变化，请重新选择。" xml:space="preserve">
+    <value>The entry has changed. Select it again.</value>
+  </data>
+  <data name="来源跟踪未启动，请关闭并重新开启该开关以重试。" xml:space="preserve">
+    <value>Origin tracking did not start. Turn this option off and back on to retry.</value>
+  </data>
+  <data name="来源跟踪消息过长。" xml:space="preserve">
+    <value>The origin tracking message is too long.</value>
+  </data>
+  <data name="来源跟踪连接认证失败。" xml:space="preserve">
+    <value>Origin tracking authentication failed.</value>
+  </data>
+  <data name="查看健康检测" xml:space="preserve">
+    <value>View health check</value>
+  </data>
+  <data name="查看变量监控" xml:space="preserve">
+    <value>View variable monitoring</value>
+  </data>
+  <data name="查看已忽略的问题" xml:space="preserve">
+    <value>View ignored issues</value>
+  </data>
+  <data name="查看新版本" xml:space="preserve">
+    <value>View release</value>
+  </data>
+  <data name="查看详情" xml:space="preserve">
+    <value>View details</value>
+  </data>
+  <data name="检查更新" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="检测到外部更改，结束当前行输入后更新。" xml:space="preserve">
+    <value>External changes detected. Finish editing the current row to update.</value>
+  </data>
+  <data name="检测未完成" xml:space="preserve">
+    <value>Check incomplete</value>
+  </data>
+  <data name="正在保存…" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="正在保存，请稍候。" xml:space="preserve">
+    <value>Saving. Please wait.</value>
+  </data>
+  <data name="正在检查更新……" xml:space="preserve">
+    <value>Checking for updates…</value>
+  </data>
+  <data name="正在检测…" xml:space="preserve">
+    <value>Checking…</value>
+  </data>
+  <data name="此位置会产生引用回环或超出引用层级限制。" xml:space="preserve">
+    <value>This position would create a circular reference or exceed the reference depth limit.</value>
+  </data>
+  <data name="此分类仅在本应用内有效" xml:space="preserve">
+    <value>This category exists only inside PathMan</value>
+  </data>
+  <data name="此功能将在用户PATH中添加垫片目录" xml:space="preserve">
+    <value>This adds the shim directory to user PATH</value>
+  </data>
+  <data name="此变量属于内置系统变量。可在“设置 → 高级设置”中解锁，PATH 始终不可选。" xml:space="preserve">
+    <value>This is a Windows built-in variable. Unlock it in Settings → Advanced settings. PATH is always unavailable.</value>
+  </data>
+  <data name="此变量已被其他程序修改或删除，请刷新后重试。" xml:space="preserve">
+    <value>This variable was changed or deleted by another program. Reload and try again.</value>
+  </data>
+  <data name="此环境变量已绑定其他版本项目。" xml:space="preserve">
+    <value>This environment variable is already bound to another version project.</value>
+  </data>
+  <data name="此项来自复用的引用，请进入变量编辑调整引用，避免删除全部副本。" xml:space="preserve">
+    <value>This entry is shared by a reused reference. Edit that variable's references to avoid deleting every copy.</value>
+  </data>
+  <data name="每行一个条目（保存为分号分隔）" xml:space="preserve">
+    <value>One entry per row (saved with semicolons)</value>
+  </data>
+  <data name="没有未忽略的问题" xml:space="preserve">
+    <value>No unignored issues</value>
+  </data>
+  <data name="没有需要清理的条目" xml:space="preserve">
+    <value>No entries need cleanup</value>
+  </data>
+  <data name="注册表类型" xml:space="preserve">
+    <value>Registry type</value>
+  </data>
+  <data name="浅色" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="浏览…" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="深色" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="清理" xml:space="preserve">
+    <value>Clean up</value>
+  </data>
+  <data name="清理会改变{0}的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。请确认预览后再应用。" xml:space="preserve">
+    <value>Cleanup will change the path search order in {0}. Windows or applications may resolve different commands or versions. Review the preview before applying.</value>
+  </data>
+  <data name="清理外部更改" xml:space="preserve">
+    <value>Clean external changes</value>
+  </data>
+  <data name="清理完成。原始值已备份。" xml:space="preserve">
+    <value>Cleanup complete. Original values were backed up.</value>
+  </data>
+  <data name="清理预览" xml:space="preserve">
+    <value>Cleanup preview</value>
+  </data>
+  <data name="源代码" xml:space="preserve">
+    <value>Source code</value>
+  </data>
+  <data name="版本" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="版本值不能含空字符，且最长为 32767 个字符。" xml:space="preserve">
+    <value>A version value cannot contain null characters or exceed 32767 characters.</value>
+  </data>
+  <data name="版本管理" xml:space="preserve">
+    <value>Versions</value>
+  </data>
+  <data name="版本配置已被其他程序修改，无法撤销或重做。请重新载入后操作。" xml:space="preserve">
+    <value>Version configuration changed in another program. Undo or redo is unavailable; reload before continuing.</value>
+  </data>
+  <data name="版本配置已被其他窗口修改，请重新选择。" xml:space="preserve">
+    <value>Version configuration changed in another window. Select it again.</value>
+  </data>
+  <data name="版本项目" xml:space="preserve">
+    <value>Version project</value>
+  </data>
+  <data name="版本项目仅支持 User 或 Machine。" xml:space="preserve">
+    <value>Version projects support only User or Machine.</value>
+  </data>
+  <data name="环境变量" xml:space="preserve">
+    <value>Environment variable</value>
+  </data>
+  <data name="环境变量存在问题" xml:space="preserve">
+    <value>Environment variables have issues</value>
+  </data>
+  <data name="环境变量配置为空。" xml:space="preserve">
+    <value>The environment configuration is empty.</value>
+  </data>
+  <data name="环境变量配置正在使用中，请稍后重试。" xml:space="preserve">
+    <value>The environment configuration is in use. Try again shortly.</value>
+  </data>
+  <data name="用户" xml:space="preserve">
+    <value>User</value>
+  </data>
+  <data name="用户 PATH" xml:space="preserve">
+    <value>User PATH</value>
+  </data>
+  <data name="用户变量" xml:space="preserve">
+    <value>User variables</value>
+  </data>
+  <data name="用户变量操作" xml:space="preserve">
+    <value>User variable operation</value>
+  </data>
+  <data name="用法：pathman add &lt;项目&gt; &lt;版本&gt; &lt;值&gt; [--variable &lt;变量名&gt;] [--type User|Machine] [--replace]" xml:space="preserve">
+    <value>Usage: pathman add &lt;project&gt; &lt;version&gt; &lt;value&gt; [--variable &lt;name&gt;] [--type User|Machine] [--replace]</value>
+  </data>
+  <data name="用法：pathman list [项目]" xml:space="preserve">
+    <value>Usage: pathman list [project]</value>
+  </data>
+  <data name="登录时自动运行后台程序" xml:space="preserve">
+    <value>Run the background program at login</value>
+  </data>
+  <data name="监控暂时无法读取或保存环境变量：" xml:space="preserve">
+    <value>Monitoring cannot currently read or save environment variables: </value>
+  </data>
+  <data name="监控设置或待整理项目已改变，本次整理已跳过。" xml:space="preserve">
+    <value>Monitoring settings or pending entries changed. This organization was skipped.</value>
+  </data>
+  <data name="目标程序" xml:space="preserve">
+    <value>Target program</value>
+  </data>
+  <data name="目标绑定已被其他窗口修改，请重新选择。" xml:space="preserve">
+    <value>The target binding changed in another window. Select it again.</value>
+  </data>
+  <data name="目标路径变量不存在。" xml:space="preserve">
+    <value>The target path variable does not exist.</value>
+  </data>
+  <data name="直接编辑以分号分隔的原始文本" xml:space="preserve">
+    <value>Edit the raw semicolon-separated text</value>
+  </data>
+  <data name="相关环境变量" xml:space="preserve">
+    <value>Related environment variables</value>
+  </data>
+  <data name="确定" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="移到用户 PATH 末尾" xml:space="preserve">
+    <value>Move to the end of user PATH</value>
+  </data>
+  <data name="移除或更正其中一个回指引用。" xml:space="preserve">
+    <value>Remove or correct one of the references that leads back here.</value>
+  </data>
+  <data name="程序别名" xml:space="preserve">
+    <value>Program aliases</value>
+  </data>
+  <data name="程序别名 · PathMan" xml:space="preserve">
+    <value>Program aliases · PathMan</value>
+  </data>
+  <data name="程序别名列表" xml:space="preserve">
+    <value>Program alias list</value>
+  </data>
+  <data name="程序别名未启用。" xml:space="preserve">
+    <value>Program aliases are disabled.</value>
+  </data>
+  <data name="程序别名未启用，请先打开开关。" xml:space="preserve">
+    <value>Enable program aliases first.</value>
+  </data>
+  <data name="空条目" xml:space="preserve">
+    <value>Empty entry</value>
+  </data>
+  <data name="第 {0} 行" xml:space="preserve">
+    <value>Line {0}</value>
+  </data>
+  <data name="第 {0} 行  " xml:space="preserve">
+    <value>Line {0}  </value>
+  </data>
+  <data name="简体中文" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="管理员操作仅支持系统环境变量。" xml:space="preserve">
+    <value>Administrator operations support system variables only.</value>
+  </data>
+  <data name="管理员操作已授权" xml:space="preserve">
+    <value>Administrator operation authorized</value>
+  </data>
+  <data name="管理员请求为空。" xml:space="preserve">
+    <value>The administrator request is empty.</value>
+  </data>
+  <data name="管理员请求格式无效。" xml:space="preserve">
+    <value>The administrator request is invalid.</value>
+  </data>
+  <data name="管理员连接已断开，请刷新确认写入结果后重试。" xml:space="preserve">
+    <value>The administrator connection was lost. Reload to confirm the result before retrying.</value>
+  </data>
+  <data name="管理员连接认证失败。" xml:space="preserve">
+    <value>Administrator connection authentication failed.</value>
+  </data>
+  <data name="管理员连接超时，请刷新确认写入结果后重试。" xml:space="preserve">
+    <value>The administrator connection timed out. Reload to confirm the result before retrying.</value>
+  </data>
+  <data name="精确识别修改来源（需要管理员权限）" xml:space="preserve">
+    <value>Identify the writing process precisely (requires administrator privileges)</value>
+  </data>
+  <data name="系统" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="系统 PATH" xml:space="preserve">
+    <value>System PATH</value>
+  </data>
+  <data name="系统 PATH 有待整理的外部新增项，需要管理员授权。" xml:space="preserve">
+    <value>New external system PATH entries require administrator authorization.</value>
+  </data>
+  <data name="系统 PATH 未整理" xml:space="preserve">
+    <value>System PATH was not organized</value>
+  </data>
+  <data name="系统 PATH 未整理：" xml:space="preserve">
+    <value>System PATH was not organized: </value>
+  </data>
+  <data name="系统 PATH 等待整理" xml:space="preserve">
+    <value>System PATH awaits organization</value>
+  </data>
+  <data name="系统变量" xml:space="preserve">
+    <value>System variables</value>
+  </data>
+  <data name="系统变量已保存，但用户记录更新失败。请刷新确认。" xml:space="preserve">
+    <value>System variables were saved, but the user record could not be updated. Reload to confirm.</value>
+  </data>
+  <data name="系统变量引用了仅在用户环境中可用的 %{0}%" xml:space="preserve">
+    <value>System variable references %{0}%, which is defined only in user scope</value>
+  </data>
+  <data name="系统变量引用用户变量" xml:space="preserve">
+    <value>System variable references a user variable</value>
+  </data>
+  <data name="系统变量操作" xml:space="preserve">
+    <value>System variable operation</value>
+  </data>
+  <data name="编辑" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="置顶" xml:space="preserve">
+    <value>Pin</value>
+  </data>
+  <data name="置顶分组与普通分组只能在各自区域内排序。" xml:space="preserve">
+    <value>Pinned and unpinned groups can only be reordered within their own regions.</value>
+  </data>
+  <data name="自动整理PATH环境变量" xml:space="preserve">
+    <value>Automatically organize PATH</value>
+  </data>
+  <data name="自动整理改变了 PATH 的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。原始值已备份，可在外部更改记录中核对。" xml:space="preserve">
+    <value>Automatic organization changed PATH search order. Windows or applications may resolve different commands or versions. Original values were backed up; review external change history.</value>
+  </data>
+  <data name="自动整理未完成：" xml:space="preserve">
+    <value>Automatic organization incomplete: </value>
+  </data>
+  <data name="自动整理用户 PATH 环境变量" xml:space="preserve">
+    <value>Automatically organize user PATH</value>
+  </data>
+  <data name="自动整理系统 PATH 环境变量" xml:space="preserve">
+    <value>Automatically organize system PATH</value>
+  </data>
+  <data name="自动检测版本更新" xml:space="preserve">
+    <value>Automatically check for updates</value>
+  </data>
+  <data name="行内编辑" xml:space="preserve">
+    <value>Inline editor</value>
+  </data>
+  <data name="许可证" xml:space="preserve">
+    <value>License</value>
+  </data>
+  <data name="设置" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="该作用域中已存在同名环境变量。" xml:space="preserve">
+    <value>A variable with this name already exists in this scope.</value>
+  </data>
+  <data name="该版本已存在；使用 --replace 更新其配置。" xml:space="preserve">
+    <value>This version already exists. Use --replace to update it.</value>
+  </data>
+  <data name="该范围内不存在此变量，请浏览选择列出的变量。" xml:space="preserve">
+    <value>This variable does not exist in the selected scope. Browse to select a listed variable.</value>
+  </data>
+  <data name="语言" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="请先启用“在后台运行监控程序”。" xml:space="preserve">
+    <value>Enable background monitoring first.</value>
+  </data>
+  <data name="请先填写项目名称。" xml:space="preserve">
+    <value>Enter a project name first.</value>
+  </data>
+  <data name="请先选择目标环境变量。" xml:space="preserve">
+    <value>Select a target environment variable first.</value>
+  </data>
+  <data name="请稍后重试。" xml:space="preserve">
+    <value>Try again shortly.</value>
+  </data>
+  <data name="调整用户和系统变量区域大小" xml:space="preserve">
+    <value>Resize user and system variable regions</value>
+  </data>
+  <data name="超过限制" xml:space="preserve">
+    <value>Limit exceeded</value>
+  </data>
+  <data name="跟随系统" xml:space="preserve">
+    <value>Use system setting</value>
+  </data>
+  <data name="路径变量" xml:space="preserve">
+    <value>Path variables</value>
+  </data>
+  <data name="路径条目" xml:space="preserve">
+    <value>Path entries</value>
+  </data>
+  <data name="转到引用变量" xml:space="preserve">
+    <value>Go to referenced variable</value>
+  </data>
+  <data name="转到：" xml:space="preserve">
+    <value>Go to: </value>
+  </data>
+  <data name="返回" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="这是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。" xml:space="preserve">
+    <value>This is a Windows built-in variable. Switching its value may prevent Windows or applications from working.</value>
+  </data>
+  <data name="选择" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="选择内置系统变量" xml:space="preserve">
+    <value>Select built-in system variable</value>
+  </data>
+  <data name="选择变量" xml:space="preserve">
+    <value>Select variable</value>
+  </data>
+  <data name="选择版本目录" xml:space="preserve">
+    <value>Select version directory</value>
+  </data>
+  <data name="选择环境变量" xml:space="preserve">
+    <value>Select environment variable</value>
+  </data>
+  <data name="选择目录" xml:space="preserve">
+    <value>Select directory</value>
+  </data>
+  <data name="选择目标文件" xml:space="preserve">
+    <value>Select target file</value>
+  </data>
+  <data name="选择要删除的来源；保留的来源及其他路径不会改动。" xml:space="preserve">
+    <value>Choose which source to delete. Retained sources and other paths will not change.</value>
+  </data>
+  <data name="通知" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="部分引用无法完整展开，无法确认清理后 PATH 的搜索顺序是否保持不变。请检查预览后再应用。" xml:space="preserve">
+    <value>Some references could not be fully expanded. It is not possible to confirm whether PATH search order is preserved. Review before applying.</value>
+  </data>
+  <data name="重命名" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="重复条目" xml:space="preserve">
+    <value>Duplicate entry</value>
+  </data>
+  <data name="重复的参数：{0}" xml:space="preserve">
+    <value>Duplicate argument: {0}</value>
+  </data>
+  <data name="重新检测" xml:space="preserve">
+    <value>Check again</value>
+  </data>
+  <data name="链接未打开" xml:space="preserve">
+    <value>Link did not open</value>
+  </data>
+  <data name="问题操作" xml:space="preserve">
+    <value>Issue actions</value>
+  </data>
+  <data name="问题详情" xml:space="preserve">
+    <value>Issue details</value>
+  </data>
+  <data name="项目" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="项目 {0} 没有版本 {1}。" xml:space="preserve">
+    <value>Project {0} has no version {1}.</value>
+  </data>
+  <data name="项目名不能重复，同一作用域的环境变量只能绑定一个版本项目。" xml:space="preserve">
+    <value>Project names must be unique. Each variable in a scope can be bound to only one version project.</value>
+  </data>
+  <data name="项目名和版本名须为 1–128 个字符，只能含字母、数字、点、加号、下划线或连字符。" xml:space="preserve">
+    <value>Project and version names must contain 1–128 letters, numbers, periods, plus signs, underscores or hyphens.</value>
+  </data>
+  <data name="项目名已经存在。" xml:space="preserve">
+    <value>The project name already exists.</value>
+  </data>
+  <data name="项目已绑定其他变量或作用域，请使用现有绑定。" xml:space="preserve">
+    <value>This project is bound to another variable or scope. Use its existing binding.</value>
+  </data>
+  <data name="首次登记项目需要 --variable &lt;环境变量名&gt;；--type 默认为 User。" xml:space="preserve">
+    <value>The first registration needs --variable &lt;name&gt;; --type defaults to User.</value>
+  </data>
+  <data name="高级设置" xml:space="preserve">
+    <value>Advanced settings</value>
+  </data>
+  <data name="（列表开头）" xml:space="preserve">
+    <value>(start of list)</value>
+  </data>
+  <data name="（列表结尾）" xml:space="preserve">
+    <value>(end of list)</value>
+  </data>
+  <data name="（新建）" xml:space="preserve">
+    <value>(new)</value>
+  </data>
+  <data name="（空条目）" xml:space="preserve">
+    <value>(empty entry)</value>
+  </data>
+  <data name="（问题）" xml:space="preserve">
+    <value>(issue)</value>
+  </data>
+  <data name="待检测" xml:space="preserve"><value>Not checked</value></data>
+  <data name="查看新版" xml:space="preserve"><value>View new version</value></data>
+  <data name="启动应用时检测版本更新" xml:space="preserve"><value>Check for updates when the app starts</value></data>
+  <data name="安装更新" xml:space="preserve"><value>Install update</value></data>
+  <data name="正在下载……" xml:space="preserve"><value>Downloading…</value></data>
+  <data name="更新未完成，请稍后重试。" xml:space="preserve"><value>The update could not be completed. Try again later.</value></data>
+  <data name="安装包信息无效。" xml:space="preserve"><value>Invalid installer information.</value></data>
+  <data name="无法验证安装包，请前往发布页下载。" xml:space="preserve"><value>The installer cannot be verified. Download it from the release page.</value></data>
+  <data name="安装包校验失败，请重新下载。" xml:space="preserve"><value>The installer could not be verified. Download it again.</value></data>
+  <data name="更新记录正在使用中，请稍后重试。" xml:space="preserve"><value>Update records are in use. Try again later.</value></data>
+  <data name="PathMan v{0} 已发布！" xml:space="preserve"><value>PathMan v{0} is available!</value></data>
+  <data name="点击查看新版本内容" xml:space="preserve"><value>Click to view what's new</value></data>
+</root>

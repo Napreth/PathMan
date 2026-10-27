@@ -2,7 +2,7 @@
 
 Windows 环境变量、程序别名与环境版本管理器。
 
-> **pre-alpha**：功能、命令、配置格式与界面可能调整。
+> **Beta**：测试版本，欢迎反馈问题。
 
 ## 功能
 
@@ -93,6 +93,20 @@ PSModulePath 默认归入“其他变量”，仍可逐行编辑或手动移动�
 
 主窗口实时监听环境变量。未编辑时，外部更改直接更新显示；存在未保存编辑时，右栏展示差异：红色为外部删除，绿色为外部新增，蓝色为本地修改。可选择撤回外部更改、清理外部更改，或在本次编辑期间启用临时自动清理。
 
+### 设置与关于
+
+“设置”位于“关于”上方，包含语言、主题、自动检测版本更新和高级设置。
+
+- 语言支持简体中文、English 和跟随系统；未支持的系统语言使用 English。切换后立即生效。
+- 主题支持浅色、深色和跟随系统，控件和云母背景一起切换。
+- 自动更新检测在应用启动时查询 GitHub 最新稳定版，排除草稿和预发布版。去除 tag 开头的 `v` 后，只要与当前版本不同就提示更新。每个版本只发送一次系统通知；点击通知直接打开新版详情。
+- 检测结果会保留。“关于”显示上次检测结果，可随时重新检测。新版详情显示发行标题和原文说明；“安装更新”自动选择相同架构和运行时类型的安装包，下载验证后安装，没有对应安装包时打开 GitHub 发布页。
+- 高级设置包含内置系统变量的版本目标开关，启用前显示风险警告。
+
+“关于”显示应用图标、程序集版本、GitHub 仓库入口、手动检查更新和 MIT 许可证原文。侧栏和关于页共用程序集提供的版本号。
+
+多语言使用 .NET 的 `.resx` 资源与 WPF 绑定；资源位于 `src/Pathman.Core/Localization`。
+
 ### 键盘与选择
 
 列表支持 Ctrl+点击不连续多选、Shift+点击范围选择，以及 Ctrl+A 全选。删除和复制作用于选中的项目；需要单个目标的编辑、重命名、浏览和版本切换在多选时禁用。
@@ -148,7 +162,7 @@ PSModulePath 默认归入“其他变量”，仍可逐行编辑或手动移动�
 
 项目可以先登记名称和版本，再绑定目标变量。删除项目或版本保留环境变量当前值。桌面界面与 CLI 共用配置。
 
-PATH 不能作为版本目标。内置系统变量按名称清单限制，默认不可选；“关于 → 高级设置”中的开关可允许选择，并显示风险警告。此规则同时适用于 CLI。自定义分组不影响目标限制。
+PATH 不能作为版本目标。内置系统变量按名称清单限制，默认不可选；“设置 → 高级设置”中的开关可允许选择，并显示风险警告。此规则同时适用于 CLI。自定义分组不影响目标限制。
 
 ### 变量监控
 
@@ -211,7 +225,7 @@ PathMan\
 
 ## 开发计划
 
-v1.0.0 前的主要功能已经全部完成，少许优化之后将发布 beta 版本。
+v1.0.0 前的主要功能已经全部完成，目前处于 Beta 测试阶段。
 
 还有以下 post-v1 功能：
 
@@ -230,12 +244,13 @@ v1.0.0 前的主要功能已经全部完成，少许优化之后将发布 beta �
 .\build.ps1 -PackageType FrameworkDependent
 .\build.ps1 -Arch x64 -PackageType SelfContained
 .\build.ps1 -Test
-.\build.ps1 -Plan
+.\build.ps1 -Version 1.0.0-beta.1
+.\build.ps1 -Version 1.0.0-rc.1+build.42 -Plan
 .\build.ps1 -SkipInstaller
 .\scripts\package.ps1
 ```
 
-`-Arch` 接受 `x86`、`x64`、`arm64`，`-PackageType` 接受 `FrameworkDependent`、`SelfContained`。两个参数都接受数组，默认构建全部六种组合。
+`-Arch` 接受 `x86`、`x64`、`arm64`，`-PackageType` 接受 `FrameworkDependent`、`SelfContained`。两个参数都接受数组，默认构建全部六种组合。`-Version` 接受 SemVer，包括预发布标识和构建元数据；未指定时读取 `Directory.Build.props`。Windows 文件版本使用对应的数值部分，应用发行版本保留预发布标识。
 
 安装包位于 `artifacts\setup`，发布目录位于 `artifacts\publish\win-<架构>\<类型>`。同名 `.exe.json` 文件记录架构、包类型和 SHA-256。
 
@@ -249,17 +264,48 @@ dotnet run --project tests/Pathman.Core.Tests -c Release
 
 ### CI
 
-[GitHub Actions 工作流](.github/workflows/ci.yml) 在推送、Pull Request 和手动触发时运行。三个 Windows 架构任务分别构建两种安装包，执行核心测试、适用架构的运行时测试和安装包哈希检查，并上传六份安装包及其清单。
+[GitHub Actions 工作流](.github/workflows/ci.yml) 在分支推送、Pull Request 和手动触发时运行，调用共用的 [构建与验收工作流](.github/workflows/build.yml)。
 
-本地可使用 [act](https://nektosact.com/usage/runners.html) 的原生 Windows 执行器。需要先安装上述构建工具；NSIS 由准备脚本校验或下载固定版本。
+- x64 在 Windows x64 上运行；x86 进程在 Windows x64 的 WoW64 环境中实际运行；ARM64 在 Windows ARM64 runner 上运行。
+- 每个架构执行核心测试、CLI 和垫片运行测试，再生成两种最终安装包。
+- 每种安装包分别验收仅当前用户、所有用户安装，旧版升级、同版本覆盖、降级拦截、安装后的 GUI/CLI 启动，以及完整卸载。验收还核对 PATH 恢复、注册信息和用户配置保留。
+- 上传六份安装包、内部校验清单和验收结果。工具下载使用校验哈希，第三方 Actions 固定到提交 SHA。
+
+本地可使用 [act](https://nektosact.com/usage/runners.html) 的原生 Windows 执行器。需要上述构建工具；脚本准备 NSIS 和便携目标运行时，不修改本机运行时登记。安装、升级、卸载验收仅在隔离虚拟机或 GitHub runner 上执行。
 
 ```powershell
-act push -P windows-2025=-self-hosted --concurrent-jobs 1
-act push -P windows-2025=-self-hosted --matrix arch:x64 --concurrent-jobs 1
+act push -P windows-2025=-self-hosted --matrix arch:x64
+act push -P windows-2025=-self-hosted --matrix arch:x86
 ```
 
-本地 act 使用已有 .NET SDK，并保留构建产物于 act 工作目录；GitHub 上会配置 .NET 10 并上传安装包。
+ARM64 任务需要 Windows ARM64 主机，并映射 `windows-11-vs2026-arm`，不会在 x64 主机上跳过运行验证后报告成功。
 
-## 许可证
+### 标签发布
 
-本项目采用 [MIT 许可证](LICENSE)。第三方组件说明见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。
+[Release 工作流](.github/workflows/release.yml) 在推送标签后构建并验收三个架构，全部通过后发布六份 EXE。JSON 校验清单不会附加到 Release。
+
+标签名使用 SemVer，可带 `v` 前缀，例如 `v1.0.0-beta.1`。发布需要带说明的附注标签或签名标签：
+
+```powershell
+git tag -a v1.0.0-beta.1 -F release-notes.txt
+git push origin v1.0.0-beta.1
+```
+
+`release-notes.txt` 第一行为标题，其余内容为正文。例如：
+
+```text
+首个 Beta 版本
+
+支持环境变量、程序别名与版本管理。
+
+其他发布说明……
+```
+
+Release 标题为 `v1.0.0-beta.1 - 首个 Beta 版本`。正文从标题之后的第一个非空行开始，保留后续内容与段落；OpenPGP、SSH 和 X.509 标签签名不会进入正文。无标签说明的轻量标签不会发布。预发布版本会标记为 GitHub prerelease。
+
+可以预览标签元数据及发布文件，不创建 Release：
+
+```powershell
+.\scripts\release-metadata.ps1 -Tag v1.0.0-beta.1
+.\scripts\publish-release.ps1 -PackageDirectory artifacts\setup -Plan
+```

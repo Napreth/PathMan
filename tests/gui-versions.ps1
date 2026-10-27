@@ -11,7 +11,7 @@ if($PrepareFixture){
  try{$machine.SetValue('PATHMAN_VERSION_MACHINE','before');$machine.SetValue('PATHMAN_VERSION_EXTRA','machine-extra');$machine.SetValue('PATHMAN_CUSTOM_TARGET','custom')}finally{$machine.Dispose()}
  New-Item -ItemType Directory -Path $data -Force|Out-Null
  New-Item -ItemType Directory -Path C:\SDK\chosen -Force|Out-Null
- @{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='已改名的内置分类';rule='builtin'},@{id='other';name='其他变量';rule='fallback'});assignments=@{'Machine:ComSpec'='other';'Machine:PATHMAN_CUSTOM_TARGET'='system'};revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
+ @{preferences=@{language='zh-CN';theme='system';autoCheckUpdates=$false};groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='已改名的内置分类';rule='builtin'},@{id='other';name='其他变量';rule='fallback'});assignments=@{'Machine:ComSpec'='other';'Machine:PATHMAN_CUSTOM_TARGET'='system'};revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
  return
 }
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
@@ -47,7 +47,14 @@ function ClipboardText([string]$value,[switch]$Read){
  try{$null=$shell.AddScript({param($text,$read)Add-Type -AssemblyName System.Windows.Forms;if($read){[Windows.Forms.Clipboard]::GetText()}else{[Windows.Forms.Clipboard]::SetText($text)}}.ToString()).AddArgument($value).AddArgument([bool]$Read);$result=$shell.Invoke();if($shell.HadErrors){throw ($shell.Streams.Error|Out-String)};if($Read){[string]$result[0]}}
  finally{$shell.Dispose();$runspace.Dispose()}
 }
-function Browse([string]$project){WaitFor {$row=Project $project;$null -ne $row -and $row.Current.BoundingRectangle.Width -gt 0} 'Project row is not visible';ClickCell (Project $project) 0.7 -Double;WaitFor {$null -ne (Dialog '选择环境变量')} 'Double-click did not open the target picker'}
+function Browse([string]$project){
+ for($attempt=0;$attempt -lt 3;$attempt++){
+  WaitFor {$row=Project $project;$null -ne $row -and $row.Current.BoundingRectangle.Width -gt 0 -and (Id 'NewProjectButton').Current.IsEnabled} 'Project row is not ready'
+  ClickCell (Project $project) 0.7 -Double
+  for($poll=0;$poll -lt 20;$poll++){if($null -ne (Dialog '选择环境变量')){return};Start-Sleep -Milliseconds 100}
+ }
+ throw 'Double-click did not open the target picker'
+}
 function Target([string]$name,[string]$scope){Find (Id $scope (Dialog '选择环境变量')) $name ([Windows.Automation.ControlType]::TreeItem)}
 function Choose([string]$name,[string]$scope){SelectNode (Target $name $scope);Invoke (Id 'ChooseTargetButton' (Dialog '选择环境变量'))}
 function CancelPicker{Invoke (Find (Dialog '选择环境变量') '取消' ([Windows.Automation.ControlType]::Button))}
@@ -116,7 +123,7 @@ try{
  Assert ((Raw 'PATHMAN_VERSION_EXTRA') -eq 'literal value;more' -and $null -eq (Dialog '删除版本')) 'The external delete button bypasses an unfinished edit and removes metadata only'
  Cell (Project 'python') 0.15;SetInput 'py';Blur;WaitFor {$null -ne (Project 'py')} 'Project inline rename failed'
  Assert ((Config 'py').variableName -eq 'PATHMAN_VERSION_EXTRA') 'Double-click renaming a project preserves its target and scope'
- Go '关于';Invoke (Id 'AdvancedSettingsLink');ToggleOption (Id 'AllowBuiltInVersionTargets')
+ Go '设置';Invoke (Id 'AdvancedSettingsLink');ToggleOption (Id 'AllowBuiltInVersionTargets')
  WaitFor {$null -ne (Dialog '允许选择内置系统变量')} 'Advanced option did not show the red warning'
  Stage 'advanced-warning';WaitFor {Test-Path C:\PathManVersionTest\continue-warning} 'Driver did not inspect the red warning'
  Invoke (Id 'ConfirmDangerButton' (Dialog '允许选择内置系统变量'));WaitFor {(State).allowBuiltInVersionTargets} 'Advanced option did not persist'
@@ -126,7 +133,7 @@ try{
  Invoke (Id 'ConfirmDangerButton' (Dialog '选择内置系统变量'));WaitFor {(Config 'py').variableName -eq 'ComSpec'} 'Approved built-in binding was not saved'
  Invoke (Id 'AddVersionButton');CommitInput 'test';WaitFor {$null -ne (Version 'test')} 'Built-in version metadata was not added'
  $originalComSpec=Raw 'ComSpec' -Machine
- Go '关于';if($null -ne (Id 'AdvancedSettingsLink') -and !(Id 'AdvancedSettingsLink').Current.IsOffscreen){Invoke (Id 'AdvancedSettingsLink')}
+ Go '设置';if($null -ne (Id 'AdvancedSettingsLink') -and !(Id 'AdvancedSettingsLink').Current.IsOffscreen){Invoke (Id 'AdvancedSettingsLink')}
  ToggleOption (Id 'AllowBuiltInVersionTargets');WaitFor {!((State).allowBuiltInVersionTargets)} 'Advanced option did not disable'
  Go '版本管理';SelectProject 'py';WaitFor {$null -ne (Version 'test')} 'Version list missing after returning'
  SelectNode (Version 'test');Assert (!(Id 'SwitchVersionButton').Current.IsEnabled) 'Disabling the advanced option also disables existing built-in bindings'

@@ -1,25 +1,43 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using Pathman.Core;
-using Pathman.Core.EnvironmentVariables;
+using Pathman.Core.Updates;
 using Pathman.Gui.Dialogs;
+
 namespace Pathman.Gui.Views;
+
 public partial class AboutView : UserControl
 {
-    private readonly EnvironmentWorkspaceStore store;
-    private bool updating;
-    public AboutView(PathmanLayout layout,EnvironmentWorkspaceStore store)
-    {this.store=store;InitializeComponent();VersionText.Text=$"{typeof(App).Assembly.GetName().Version?.ToString(3)} · pre-alpha";ConfigPath.Text=$"配置：{System.IO.Path.Combine(layout.DataDirectory,"environment.json")}";Loaded+=(_,_)=>Update(store.Read());}
-    public void Update(EnvironmentWorkspace state)
-    {updating=true;AllowBuiltInVersionTargets.IsChecked=state.AllowBuiltInVersionTargets;BuiltInWarning.Visibility=state.AllowBuiltInVersionTargets ? Visibility.Visible : Visibility.Collapsed;updating=false;}
-    private void OpenAdvanced(object sender,RoutedEventArgs e) {AboutPage.Visibility=Visibility.Collapsed;AdvancedPage.Visibility=Visibility.Visible;Update(store.Read());}
-    private void CloseAdvanced(object sender,RoutedEventArgs e) {AdvancedPage.Visibility=Visibility.Collapsed;AboutPage.Visibility=Visibility.Visible;}
-    private void ChangeBuiltInTargets(object sender,RoutedEventArgs e)
+    private readonly ApplicationUpdateService updates;
+    private readonly Func<string,Task<bool>> install;
+    private UpdateDialog? releaseDialog;
+    public AboutView(ApplicationUpdateService updates,Func<string,Task<bool>> install)
     {
-        if(updating) return;var enabled=AllowBuiltInVersionTargets.IsChecked==true;
-        if(enabled && new DangerConfirmDialog(Window.GetWindow(this),"允许选择内置系统变量","更改内置系统变量可能导致 Windows 或应用无法正常运行。确认了解风险后再启用。PATH 仍不可选择。","仍然启用").ShowDialog()!=true) {Update(store.Read());return;}
-        try {store.Update(state=>state.AllowBuiltInVersionTargets=enabled);AdvancedStatus.Text="";Update(store.Read());}
-        catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) {AdvancedStatus.Text=error.Message;Update(store.Read());}
+        this.updates=updates;this.install=install;InitializeComponent();VersionText.Text=AppInfo.Version;
+        AppIcon.Source=System.Windows.Media.Imaging.BitmapDecoder.Create(new Uri("pack://application:,,,/Assets/PathMan.ico"),System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,System.Windows.Media.Imaging.BitmapCacheOption.OnLoad).Frames.MaxBy(frame=>frame.PixelWidth);
+        updates.Changed+=(_,_)=>Update();L.Current.PropertyChanged+=(_,_)=>Update();Loaded+=(_,_)=>Update();
     }
+    private void Update()
+    {
+        CheckUpdatesButton.IsEnabled=!updates.IsChecking;UpdateStatus.Text=updates.Status;
+        UpdateStatus.Foreground=TryFindResource(updates.HasResult ? "SystemFillColorSuccessBrush" : "TextFillColorSecondaryBrush") as System.Windows.Media.Brush
+            ?? (updates.HasResult ? System.Windows.Media.Brushes.ForestGreen : System.Windows.Media.Brushes.Gray);
+        ReleaseLink.Visibility=updates.Available is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+    private void OpenSource(object sender,RoutedEventArgs e)=>OpenPage(GitHubReleaseClient.RepositoryPage);
+    private async void CheckUpdates(object sender,RoutedEventArgs e)=>await updates.CheckAsync();
+    private void OpenRelease(object sender,RoutedEventArgs e)=>ShowReleaseDetails();
+    public bool IsUpdateOpen=>releaseDialog?.IsVisible==true;
+    public void ShowReleaseDetails(bool fromNotification=false)
+    {
+        if(releaseDialog?.IsVisible==true) {if(releaseDialog.WindowState==WindowState.Minimized) releaseDialog.WindowState=WindowState.Normal;releaseDialog.Activate();return;}
+        if((fromNotification ? updates.Latest : updates.Available) is not {} release) return;
+        try {releaseDialog=new(Window.GetWindow(this),release,updates,install);releaseDialog.ShowDialog();}
+        finally {releaseDialog=null;}
+    }
+    private void OpenPage(Uri page)
+    {
+        try {if(page.Scheme==Uri.UriSchemeHttps) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(page.AbsoluteUri) {UseShellExecute=true});}
+        catch(System.ComponentModel.Win32Exception error) {UpdateStatus.Text=error.Message;}
+    }
+    private void ShowLicense(object sender,RoutedEventArgs e)=>new LicenseDialog(Window.GetWindow(this)).ShowDialog();
 }

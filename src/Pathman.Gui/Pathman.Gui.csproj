@@ -4,9 +4,17 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>PathMan</AssemblyName>
     <ApplicationIcon>Assets/PathMan.ico</ApplicationIcon>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <DefineConstants Condition="'$(UpdateTestBuild)' == 'true'">$(DefineConstants);PATHMAN_UPDATE_TEST</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <AssemblyMetadata Include="PathMan.ReleaseVersion" Value="$(Version)" />
+    <Compile Remove="Updates/UpdateTest*.cs" Condition="'$(UpdateTestBuild)' != 'true'" />
+    <AssemblyMetadata Include="PathMan.UpdateTest" Value="true" Condition="'$(UpdateTestBuild)' == 'true'" />
+    <AssemblyMetadata Include="PathMan.PackageType" Value="SelfContained" Condition="'$(SelfContained)' == 'true'" />
+    <AssemblyMetadata Include="PathMan.PackageType" Value="FrameworkDependent" Condition="'$(SelfContained)' != 'true'" />
     <Resource Include="Assets/PathMan.ico" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="PathMan.LICENSE" />
     <ProjectReference Include="../Pathman.Core/Pathman.Core.csproj" />
   </ItemGroup>
 </Project>

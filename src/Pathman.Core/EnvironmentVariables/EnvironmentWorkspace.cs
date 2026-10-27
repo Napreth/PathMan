@@ -9,7 +9,8 @@ namespace Pathman.Core.EnvironmentVariables;
 
 public sealed class VariableGroupDefinition
 {
-    public override string ToString()=>Name;
+    [JsonIgnore] public string DisplayName=>Rule is "paths" or "builtin" or "fallback" or "external" && Name is "路径变量" or "系统变量" or "其他变量" or "外部变量" ? L.Get(Name) : Name;
+    public override string ToString()=>DisplayName;
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "";
     public string Rule { get; set; } = "manual";
@@ -24,6 +25,7 @@ public sealed record VariableChange(DateTime Time, VariableScope Scope, string N
 
 public sealed class EnvironmentWorkspace
 {
+    public ApplicationPreferences Preferences {get;set;}=new();
     public List<VersionProject> VersionProjects {get;set;}=[];
     public bool AllowBuiltInVersionTargets {get;set;}
     public List<VariableGroupDefinition> Groups { get; set; } = [];
@@ -93,7 +95,7 @@ public sealed class EnvironmentWorkspace
         .ThenBy(variable => variable.Name, StringComparer.OrdinalIgnoreCase);
     public void PinGroup(VariableScope scope, string id, bool pinned)
     {
-        if (!VisibleGroups(scope).Any(group => group.Id == id)) throw new ArgumentException("找不到分组。");
+        if (!VisibleGroups(scope).Any(group => group.Id == id)) throw new ArgumentException(L.Get("找不到分组。"));
         if (!PinnedGroups.TryGetValue(scope, out var pins)) PinnedGroups[scope] = pins = [];
         pins.RemoveAll(item => item.Equals(id, StringComparison.OrdinalIgnoreCase));
         if (pinned) pins.Add(id);
@@ -107,7 +109,7 @@ public sealed class EnvironmentWorkspace
     public void MoveGroup(VariableScope scope, string id, string? beforeId)
     {
         var groups = VisibleGroups(scope).ToList();
-        var source = groups.Find(group => group.Id == id) ?? throw new ArgumentException("找不到分组。");
+        var source = groups.Find(group => group.Id == id) ?? throw new ArgumentException(L.Get("找不到分组。"));
         if (beforeId == id) return;
         var pinned = IsGroupPinned(scope, id);
         var remaining = groups.Where(group => group != source).ToList();
@@ -116,7 +118,7 @@ public sealed class EnvironmentWorkspace
                 index < remaining.Count && IsGroupPinned(scope, remaining[index].Id)) ||
             (!pinned && index == 0 && remaining.Count > 0 && IsGroupPinned(scope, remaining[0].Id)) ||
             (pinned && index > 0 && !IsGroupPinned(scope, remaining[index - 1].Id)))
-            throw new ArgumentException("置顶分组与普通分组只能在各自区域内排序。");
+            throw new ArgumentException(L.Get("置顶分组与普通分组只能在各自区域内排序。"));
         remaining.Insert(index, source);
         var hiddenOrder = (GroupOrder.GetValueOrDefault(scope) ?? []).Where(id => groups.All(group => group.Id != id));
         var hiddenPins = (PinnedGroups.GetValueOrDefault(scope) ?? []).Where(id => groups.All(group => group.Id != id));
@@ -125,10 +127,10 @@ public sealed class EnvironmentWorkspace
     }
     public void MoveVariable(VariableScope scope, string name, string sourceGroupId, string targetGroupId, string? beforePinnedName = null)
     {
-        if (!VisibleGroups(scope).Any(group => group.Id == targetGroupId)) throw new ArgumentException("找不到目标分组。");
+        if (!VisibleGroups(scope).Any(group => group.Id == targetGroupId)) throw new ArgumentException(L.Get("找不到目标分组。"));
         var pinned = IsVariablePinned(scope, name);
-        if (sourceGroupId == targetGroupId && !pinned) throw new ArgumentException("普通变量按名称排序，只能拖到其他分组。");
-        if (beforePinnedName is not null && (!pinned || !IsVariablePinned(scope, beforePinnedName))) throw new ArgumentException("只能调整置顶变量之间的顺序。");
+        if (sourceGroupId == targetGroupId && !pinned) throw new ArgumentException(L.Get("普通变量按名称排序，只能拖到其他分组。"));
+        if (beforePinnedName is not null && (!pinned || !IsVariablePinned(scope, beforePinnedName))) throw new ArgumentException(L.Get("只能调整置顶变量之间的顺序。"));
         Assignments[Key(scope, name)] = targetGroupId;
         if (!pinned) return;
         var key = Key(scope, name);
@@ -137,6 +139,13 @@ public sealed class EnvironmentWorkspace
         var index = beforePinnedName is null ? PinnedVariables.Count : Position(PinnedVariables, Key(scope, beforePinnedName));
         PinnedVariables.Insert(Math.Min(index, PinnedVariables.Count), key);
     }
+}
+
+public sealed class ApplicationPreferences
+{
+    public string Language {get;set;}="system";
+    public string Theme {get;set;}="system";
+    public bool AutoCheckUpdates {get;set;}=true;
 }
 
 public sealed class EnvironmentWorkspaceStore
@@ -160,7 +169,8 @@ public sealed class EnvironmentWorkspaceStore
     private EnvironmentWorkspace Load()
     {
         var state = File.Exists(FilePath) ? JsonSerializer.Deserialize<EnvironmentWorkspace>(File.ReadAllText(FilePath), JsonOptions)
-            ?? throw new InvalidDataException("环境变量配置为空。") : ReadDefault<EnvironmentWorkspace>("groups");
+            ?? throw new InvalidDataException(L.Get("环境变量配置为空。")) : ReadDefault<EnvironmentWorkspace>("groups");
+        state.Preferences??=new();state.Preferences.Language??="system";state.Preferences.Theme??="system";
         foreach(var project in state.VersionProjects) project.Versions=new(project.Versions,StringComparer.OrdinalIgnoreCase);
         VersionCatalog.Validate(state.VersionProjects);
         state.Assignments = new(state.Assignments, StringComparer.OrdinalIgnoreCase);
@@ -179,13 +189,13 @@ public sealed class EnvironmentWorkspaceStore
         if (state.Groups.Select(group => group.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Groups.Count ||
             state.Groups.Any(group => string.IsNullOrWhiteSpace(group.Id) || string.IsNullOrWhiteSpace(group.Name)) ||
             !state.Groups.Any(group => group.Rule == "fallback" && group.Scope is null && !group.RequiresMonitoring))
-            throw new InvalidDataException("分组配置必须包含唯一 ID、有效名称和一个通用默认分组。");
+            throw new InvalidDataException(L.Get("分组配置必须包含唯一 ID、有效名称和一个通用默认分组。"));
         return state;
     }
     private T Locked<T>(Func<T> action)
     {
         using var mutex = new Mutex(false, mutexName);
-        try { if (!mutex.WaitOne(TimeSpan.FromSeconds(15))) throw new IOException("环境变量配置正在使用中，请稍后重试。"); }
+        try { if (!mutex.WaitOne(TimeSpan.FromSeconds(15))) throw new IOException(L.Get("环境变量配置正在使用中，请稍后重试。")); }
         catch (AbandonedMutexException) { }
         try { return action(); } finally { mutex.ReleaseMutex(); }
     }

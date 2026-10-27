@@ -1,0 +1,20 @@
+<UserControl xmlns:loc="clr-namespace:Pathman.Gui.Controls" x:Class="Pathman.Gui.Views.SettingsView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:Pathman.Gui.Controls">
+    <Grid>
+        <ScrollViewer x:Name="SettingsPage" VerticalScrollBarVisibility="Auto"><StackPanel>
+            <TextBlock Text="{loc:Translate '设置'}" Style="{StaticResource PageTitle}" Margin="0,0,0,24"/>
+            <Border Style="{StaticResource Surface}"><StackPanel>
+                <Grid Margin="20,16"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{loc:Translate '语言'}" VerticalAlignment="Center"/><ComboBox x:Name="LanguageChoice" Grid.Column="1" MinWidth="180" SelectedValuePath="Tag" SelectionChanged="ChangePreferences" AutomationProperties.Name="{loc:Translate '语言'}"><ComboBoxItem Tag="system" Content="{loc:Translate '跟随系统'}"/><ComboBoxItem Tag="zh-CN" Content="{loc:Translate '简体中文'}"/><ComboBoxItem Tag="en-US" Content="English"/></ComboBox></Grid>
+                <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                <Grid Margin="20,16"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{loc:Translate '主题'}" VerticalAlignment="Center"/><ComboBox x:Name="ThemeChoice" Grid.Column="1" MinWidth="180" SelectedValuePath="Tag" SelectionChanged="ChangePreferences" AutomationProperties.Name="{loc:Translate '主题'}"><ComboBoxItem Tag="system" Content="{loc:Translate '跟随系统'}"/><ComboBoxItem Tag="light" Content="{loc:Translate '浅色'}"/><ComboBoxItem Tag="dark" Content="{loc:Translate '深色'}"/></ComboBox></Grid>
+            </StackPanel></Border>
+            <Border Style="{StaticResource Surface}" Padding="20,20" Margin="0,12,0,12"><CheckBox x:Name="AutoCheckUpdates" Style="{StaticResource SettingsToggleSwitch}" Checked="ChangePreferences" Unchecked="ChangePreferences"><StackPanel><TextBlock Text="{loc:Translate '自动检测版本更新'}"/><TextBlock Text="{loc:Translate '启动应用时检测版本更新'}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/></StackPanel></CheckBox></Border>
+            <controls:SettingsLinkCard x:Name="AdvancedSettingsLink" Content="{loc:Translate '高级设置'}" Icon="&#xE713;" Click="OpenAdvanced"/>
+            <TextBlock x:Name="SettingsStatus" Margin="0,12,0,0" TextWrapping="Wrap"/>
+        </StackPanel></ScrollViewer>
+        <StackPanel x:Name="AdvancedPage" Visibility="Collapsed"><DockPanel Margin="0,0,0,24"><Button Content="{loc:Translate '返回'}" DockPanel.Dock="Right" Click="CloseAdvanced"/><TextBlock Text="{loc:Translate '高级设置'}" Style="{StaticResource PageTitle}"/></DockPanel>
+            <Border Style="{StaticResource Surface}" Padding="20"><CheckBox x:Name="AllowBuiltInVersionTargets" Content="{loc:Translate '允许选择内置系统变量'}" Style="{StaticResource SettingsToggleSwitch}" Checked="ChangeBuiltInTargets" Unchecked="ChangeBuiltInTargets"/></Border>
+            <Border x:Name="BuiltInWarning" Background="{x:Static controls:SemanticPalette.Red}" CornerRadius="6" Padding="16" Margin="0,12,0,0" Visibility="Collapsed"><TextBlock Text="{loc:Translate '内置系统变量的错误值可能导致 Windows 或应用无法正常运行。PATH 始终不可作为版本目标。'}" Foreground="#7A0000" TextWrapping="Wrap"/></Border>
+            <TextBlock x:Name="AdvancedStatus" Margin="0,12,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

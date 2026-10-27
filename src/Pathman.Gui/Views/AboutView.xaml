@@ -1,10 +1,18 @@
-<UserControl x:Class="Pathman.Gui.Views.AboutView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:Pathman.Gui.Controls">
-    <Grid>
-        <StackPanel x:Name="AboutPage"><TextBlock Text="关于" Style="{StaticResource PageTitle}" Margin="0,0,0,24"/><Border Style="{StaticResource Surface}" Padding="24"><StackPanel><TextBlock Text="PathMan" FontSize="28" FontWeight="SemiBold"/><TextBlock x:Name="VersionText" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0"/><TextBlock Text="Windows 环境变量与程序别名管理器" Margin="0,18,0,0"/><TextBlock Text="MIT License" Margin="0,12,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/></StackPanel></Border><TextBlock x:Name="ConfigPath" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,20,0,20"/><controls:SettingsLinkCard x:Name="AdvancedSettingsLink" Content="高级设置" Icon="&#xE713;" Click="OpenAdvanced"/></StackPanel>
-        <StackPanel x:Name="AdvancedPage" Visibility="Collapsed"><DockPanel Margin="0,0,0,24"><Button Content="返回" DockPanel.Dock="Right" Click="CloseAdvanced"/><TextBlock Text="高级设置" Style="{StaticResource PageTitle}"/></DockPanel>
-            <Border Style="{StaticResource Surface}" Padding="20"><CheckBox x:Name="AllowBuiltInVersionTargets" Content="允许选择内置系统变量" Style="{StaticResource SettingsToggleSwitch}" Checked="ChangeBuiltInTargets" Unchecked="ChangeBuiltInTargets"/></Border>
-            <Border x:Name="BuiltInWarning" Background="{x:Static controls:SemanticPalette.Red}" CornerRadius="6" Padding="16" Margin="0,12,0,0" Visibility="Collapsed"><TextBlock Text="内置系统变量的错误值可能导致 Windows 或应用无法正常运行。PATH 始终不可作为版本目标。" Foreground="#7A0000" TextWrapping="Wrap"/></Border>
-            <TextBlock x:Name="AdvancedStatus" Margin="0,12,0,0" TextWrapping="Wrap"/>
-        </StackPanel>
-    </Grid>
+<UserControl xmlns:loc="clr-namespace:Pathman.Gui.Controls" x:Class="Pathman.Gui.Views.AboutView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:Pathman.Gui.Controls">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+        <TextBlock Text="{loc:Translate '关于'}" Style="{StaticResource PageTitle}" Margin="0,0,0,24"/>
+        <Grid Margin="0,0,0,28"><Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Image x:Name="AppIcon" Width="56" Height="56" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center"><StackPanel Orientation="Horizontal"><TextBlock Text="PathMan" FontSize="28" FontWeight="SemiBold"/><TextBlock x:Name="VersionText" FontSize="16" Margin="12,0,0,3" VerticalAlignment="Bottom" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/></StackPanel><TextBlock Text="{loc:Translate 'Windows 环境变量与程序别名管理器'}" Margin="0,6,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/></StackPanel>
+        </Grid>
+        <controls:SettingsLinkCard x:Name="SourceCodeLink" Content="{loc:Translate '源代码'}" Detail="Napreth/PathMan" Icon="&#xE943;" Click="OpenSource" Margin="0,0,0,4"/>
+        <Border Style="{StaticResource Surface}" Padding="20,16" Margin="0,0,0,4">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="&#xE895;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="{loc:Translate '更新'}"/><TextBlock x:Name="UpdateStatus" FontSize="12" FontWeight="Normal" Margin="0,4,16,0" TextWrapping="Wrap"/></StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"><Button x:Name="ReleaseLink" Content="{loc:Translate '查看新版'}" Click="OpenRelease" Margin="0,0,8,0" Visibility="Collapsed"/><Button x:Name="CheckUpdatesButton" Content="{loc:Translate '检查更新'}" Click="CheckUpdates"/></StackPanel>
+            </Grid>
+        </Border>
+        <controls:SettingsLinkCard x:Name="LicenseLink" Content="{loc:Translate '许可证'}" Detail="MIT license" Icon="&#xE8A5;" Click="ShowLicense"/>
+    </StackPanel></ScrollViewer>
 </UserControl>

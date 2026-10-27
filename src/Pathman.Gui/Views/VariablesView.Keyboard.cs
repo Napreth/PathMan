@@ -82,13 +82,13 @@ public partial class VariablesView
         }
     }
     private void CopySelectionText(string text)
-    {try {Clipboard.SetDataObject(text,true);}catch(System.Runtime.InteropServices.ExternalException) {StatusText.Text="剪贴板暂时不可用。";}}
+    {try {Clipboard.SetDataObject(text,true);}catch(System.Runtime.InteropServices.ExternalException) {StatusText.Text=L.Get("剪贴板暂时不可用。");}}
     private async Task DeleteMarkedNodes(EnvironmentTreeNode[]? selection=null)
     {
         var nodes=(selection ?? AllNodes.Where(node=>node.IsMarked).ToArray()).Where(node=>node.CanDelete).ToArray();
         if(nodes.Length==0 || !await ConfirmLeaveAsync()) return;
         if(nodes.Length==1) {await DeleteNode(nodes[0]);return;}
-        if(new ConfirmDialog(OwnerWindow,"删除",$"删除选中的 {nodes.Count(node=>!node.IsGroup)} 个环境变量和 {nodes.Count(node=>node.IsGroup)} 个分组？分组内未选中的变量会移到默认分组。","删除").ShowDialog()!=true) return;
+        if(new ConfirmDialog(OwnerWindow,L.Get("删除"),L.Format("删除选中的 {0} 个环境变量和 {1} 个分组？分组内未选中的变量会移到默认分组。",nodes.Count(node=>!node.IsGroup),nodes.Count(node=>node.IsGroup)),L.Get("删除")).ShowDialog()!=true) return;
         busy=true;IsEnabled=false;
         try
         {

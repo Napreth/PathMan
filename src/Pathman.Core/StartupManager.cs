@@ -21,9 +21,9 @@ public sealed class StartupManager(PathmanLayout layout)
     public void SetEnabled(bool enabled)
     {
         if(enabled && !new EnvironmentWorkspaceStore(layout.DataDirectory).Read().MonitoringEnabled)
-            throw new IOException("请先启用“在后台运行监控程序”。");
+            throw new IOException(L.Get("请先启用“在后台运行监控程序”。"));
         if (enabled && !File.Exists(layout.BackgroundExecutable))
-            throw new FileNotFoundException("后台程序不存在，请先构建或安装 PathMan。", layout.BackgroundExecutable);
+            throw new FileNotFoundException(L.Get("后台程序不存在，请先构建或安装 PathMan。"), layout.BackgroundExecutable);
         using var key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
         if (enabled) key.SetValue(ValueName, Command, RegistryValueKind.String);
         else if (IsEnabled) key.DeleteValue(ValueName, throwOnMissingValue: false);

@@ -19,7 +19,7 @@ internal static class EnvironmentEditHost
     {
         if(mutations.Count==0) return;
         var scope=mutations[0].Scope;
-        if(mutations.Any(item=>item.Scope!=scope)) throw new ArgumentException("一次保存只支持一种作用域。");
+        if(mutations.Any(item=>item.Scope!=scope)) throw new ArgumentException(L.Get("一次保存只支持一种作用域。"));
         if(scope!=VariableScope.Machine || IsAdministrator)
         {
             await Task.Run(()=> {
@@ -47,11 +47,11 @@ internal static class EnvironmentEditHost
                 catch(IOException error) when(error is not EnvironmentOperationException) {session.Dispose();session=null;AuthorizationChanged?.Invoke(null,EventArgs.Empty);throw;}
                 try {await Task.Run(()=>WindowsEnvironmentVariableEditor.RecordOwnChanges(store,mutations));}
                 catch(Exception error) when(error is IOException or UnauthorizedAccessException)
-                {throw new IOException("系统变量已保存，但用户记录更新失败。请刷新确认。"+error.Message,error);}
+                {throw new IOException(L.Get("系统变量已保存，但用户记录更新失败。请刷新确认。")+error.Message,error);}
             }
             finally {store.Update(state=>state.RegistryWriteInProgressUntil=null);}
         }
-        catch(Win32Exception error) when(error.NativeErrorCode==1223) {throw new OperationCanceledException("已取消管理员操作。");}
+        catch(Win32Exception error) when(error.NativeErrorCode==1223) {throw new OperationCanceledException(L.Get("已取消管理员操作。"));}
         finally {Gate.Release();}
     }
     public static void Shutdown() {session?.Dispose();session=null;AuthorizationChanged?.Invoke(null,EventArgs.Empty);}

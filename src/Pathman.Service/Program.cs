@@ -15,6 +15,7 @@ if (args.Length != 0 && (args.Length != 2 || args[0] != "--data-root")) return 2
 var layout = PathmanLayout.Discover(args.Length == 2 ? args[1] : null);
 var background = new BackgroundProcess(layout);
 var store=new EnvironmentWorkspaceStore(layout.DataDirectory);
+L.SetLanguage(store.Read().Preferences.Language);
 var startup=new StartupManager(layout);
 startup.Reconcile();
 if(!StartupManager.CanRun(store.Read(),startup.IsEnabled)) return 5;
@@ -41,6 +42,7 @@ try
         try
         {
             var settings=store.Read();
+            L.SetLanguage(settings.Preferences.Language);
             if(originRequest!=settings.OriginTrackingRequest) {originRequest=settings.OriginTrackingRequest;origins?.Dispose();origins=null;requestedOrigin=false;originError=null;}
             if(!settings.TrackChangeOrigins) {origins?.Dispose();origins=null;requestedOrigin=false;originError=null;}
             else if(!requestedOrigin)
@@ -48,17 +50,17 @@ try
                 requestedOrigin=true;
                 try {origins=RegistryOriginTracker.Start();}
                 catch(Exception error) when(error is System.ComponentModel.Win32Exception or IOException or OperationCanceledException)
-                {originError="来源跟踪未启动，请关闭并重新开启该开关以重试。"+error.Message;}
+                {originError=L.Get("来源跟踪未启动，请关闭并重新开启该开关以重试。")+error.Message;}
             }
             var tracking=origins?.IsReady==true;
-            var message=settings.TrackChangeOrigins && !tracking ? originError ?? origins?.Error ?? "修改来源跟踪尚未就绪。" : null;
+            var message=settings.TrackChangeOrigins && !tracking ? originError ?? origins?.Error ?? L.Get("修改来源跟踪尚未就绪。") : null;
             if(settings.OriginTrackingReady!=tracking || settings.OriginTrackingMessage!=message)
                 store.Update(state=> {state.OriginTrackingReady=tracking;state.OriginTrackingMessage=message;});
             if(tracking) Thread.Sleep(1000); // Allow buffered ETW writes and process events to reach the batch before comparing.
             monitor.Poll(origins?.Batch());
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
-        {try {monitor.ReportError("监控暂时无法读取或保存环境变量："+error.Message);}catch(IOException) {}}
+        {try {monitor.ReportError(L.Get("监控暂时无法读取或保存环境变量：")+error.Message);}catch(IOException) {}}
         var reason = WaitHandle.WaitAny([stop, signal.UserChanged, signal.MachineChanged], 1000);
         if (reason == 0) break;
         if (reason is 1 or 2) signal.Arm(reason-1);

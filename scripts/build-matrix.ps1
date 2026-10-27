@@ -3,12 +3,15 @@ param(
     [ValidateSet('x86', 'x64', 'arm64')][string[]]$Arch = @('x86', 'x64', 'arm64'),
     [ValidateSet('FrameworkDependent', 'SelfContained')][string[]]$PackageType = @('FrameworkDependent', 'SelfContained'),
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.1.0',
+    [string]$Version = '',
     [switch]$SkipInstaller,
     [switch]$Test,
     [switch]$Plan
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'version.ps1')
+$versionInfo=Get-BuildVersion $Version
+$Version=$versionInfo.Version
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $Arch = @($Arch | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
 $PackageType = @($PackageType | ForEach-Object {
@@ -63,8 +66,8 @@ foreach ($cpu in $Arch) {
         Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.txt') -Destination $output
         Copy-Item -LiteralPath (Join-Path $projectRoot 'licenses') -Destination $output -Recurse
         $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
-        if ($Test -and $cpu -eq $hostArch) {
-            & (Join-Path $PSScriptRoot 'test.ps1') -PublishDirectory $output -CoreAssembly (Join-Path $projectRoot "src/Pathman.Core/bin/$Configuration/net10.0-windows/Pathman.Core.dll")
+        if ($Test -and ($cpu -eq $hostArch -or $cpu -eq 'x86' -and $hostArch -eq 'x64')) {
+            & (Join-Path $PSScriptRoot 'test.ps1') -Architecture $cpu -PublishDirectory $output -CoreAssembly (Join-Path $projectRoot "src/Pathman.Core/bin/$Configuration/net10.0-windows/Pathman.Core.dll")
         } elseif ($Test) { Write-Host "Runtime tests for $cpu require a compatible test machine." }
         Write-Host "Published $cpu / $kind to $output"
     }

@@ -1,55 +1,55 @@
-<UserControl x:Class="Pathman.Gui.Views.MonitorView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:Pathman.Gui.Controls">
+<UserControl xmlns:loc="clr-namespace:Pathman.Gui.Controls" x:Class="Pathman.Gui.Views.MonitorView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:Pathman.Gui.Controls">
     <Grid>
         <Grid x:Name="SettingsPage"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-            <TextBlock Text="变量监控" Style="{StaticResource PageTitle}" Margin="0,0,0,24"/>
+            <TextBlock Text="{loc:Translate '变量监控'}" Style="{StaticResource PageTitle}" Margin="0,0,0,24"/>
             <ScrollViewer x:Name="MonitorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="SettingsPanel" Margin="0,0,4,16">
                     <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
-                        <CheckBox x:Name="EnableMonitoring" Content="在后台运行监控程序" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeMonitoring" Unchecked="ChangeMonitoring"/>
+                        <CheckBox x:Name="EnableMonitoring" Content="{loc:Translate '在后台运行监控程序'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeMonitoring" Unchecked="ChangeMonitoring"/>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                        <CheckBox x:Name="StartupEnabled" Content="登录时自动运行后台程序" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeStartup" Unchecked="ChangeStartup"/>
+                        <CheckBox x:Name="StartupEnabled" Content="{loc:Translate '登录时自动运行后台程序'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeStartup" Unchecked="ChangeStartup"/>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                        <CheckBox x:Name="TrackOrigins" Content="精确识别修改来源（需要管理员权限）" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                        <CheckBox x:Name="TrackOrigins" Content="{loc:Translate '精确识别修改来源（需要管理员权限）'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                     </StackPanel></Border>
                     <StackPanel x:Name="MonitoringRules">
-                    <TextBlock Text="用户变量" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{loc:Translate '用户变量'}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
-                        <CheckBox x:Name="GroupExternalUser" AutomationProperties.Name="将外部新用户环境变量归入‘外部变量’分类" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
-                            <TextBlock Text="将外部新环境变量归入‘外部变量’分类"/>
-                            <TextBlock Text="此分类仅在本应用内有效" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
+                        <CheckBox x:Name="GroupExternalUser" AutomationProperties.Name="{loc:Translate '将外部新用户环境变量归入‘外部变量’分类'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                            <TextBlock Text="{loc:Translate '将外部新环境变量归入‘外部变量’分类'}"/>
+                            <TextBlock Text="{loc:Translate '此分类仅在本应用内有效'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel></CheckBox>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                        <CheckBox x:Name="AutoArrangeUser" Content="自动整理PATH环境变量" AutomationProperties.Name="自动整理用户 PATH 环境变量" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                        <CheckBox x:Name="AutoArrangeUser" Content="{loc:Translate '自动整理PATH环境变量'}" AutomationProperties.Name="{loc:Translate '自动整理用户 PATH 环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                         <StackPanel x:Name="UserArrangeOptions" Margin="44,0,20,20">
-                            <CheckBox x:Name="RemoveUserDuplicates" Content="删除外部添加的重复PATH项" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
-                            <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNAL_USER_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNAL_USER_PATH"/></CheckBox>
+                            <CheckBox x:Name="RemoveUserDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                            <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_USER_PATH'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_USER_PATH'}"/></CheckBox>
                             <StackPanel x:Name="UserEditorExclusions" Margin="0,14,0,0">
-                                <CheckBox x:Name="IgnoreSystemEditorUser" Content="不整理系统编辑器修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
-                                <CheckBox x:Name="IgnorePowerToysUser" Content="不整理PowerToys修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                                <CheckBox x:Name="IgnoreSystemEditorUser" Content="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
+                                <CheckBox x:Name="IgnorePowerToysUser" Content="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>
-                    <TextBlock Text="系统变量" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{loc:Translate '系统变量'}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
-                        <CheckBox x:Name="GroupExternalMachine" AutomationProperties.Name="将外部新系统环境变量归入‘外部变量’分类" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
-                            <TextBlock Text="将外部新环境变量归入‘外部变量’分类"/>
-                            <TextBlock Text="此分类仅在本应用内有效" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
+                        <CheckBox x:Name="GroupExternalMachine" AutomationProperties.Name="{loc:Translate '将外部新系统环境变量归入‘外部变量’分类'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                            <TextBlock Text="{loc:Translate '将外部新环境变量归入‘外部变量’分类'}"/>
+                            <TextBlock Text="{loc:Translate '此分类仅在本应用内有效'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel></CheckBox>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                        <CheckBox x:Name="AutoArrangeMachine" Content="自动整理PATH环境变量" AutomationProperties.Name="自动整理系统 PATH 环境变量" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                        <CheckBox x:Name="AutoArrangeMachine" Content="{loc:Translate '自动整理PATH环境变量'}" AutomationProperties.Name="{loc:Translate '自动整理系统 PATH 环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                         <StackPanel x:Name="MachineArrangeOptions" Margin="44,0,20,20">
-                            <CheckBox x:Name="RemoveMachineDuplicates" Content="删除外部添加的重复PATH项" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
-                            <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="将外部添加的PATH项移至EXTERNAL_PATH" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="将外部添加的PATH项移至EXTERNAL_PATH"/></CheckBox>
+                            <CheckBox x:Name="RemoveMachineDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                            <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}"/></CheckBox>
                             <StackPanel x:Name="MachineEditorExclusions" Margin="0,14,0,0">
-                                <CheckBox x:Name="IgnoreSystemEditorMachine" Content="不整理系统编辑器修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
-                                <CheckBox x:Name="IgnorePowerToysMachine" Content="不整理PowerToys修改的变量" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                                <CheckBox x:Name="IgnoreSystemEditorMachine" Content="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
+                                <CheckBox x:Name="IgnorePowerToysMachine" Content="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>
-                    <controls:SettingsLinkCard Content="外部更改记录" Icon="&#xE81C;" Click="OpenHistory"/>
+                    <controls:SettingsLinkCard Content="{loc:Translate '外部更改记录'}" Icon="&#xE81C;" Click="OpenHistory"/>
                     <Border x:Name="MonitorNotice" Style="{StaticResource Surface}" Padding="16" Margin="0,12,0,0" Visibility="Collapsed"><StackPanel>
                         <TextBlock x:Name="MonitorStatus" TextWrapping="Wrap"/>
-                        <Button x:Name="ApplyPending" Content="授权并整理系统 PATH" HorizontalAlignment="Left" Margin="0,12,0,0" Click="ApplyPendingChanges" Visibility="Collapsed"/>
+                        <Button x:Name="ApplyPending" Content="{loc:Translate '授权并整理系统 PATH'}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="ApplyPendingChanges" Visibility="Collapsed"/>
                     </StackPanel></Border>
                     </StackPanel>
                 </StackPanel>
@@ -57,16 +57,16 @@
         </Grid>
         <Grid x:Name="HistoryPage" Visibility="Collapsed"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
             <Grid Margin="0,0,0,24"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBlock Text="外部更改记录" Style="{StaticResource PageTitle}"/>
-                <Button Grid.Column="1" Content="返回" Click="CloseHistory"/>
+                <TextBlock Text="{loc:Translate '外部更改记录'}" Style="{StaticResource PageTitle}"/>
+                <Button Grid.Column="1" Content="{loc:Translate '返回'}" Click="CloseHistory"/>
             </Grid>
             <Border Grid.Row="1" Style="{StaticResource Surface}" Padding="4"><Grid>
-                <TextBlock x:Name="NoChanges" Text="暂无外部更改记录" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <ListView x:Name="Changes" Background="Transparent" BorderThickness="0" FontSize="13" AutomationProperties.Name="外部更改记录"><ListView.View><GridView>
-                    <GridViewColumn Header="时间" DisplayMemberBinding="{Binding TimeText}" Width="145"/><GridViewColumn Header="作用域" DisplayMemberBinding="{Binding ScopeText}" Width="70"/>
-                    <GridViewColumn Header="变量名" DisplayMemberBinding="{Binding Name}" Width="180"/><GridViewColumn Header="操作" DisplayMemberBinding="{Binding ActionText}" Width="65"/>
-                    <GridViewColumn Header="修改进程" DisplayMemberBinding="{Binding ProcessText}" Width="230"/>
-                    <GridViewColumn Header="更改前" DisplayMemberBinding="{Binding Before}" Width="260"/><GridViewColumn Header="更改后" DisplayMemberBinding="{Binding After}" Width="260"/>
+                <TextBlock x:Name="NoChanges" Text="{loc:Translate '暂无外部更改记录'}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <ListView x:Name="Changes" Background="Transparent" BorderThickness="0" FontSize="13" AutomationProperties.Name="{loc:Translate '外部更改记录'}"><ListView.View><GridView>
+                    <GridViewColumn Header="{loc:Translate '时间'}" DisplayMemberBinding="{Binding TimeText}" Width="145"/><GridViewColumn Header="{loc:Translate '作用域'}" DisplayMemberBinding="{Binding ScopeText}" Width="70"/>
+                    <GridViewColumn Header="{loc:Translate '变量名'}" DisplayMemberBinding="{Binding Name}" Width="180"/><GridViewColumn Header="{loc:Translate '操作'}" DisplayMemberBinding="{Binding ActionText}" Width="65"/>
+                    <GridViewColumn Header="{loc:Translate '修改进程'}" DisplayMemberBinding="{Binding ProcessText}" Width="230"/>
+                    <GridViewColumn Header="{loc:Translate '更改前'}" DisplayMemberBinding="{Binding Before}" Width="260"/><GridViewColumn Header="{loc:Translate '更改后'}" DisplayMemberBinding="{Binding After}" Width="260"/>
                 </GridView></ListView.View></ListView>
             </Grid></Border>
         </Grid>

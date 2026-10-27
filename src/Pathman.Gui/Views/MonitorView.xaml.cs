@@ -45,11 +45,11 @@ public partial class MonitorView : UserControl
         UserArrangeOptions.IsEnabled=state.AutoArrangeUserPath;MachineArrangeOptions.IsEnabled=state.AutoArrangeMachinePath;
         updating=false;RefreshProcessState();
         var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
-        var message=state.OriginTrackingMessage ?? (pending ? "系统 PATH 有待整理的外部新增项，需要管理员授权。" : state.MonitorMessage);
+        var message=state.OriginTrackingMessage ?? (pending ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
         MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
         ApplyPending.Visibility=pending ? Visibility.Visible : Visibility.Collapsed;
         ApplyPending.IsEnabled=!EnvironmentMonitor.RequiresOrigin(state,VariableScope.Machine) || state.OriginTrackingReady;
-        var changes=state.Changes.Where(change=>change.Source=="外部程序").Select(change=>new {TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? "用户" : "系统",change.Name,ActionText=change.Action switch {"create"=>"新增","delete"=>"删除",_=>"修改"},ProcessText=change.Origins.Count==0 ? "未识别" : string.Join("、",change.Origins.Select(origin=>$"{origin.ProcessName} ({origin.ProcessId})").Distinct()),change.Before,change.After}).ToArray();
+        var changes=state.Changes.Where(change=>change.Source==L.Get("外部程序")).Select(change=>new {TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统"),change.Name,ActionText=change.Action switch {"create"=>L.Get("新增"),"delete"=>L.Get("删除"),_=>L.Get("修改")},ProcessText=change.Origins.Count==0 ? L.Get("未识别") : string.Join("、",change.Origins.Select(origin=>$"{origin.ProcessName} ({origin.ProcessId})").Distinct()),change.Before,change.After}).ToArray();
         Changes.ItemsSource=changes;NoChanges.Visibility=changes.Length==0 ? Visibility.Visible : Visibility.Collapsed;
         Changes.Visibility=changes.Length==0 ? Visibility.Collapsed : Visibility.Visible;
     }

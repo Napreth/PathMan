@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$ResultPath='C:\PathManFeaturesTest\results.json',[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine'){throw 'Use only the disposable VM and restore its initial checkpoint.'}
@@ -11,7 +11,7 @@ if($PrepareFixture){
  $data=Join-Path $env:LOCALAPPDATA 'PathMan';$shims=Join-Path $data 'shims';New-Item -ItemType Directory -Force $shims | Out-Null
  New-Item -ItemType HardLink -Path (Join-Path $shims 'fixture.exe') -Target C:\PathManTestApp\internal\PathMan.Shim.exe -Force | Out-Null
  [IO.File]::WriteAllText((Join-Path $shims 'fixture.shim'),"[PathMan.Shim]`r`nFormat=1`r`nTarget=C:\Windows\System32\notepad.exe`r`n",[Text.Encoding]::Unicode)
- @{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'});revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
+ @{preferences=@{language='zh-CN';theme='system';autoCheckUpdates=$false};groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'});revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
  return
 }
 # Reuse the UIA primitives from the health regression without running its fixture or tests.

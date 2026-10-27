@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 ManifestDPIAware true
 ManifestSupportedOS all
 !include MUI2.nsh
@@ -30,7 +30,7 @@ RequestExecutionLevel user
 
 Name "PathMan"
 OutFile "${OUTPUT_FILE}"
-VIProductVersion "${VERSION}.0"
+VIProductVersion "${VERSION_NUMERIC}.0"
 VIAddVersionKey /LANG=1033 "ProductName" "PathMan"
 VIAddVersionKey /LANG=1033 "FileDescription" "PathMan Setup (${ARCH}, ${PACKAGE_TYPE})"
 VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION}"
@@ -55,8 +55,12 @@ Var Worker
 Var WorkerConfig
 Var ApplicationsApproved
 Var ApplicationsDialog
+Var ApplicationsList
+Var ApplicationsAutomatic
+Var ApplicationsManual
 Var ApplicationsStatus
 Var WaitingApplications
+Var UpdateMode
 
 !define MUI_CUSTOMFUNCTION_ABORT RestoreBackground
 !define MUI_CUSTOMFUNCTION_UNABORT un.RestoreBackground
@@ -89,6 +93,8 @@ UninstPage custom un.ApplicationsPage un.ApplicationsLeave
 !insertmacro MUI_UNPAGE_FINISH
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "SimpChinese"
+SetFont /LANG=1033 "Segoe UI" 9
+SetFont /LANG=2052 "Microsoft YaHei UI" 9
 
 LangString DesktopShortcut ${LANG_ENGLISH} "Create a &desktop shortcut"
 LangString DesktopShortcut ${LANG_SIMPCHINESE} "创建桌面快捷方式(&D)"
@@ -119,8 +125,18 @@ LangString ApplicationsTitle ${LANG_ENGLISH} "Close running applications"
 LangString ApplicationsTitle ${LANG_SIMPCHINESE} "关闭正在运行的程序"
 LangString ApplicationsSubtitle ${LANG_ENGLISH} "PathMan needs to close before setup can continue."
 LangString ApplicationsSubtitle ${LANG_SIMPCHINESE} "请先关闭 PathMan，再继续安装。"
-LangString ApplicationsDescription ${LANG_ENGLISH} "Save your work in PathMan. Click Continue to terminate the PathMan window and background program. Any unsaved changes will be lost.$\r$\n$\r$\nSetup waits for CLI commands to finish. Programs launched through aliases can keep running."
-LangString ApplicationsDescription ${LANG_SIMPCHINESE} "请先保存 PathMan 中的工作。单击“继续”将终止主窗口和后台程序，未保存的更改会丢失。$\r$\n$\r$\n安装器会等待命令行任务结束。通过别名启动的程序可以继续运行。"
+LangString ApplicationsDescription ${LANG_ENGLISH} "The following applications need to close before setup can continue. Save your work first. Background monitoring will resume after installation if it was running."
+LangString ApplicationsDescription ${LANG_SIMPCHINESE} "以下程序需要关闭后才能继续安装，请先保存工作。此前运行的后台程序将在安装完成后重新启动。"
+LangString UnApplicationsDescription ${LANG_ENGLISH} "The following applications need to close before uninstall can continue. Save your work first."
+LangString UnApplicationsDescription ${LANG_SIMPCHINESE} "以下程序需要关闭后才能继续卸载，请先保存工作。"
+LangString ApplicationsAutomatic ${LANG_ENGLISH} "&Automatically close the applications"
+LangString ApplicationsAutomatic ${LANG_SIMPCHINESE} "自动关闭这些程序(&A)"
+LangString ApplicationsManual ${LANG_ENGLISH} "I will close the applications &manually"
+LangString ApplicationsManual ${LANG_SIMPCHINESE} "我将手动关闭这些程序(&M)"
+LangString ApplicationsManualWaiting ${LANG_ENGLISH} "Waiting for you to close the applications..."
+LangString ApplicationsManualWaiting ${LANG_SIMPCHINESE} "正在等待你关闭这些程序……"
+LangString ApplicationsScanError ${LANG_ENGLISH} "Unable to refresh the application list. Close PathMan manually, then click Continue to retry."
+LangString ApplicationsScanError ${LANG_SIMPCHINESE} "无法刷新程序列表。请手动关闭 PathMan 后单击“继续”重试。"
 LangString ApplicationsContinue ${LANG_ENGLISH} "&Continue"
 LangString ApplicationsContinue ${LANG_SIMPCHINESE} "继续(&C)"
 LangString ApplicationsWaiting ${LANG_ENGLISH} "Waiting for command-line tasks to finish..."
@@ -158,6 +174,7 @@ Function ${Prefix}InitializeSetup
   StrCpy $Worker 0
   StrCpy $ApplicationsApproved 0
   StrCpy $RestartBackground 0
+  StrCpy $UpdateMode 0
   ClearErrors
   ${GetOptions} $Parameters "/SetupWorker=" $0
   ${IfNot} ${Errors}
@@ -170,6 +187,7 @@ Function ${Prefix}InitializeSetup
       StrCpy $Worker 1
       ${GetOptions} $Parameters "/SetupConfig=" $WorkerConfig
       ReadINIStr $ApplicationsApproved "$WorkerConfig" "Setup" "ApplicationsApproved"
+      ReadINIStr $UpdateMode "$WorkerConfig" "Setup" "UpdateMode"
       ReadINIStr $LANGUAGE "$WorkerConfig" "Setup" "Language"
       ReadINIStr $CommandDirectory "$WorkerConfig" "Setup" "Directory"
       ReadINIStr $StartMenuFolder "$WorkerConfig" "Setup" "StartMenuFolder"
@@ -190,6 +208,7 @@ FunctionEnd
 Function ${Prefix}WriteWorkerConfiguration
   StrCpy $WorkerConfig "$PLUGINSDIR\worker.ini"
   WriteINIStr "$WorkerConfig" "Setup" "ApplicationsApproved" "$ApplicationsApproved"
+  WriteINIStr "$WorkerConfig" "Setup" "UpdateMode" "$UpdateMode"
   WriteINIStr "$WorkerConfig" "Setup" "Language" "$LANGUAGE"
   WriteINIStr "$WorkerConfig" "Setup" "Directory" "$INSTDIR"
   WriteINIStr "$WorkerConfig" "Setup" "StartMenuFolder" "$StartMenuFolder"
@@ -273,6 +292,18 @@ Function .onInit
     StrCpy $INSTDIR $CommandDirectory
   ${EndIf}
   ReadRegStr $0 SHCTX "${APPKEY}" "InstallDirectory"
+  ClearErrors
+  ${GetOptions} $Parameters "/Update" $1
+  ${IfNot} ${Errors}
+    ; The application requests unattended maintenance only in its registered folder.
+    ${If} $0 != "$INSTDIR"
+    ${OrIf} $0 == ""
+      SetErrorLevel 87
+      Quit
+    ${EndIf}
+    StrCpy $UpdateMode 1
+    StrCpy $ApplicationsApproved 1
+  ${EndIf}
   ${If} $0 != ""
     ReadRegStr $1 SHCTX "${APPKEY}" "InstallerKind"
     ${If} $1 != "NSIS"
@@ -373,6 +404,9 @@ Function DirectoryLeave
 FunctionEnd
 
 Function CheckInstalledVersion
+  ${If} $UpdateMode == 1
+    Return
+  ${EndIf}
   ReadRegStr $OldDirectory SHCTX "${APPKEY}" "InstallDirectory"
   ${If} $OldDirectory == ""
     Return
@@ -381,7 +415,7 @@ Function CheckInstalledVersion
   ${If} $1 == ""
     StrCpy $1 "0.0.0"
   ${EndIf}
-  ${VersionCompare} "$1" "${VERSION}" $0
+  System::Call '$Helper::CompareVersions(w r1, w "${VERSION}") i.r0'
   ${If} $0 == 1
     MessageBox MB_OK|MB_ICONSTOP "$(DowngradeBlocked)" /SD IDOK
     SetErrorLevel 1638
@@ -407,9 +441,26 @@ Function ${Prefix}ApplicationsPage
   ${If} $ApplicationsDialog == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 90u "$(ApplicationsDescription)"
+  System::Call 'user32::GetSystemMetrics(i 49) i.r1'
+  nsDialogs::CreateControl STATIC ${DEFAULT_STYLES}|${SS_ICON}|${SS_REALSIZECONTROL} 0 0 0 $1 $1 ""
   Pop $0
-  ${NSD_CreateLabel} 0 100u 100% 35u ""
+  System::Call 'user32::LoadImageW(p 0, p 32513, i 1, i r1, i r1, i 0x8000) p.r1'
+  SendMessage $0 ${STM_SETICON} $1 0
+!if "${Prefix}" == "un."
+  ${NSD_CreateLabel} 20u 0 280u 32u "$(UnApplicationsDescription)"
+!else
+  ${NSD_CreateLabel} 20u 0 280u 32u "$(ApplicationsDescription)"
+!endif
+  Pop $0
+  ${NSD_CreateListBox} 20u 35u 280u 64u ""
+  Pop $ApplicationsList
+  System::Call '$Helper::UpdateApplicationsList(w "$INSTDIR", p $ApplicationsList) i.r0'
+  ${NSD_CreateFirstRadioButton} 20u 105u 280u 10u "$(ApplicationsAutomatic)"
+  Pop $ApplicationsAutomatic
+  ${NSD_Check} $ApplicationsAutomatic
+  ${NSD_CreateAdditionalRadioButton} 20u 118u 280u 10u "$(ApplicationsManual)"
+  Pop $ApplicationsManual
+  ${NSD_CreateLabel} 20u 132u 280u 10u ""
   Pop $ApplicationsStatus
   GetDlgItem $1 $HWNDPARENT 1
   EnableWindow $1 1
@@ -425,8 +476,12 @@ Function ${Prefix}ApplicationsPage
   nsDialogs::KillTimer $0
 FunctionEnd
 Function ${Prefix}ApplicationsPoll
+  System::Call '$Helper::UpdateApplicationsList(w "$INSTDIR", p $ApplicationsList) i.r0'
+  ${If} $0 < 0
+    ${NSD_SetText} $ApplicationsStatus "$(ApplicationsScanError)"
+    Return
+  ${EndIf}
   ${If} $WaitingApplications == 1
-    System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
     ${If} $0 == 0
       StrCpy $WaitingApplications 0
       GetDlgItem $1 $HWNDPARENT 1
@@ -436,6 +491,23 @@ Function ${Prefix}ApplicationsPoll
   ${EndIf}
 FunctionEnd
 Function ${Prefix}ApplicationsLeave
+  ${NSD_GetState} $ApplicationsManual $0
+  ${If} $0 == ${BST_CHECKED}
+    System::Call '$Helper::RunningApplications(w "$INSTDIR") i.r0'
+    ${If} $0 < 0
+      ${NSD_SetText} $ApplicationsStatus "$(ApplicationsScanError)"
+      Abort
+    ${ElseIf} $0 != 0
+      StrCpy $WaitingApplications 1
+      EnableWindow $ApplicationsAutomatic 0
+      EnableWindow $ApplicationsManual 0
+      ${NSD_SetText} $ApplicationsStatus "$(ApplicationsManualWaiting)"
+      GetDlgItem $1 $HWNDPARENT 1
+      EnableWindow $1 0
+      Abort
+    ${EndIf}
+    Return
+  ${EndIf}
   StrCpy $ApplicationsApproved 1
   ${If} $Machine == 1
   ${AndIf} $Elevated == 0
@@ -444,6 +516,8 @@ Function ${Prefix}ApplicationsLeave
   System::Call '$Helper::StopApplications(w "$INSTDIR") i.r0'
   ${If} $0 == 170
     StrCpy $WaitingApplications 1
+    EnableWindow $ApplicationsAutomatic 0
+    EnableWindow $ApplicationsManual 0
     ${NSD_SetText} $ApplicationsStatus "$(ApplicationsWaiting)"
     GetDlgItem $1 $HWNDPARENT 1
     EnableWindow $1 0
@@ -491,6 +565,16 @@ FunctionEnd
 
 Function .onInstFailed
   Call RestoreBackground
+  ${If} $UpdateMode == 1
+  ${AndIf} $Worker == 0
+    Call LaunchPathMan
+  ${EndIf}
+FunctionEnd
+Function .onInstSuccess
+  ${If} $UpdateMode == 1
+  ${AndIf} $Worker == 0
+    Call LaunchPathMan
+  ${EndIf}
 FunctionEnd
 Function un.onUninstFailed
   Call un.RestoreBackground
@@ -660,6 +744,8 @@ Section "Uninstall"
   ClearErrors
   !insertmacro DeleteInstalledFile "PathMan.exe"
   !insertmacro DeleteInstalledFile "LICENSE"
+  !insertmacro DeleteInstalledFile "THIRD-PARTY-NOTICES.txt"
+  !insertmacro DeleteInstalledFile "licenses\dotnet-THIRD-PARTY-NOTICES.txt"
   !insertmacro DeleteInstalledFile "bin\pathman.exe"
   !insertmacro DeleteInstalledFile "internal\PathMan.Service.exe"
   System::Call '$Helper::RemoveShim(w "$INSTDIR") i.r0'
@@ -688,5 +774,6 @@ Section "Uninstall"
   ${EndIf}
   RMDir "$INSTDIR\bin"
   RMDir "$INSTDIR\internal"
+  RMDir "$INSTDIR\licenses"
   RMDir "$INSTDIR"
 SectionEnd

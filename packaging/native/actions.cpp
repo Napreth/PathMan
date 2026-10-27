@@ -10,14 +10,17 @@
 #include <string>
 #include <vector>
 #include <cwctype>
+#include "version.h"
 
 #ifdef _M_IX86
+#pragma comment(linker, "/EXPORT:CompareVersions=_CompareVersions@8")
 #pragma comment(linker, "/EXPORT:ValidateDirectory=_ValidateDirectory@8")
 #pragma comment(linker, "/EXPORT:HasDesktopRuntime=_HasDesktopRuntime@4")
 #pragma comment(linker, "/EXPORT:StopApplications=_StopApplications@4")
 #pragma comment(linker, "/EXPORT:ReplaceShim=_ReplaceShim@8")
 #pragma comment(linker, "/EXPORT:RemoveShim=_RemoveShim@4")
 #pragma comment(linker, "/EXPORT:RunningApplications=_RunningApplications@4")
+#pragma comment(linker, "/EXPORT:UpdateApplicationsList=_UpdateApplicationsList@8")
 #pragma comment(linker, "/EXPORT:BackgroundRunning=_BackgroundRunning@4")
 #pragma comment(linker, "/EXPORT:ConfigureInstall=_ConfigureInstall@8")
 #pragma comment(linker, "/EXPORT:CleanupInstall=_CleanupInstall@12")
@@ -27,6 +30,11 @@
 #pragma comment(linker, "/EXPORT:BeginSetup=_BeginSetup@0")
 #pragma comment(linker, "/EXPORT:CleanupUserInstall=_CleanupUserInstall@8")
 #endif
+
+extern "C" __declspec(dllexport) DWORD __stdcall CompareVersions(const wchar_t* left,const wchar_t* right) {
+    try {auto value=pathman_version::compare(left?left:L"0.0.0",right?right:L"0.0.0");return value>0?1:value<0?2:0;}
+    catch(...) {return 0;}
+}
 
 namespace {
 constexpr auto settings = L"Software\\PathMan";
@@ -347,6 +355,39 @@ extern "C" __declspec(dllexport) int __stdcall RunningApplications(const wchar_t
         return applications(std::filesystem::path(directory), running) == ERROR_SUCCESS ? static_cast<int>(running.size()) : -1;
     } catch (...) { return -1; }
 }
+extern "C" __declspec(dllexport) int __stdcall UpdateApplicationsList(const wchar_t* directory, HWND list) {
+    try {
+        std::vector<running_app> running;
+        if (applications(std::filesystem::path(directory), running) != ERROR_SUCCESS || !IsWindow(list)) return -1;
+        bool gui = false, background = false, cli = false;
+        for (const auto& app : running) {
+            gui |= app.gui;
+            background |= app.background;
+            cli |= !app.gui && !app.background;
+        }
+        // Show each executable once, regardless of how many instances are open.
+        std::vector<std::wstring> names;
+        if (gui) names.emplace_back(L"PathMan.exe");
+        if (background) names.emplace_back(L"PathMan.Service.exe");
+        if (cli) names.emplace_back(L"pathman.exe");
+        bool changed = SendMessageW(list, LB_GETCOUNT, 0, 0) != static_cast<LRESULT>(names.size());
+        for (size_t index = 0; !changed && index < names.size(); ++index) {
+            const auto length = SendMessageW(list, LB_GETTEXTLEN, index, 0);
+            if (length < 0 || length > 32768) { changed = true; break; }
+            std::vector<wchar_t> text(static_cast<size_t>(length) + 1);
+            SendMessageW(list, LB_GETTEXT, index, reinterpret_cast<LPARAM>(text.data()));
+            changed = names[index] != text.data();
+        }
+        if (changed) {
+            SendMessageW(list, WM_SETREDRAW, FALSE, 0);
+            SendMessageW(list, LB_RESETCONTENT, 0, 0);
+            for (const auto& name : names) SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
+            SendMessageW(list, WM_SETREDRAW, TRUE, 0);
+            InvalidateRect(list, nullptr, TRUE);
+        }
+        return static_cast<int>(running.size());
+    } catch (...) { return -1; }
+}
 extern "C" __declspec(dllexport) BOOL __stdcall BackgroundRunning(const wchar_t* directory) {
     try {
         std::vector<running_app> running;
@@ -382,6 +423,11 @@ extern "C" __declspec(dllexport) DWORD __stdcall CleanupInstall(const wchar_t* d
 extern "C" __declspec(dllexport) DWORD __stdcall CleanupUserInstall(const wchar_t* directory, const wchar_t* desktop) {
     try {
         const std::filesystem::path root(directory);
+        for (const auto name : { L"AppUserModelId\\PathMan.PathMan", L"AppUserModelId\\PathMan.UpdateTest", L"pathman-update", L"pathman-update-test" }) {
+            const auto key = std::wstring(L"Software\\Classes\\") + name;
+            if (normalized(read(HKEY_CURRENT_USER, key.c_str(), L"ExecutablePath")) == normalized((root / L"PathMan.exe").wstring()))
+                RegDeleteTreeW(HKEY_CURRENT_USER, key.c_str());
+        }
         constexpr auto run = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
         const auto expected = L"\"" + (root / L"internal" / L"PathMan.Service.exe").wstring() + L"\"";
         if (_wcsicmp(read(HKEY_CURRENT_USER, run, L"PathMan").c_str(), expected.c_str()) == 0) {

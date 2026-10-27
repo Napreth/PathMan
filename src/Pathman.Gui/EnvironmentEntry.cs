@@ -22,10 +22,10 @@ public sealed class EnvironmentEntry(string value, bool isDraft = false, IReadOn
     public bool IsGroup => Row?.IsGroup == true;
     public bool IsExpanded => Row?.IsExpanded == true;
     public bool CanExpand => IsGroup && Row?.IsCycle != true;
-    public string ExpandActionName => (IsExpanded ? "折叠 " : "展开 ")+Value;
+    public string ExpandActionName => (IsExpanded ? L.Get("折叠 ") : L.Get("展开 "))+Value;
     public bool IsDragPlaceholder {get;}=placeholder;
     public System.Windows.Thickness Indent => new((Row?.Depth ?? 0)*16,0,0,0);
-    public string GroupToolTip => Row?.IsCycle==true ? "引用回环或层级过深，已停止展开" : "展开或折叠引用的路径变量";
-    public string ReferenceToolTip => "转到：" + string.Join("、", References.Select(item => item.Name));
-    public string AutomationName => DiffPrefix+(Value.Length == 0 ? "（空条目）" : Value);
+    public string GroupToolTip => Row?.IsCycle==true ? L.Get("引用回环或层级过深，已停止展开") : L.Get("展开或折叠引用的路径变量");
+    public string ReferenceToolTip => L.Get("转到：") + string.Join("、", References.Select(item => item.Name));
+    public string AutomationName => DiffPrefix+(Value.Length == 0 ? L.Get("（空条目）") : Value);
 }

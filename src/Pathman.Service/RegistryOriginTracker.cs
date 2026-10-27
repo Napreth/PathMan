@@ -44,7 +44,7 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
                 using var input=new StreamReader(pipe,Encoding.UTF8,false,4096,true);
                 while(!stop.IsCancellationRequested && await input.ReadLineAsync(stop.Token) is {} line)
                 {
-                    if(line.Length>262144) throw new IOException("来源跟踪消息过长。");
+                    if(line.Length>262144) throw new IOException(L.Get("来源跟踪消息过长。"));
                     var message=JsonSerializer.Deserialize<OriginMessage>(line,EnvironmentWorkspaceStore.JsonOptions);
                     if(message?.Kind=="ready") ready=true;
                     else if(message?.Kind=="error") {Error=message.Message;ready=false;}
@@ -52,7 +52,7 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
                 }
             }
             catch(Exception error) when(error is IOException or OperationCanceledException or JsonException or ObjectDisposedException) {Error=error.Message;}
-            finally {ready=false;if(!stop.IsCancellationRequested) Error ??= "修改来源跟踪连接已断开，请重新启用来源识别。";}
+            finally {ready=false;if(!stop.IsCancellationRequested) Error ??= L.Get("修改来源跟踪连接已断开，请重新启用来源识别。");}
         });
     }
     public static RegistryOriginTracker Start()
@@ -70,7 +70,7 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
             using var parent=Process.GetCurrentProcess();
             var start=new ProcessStartInfo(Environment.ProcessPath!) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};
             foreach(var value in new[] {"--registry-origin-worker",parent.Id.ToString(CultureInfo.InvariantCulture),parent.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture),name,secret,identity.User!.Value}) start.ArgumentList.Add(value);
-            child=Process.Start(start) ?? throw new IOException("无法启动修改来源跟踪。");
+            child=Process.Start(start) ?? throw new IOException(L.Get("无法启动修改来源跟踪。"));
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(30));
             while(true)
             {
@@ -82,7 +82,7 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
             // the collector's first ready/event message from the long-lived reader.
             var hello=new List<byte>();
             while(hello.Count<128) {var value=pipe.ReadByte();if(value<0) throw new EndOfStreamException();if(value==10) break;hello.Add((byte)value);}
-            if(!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(secret),hello.ToArray())) throw new IOException("来源跟踪连接认证失败。");
+            if(!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(secret),hello.ToArray())) throw new IOException(L.Get("来源跟踪连接认证失败。"));
             pipe.WriteByte(1);pipe.Flush();
             return new(pipe,child);
         }

@@ -13,11 +13,13 @@ public sealed record EnvironmentHealthFix(string Label,IReadOnlyList<Environment
     {
         foreach(var guard in Preconditions)
             if(!current.Any(item=>item.Scope==guard.Scope && item.Name.Equals(guard.Name,StringComparison.OrdinalIgnoreCase) && item.RawValue==guard.Value && (int)item.Kind==guard.Kind))
-                throw new IOException($"{guard.Name} 已变化，请重新检测后再操作。");
+                throw new IOException(L.Format("{0} 已变化，请重新检测后再操作。",guard.Name));
     }
 }
 public sealed record EnvironmentHealthIssue(EnvironmentIssueKind Kind,VariableScope Scope,string Name,string Message)
 {
+    // Ignore keys must not depend on translated display text.
+    public string? IdentityMessage {get;init;}
     public bool IsError {get;init;}=Kind is EnvironmentIssueKind.ReferenceCycle or EnvironmentIssueKind.UndefinedReference or EnvironmentIssueKind.UserScopeReference or EnvironmentIssueKind.RegistryType;
     public string CheckId {get;init;}="";
     public string Category {get;init;}="";
@@ -28,7 +30,7 @@ public sealed record EnvironmentHealthIssue(EnvironmentIssueKind Kind,VariableSc
     public IReadOnlyList<EnvironmentHealthFix> Fixes {get;init;}=[];
     public IReadOnlyList<VariableSnapshot> Sources {get;init;}=[];
     // Ignore only this exact finding. A changed source value/type is a new finding.
-    private object Identity=>Kind==EnvironmentIssueKind.Custom ? new {CheckId,Kind,Scope,Name,Message,Locations,Sources} : new {Kind,Scope,Name,Message,Locations,Sources};
+    private object Identity=>Kind==EnvironmentIssueKind.Custom ? new {CheckId,Kind,Scope,Name,Message=IdentityMessage ?? Message,Locations,Sources} : new {Kind,Scope,Name,Message=IdentityMessage ?? Message,Locations,Sources};
     public string Id=>Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(Identity))));
 }
 public sealed record EnvironmentHealthReport(IReadOnlyList<EnvironmentHealthIssue> Issues)

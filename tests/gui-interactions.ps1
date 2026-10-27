@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$ResultPath='C:\PathManInteractionTest\gui-results.json', [switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine') { throw 'Run this fixture-driven GUI test only in the disposable Windows VM.' }
@@ -12,7 +12,7 @@ if($PrepareFixture) {
     [Environment]::SetEnvironmentVariable('PATHMAN_DRAG_C','gamma','User')
     [Environment]::SetEnvironmentVariable('PATHMAN_LIST','one;;two;  spaced  ;','User')
     [Environment]::SetEnvironmentVariable('PATHMAN_SCALAR_ORIGIN','one','User')
-    $fixture=@{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'},@{id='external';name='外部变量';rule='external';requiresMonitoring=$true},@{id='work';name='工作';rule='manual';scope='User'});assignments=@{'User:PATHMAN_DRAG_A'='work';'User:PATHMAN_DRAG_B'='work';'User:PATHMAN_LIST'='work';'User:PATHMAN_DRAG_C'='other'};pinnedVariables=@('User:PATHMAN_DRAG_B','User:PATHMAN_DRAG_A');revision=[guid]::NewGuid().ToString('N')}
+    $fixture=@{preferences=@{language='zh-CN';theme='system';autoCheckUpdates=$false};groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'},@{id='external';name='外部变量';rule='external';requiresMonitoring=$true},@{id='work';name='工作';rule='manual';scope='User'});assignments=@{'User:PATHMAN_DRAG_A'='work';'User:PATHMAN_DRAG_B'='work';'User:PATHMAN_LIST'='work';'User:PATHMAN_DRAG_C'='other'};pinnedVariables=@('User:PATHMAN_DRAG_B','User:PATHMAN_DRAG_A');revision=[guid]::NewGuid().ToString('N')}
     $fixture|ConvertTo-Json -Depth 8|Set-Content (Join-Path $env:LOCALAPPDATA 'PathMan\environment.json') -Encoding UTF8
     Start-Process $testExe; Start-Sleep -Seconds 2
 }

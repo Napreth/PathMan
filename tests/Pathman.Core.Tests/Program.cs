@@ -5,6 +5,9 @@ using Pathman.Core.Models;
 static void Assert(bool condition,string message) { if(!condition) throw new InvalidOperationException(message); }
 static void Reject(Action action,string message) { try { action(); } catch(IOException) { return; } throw new InvalidOperationException(message); }
 static void RejectMove(Action action,string message) { try { action(); } catch(ArgumentException) { return; } throw new InvalidOperationException(message); }
+Pathman.Core.Localization.Text.SetLanguage("zh-CN");
+UpdateAndLocalizationTests.Run(Assert);
+UpdateDeliveryTests.Run(Assert);
 var cases=new (string Name,string Raw,bool List,string[] Entries)[]
 {
     ("Path",@"%SystemRoot%\System32; C:\工具 ;C:\工具;;",true,[@"%SystemRoot%\System32",@" C:\工具 ",@"C:\工具","",""]),

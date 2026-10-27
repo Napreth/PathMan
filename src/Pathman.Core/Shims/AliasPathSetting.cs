@@ -24,7 +24,7 @@ public sealed class AliasPathSetting(PathmanLayout layout)
         {
             var expansion=resolver.Expand(entry,VariableScope.User);
             var matches=expansion.IsResolved && expansion.Paths.Any(item=>string.Equals(EnvironmentPathResolver.Normalize(item),target,StringComparison.OrdinalIgnoreCase));
-            if(matches && expansion.Paths.Count>1) throw new InvalidOperationException("垫片目录包含在多路径引用中，请先将它从被引用变量中移出，再切换程序别名。");
+            if(matches && expansion.Paths.Count>1) throw new InvalidOperationException(L.Get("垫片目录包含在多路径引用中，请先将它从被引用变量中移出，再切换程序别名。"));
             if(!matches) retained.Add(entry);
         }
         if(enabled) retained.Add(layout.ShimsDirectory);

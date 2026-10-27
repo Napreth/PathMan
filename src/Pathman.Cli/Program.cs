@@ -37,11 +37,11 @@ catch (Exception exception) when (exception is IOException or ArgumentException 
     return 1;
 }
 
-static void PrintHelp() => Console.WriteLine("""
+static void PrintHelp() => Console.WriteLine(L.Get("""
     PathMan — 版本管理
 
       pathman list [项目]
       pathman add <项目> <版本> <值> [--variable <变量名>] [--type User|Machine] [--replace]
       pathman switch <项目> <版本>
       pathman delete <项目> [版本]
-    """);
+    """));

@@ -64,7 +64,7 @@ public partial class AliasesView : UserControl
     {
         enabled=new AliasPathSetting(layout).IsEnabled(EnvironmentMonitor.ReadAll());
         updating=true;EnableAliases.IsChecked=enabled;updating=false;UpdateActions();
-        if(!enabled) AliasStatus.Text="程序别名未启用。";
+        if(!enabled) AliasStatus.Text=L.Get("程序别名未启用。");
         return enabled;
     }
     private async Task<bool> CommitActive()
@@ -119,7 +119,7 @@ public partial class AliasesView : UserControl
             if(change is not null) await EnvironmentEditHost.ApplyAsync(change,store,layout.DataDirectory);
             using var key=Registry.CurrentUser.CreateSubKey(@"Software\PathMan",true);
             if(requested) key.SetValue("ShimsPathOwned",1,RegistryValueKind.DWord);else key.DeleteValue("ShimsPathOwned",false);
-            enabled=requested;updating=true;EnableAliases.IsChecked=requested;updating=false;AliasStatus.Text=requested ? "垫片目录已放到用户 Path 末尾，新终端生效。" : "已从用户 Path 移除垫片目录，新终端生效。";
+            enabled=requested;updating=true;EnableAliases.IsChecked=requested;updating=false;AliasStatus.Text=requested ? L.Get("垫片目录已放到用户 Path 末尾，新终端生效。") : L.Get("已从用户 Path 移除垫片目录，新终端生效。");
             SnapshotChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(Expected(error)) {CheckEnabled();AliasStatus.Text=error.Message;}
@@ -172,16 +172,16 @@ public partial class AliasesView : UserControl
     {if(sender is EditableRow {DataContext:AliasRow row}) e.Completion=!e.WasChanged && !row.IsDraft ? Task.FromResult<string?>(null) : CommitRow(row,e.Value,e.IsDetail);}
     private async Task<string?> CommitRow(AliasRow row,string value,bool detail)
     {
-        if(busy) return "别名正在保存，请稍后重试。";
+        if(busy) return L.Get("别名正在保存，请稍后重试。");
         var before=row.IsDraft ? null : new ShimAlias(row.Name,row.Target);
         try
         {
-            if(!CheckEnabled()) return "程序别名未启用，请先打开开关。";
+            if(!CheckEnabled()) return L.Get("程序别名未启用，请先打开开关。");
             if(row.IsDraft && !detail && value.Length==0) {rows.Remove(row);return null;}
             if(!detail)
             {
                 var name=ShimManager.ValidateName(value);
-                if(rows.Any(other=>other!=row && other.Name.Equals(name,StringComparison.OrdinalIgnoreCase))) return "别名已经存在。";
+                if(rows.Any(other=>other!=row && other.Name.Equals(name,StringComparison.OrdinalIgnoreCase))) return L.Get("别名已经存在。");
                 busy=true;UpdateActions();
                 if(row.IsDraft)
                 {
@@ -196,7 +196,7 @@ public partial class AliasesView : UserControl
                 row.Name=alias.Name;row.Target=alias.Target;row.IsDraft=false;
             }
             RememberAlias(before,new(row.Name,row.Target));
-            AliasStatus.Text="已保存。";SnapshotChanged?.Invoke(this,EventArgs.Empty);return null;
+            AliasStatus.Text=L.Get("已保存。");SnapshotChanged?.Invoke(this,EventArgs.Empty);return null;
         }
         catch(Exception error) when(Expected(error)) {AliasStatus.Text=error.Message;return error.Message;}
         finally {busy=false;UpdateActions();}
@@ -208,7 +208,7 @@ public partial class AliasesView : UserControl
         browsing=true;autoSaveEpoch++;UpdateActions();
         try
         {
-            var dialog=new OpenFileDialog {Title="选择目标文件",Filter="所有文件 (*.*)|*.*",AddExtension=false,CheckFileExists=true};
+            var dialog=new OpenFileDialog {Title=L.Get("选择目标文件"),Filter=L.Get("所有文件 (*.*)|*.*"),AddExtension=false,CheckFileExists=true};
             if(dialog.ShowDialog(Window.GetWindow(this))!=true) {editor?.FocusEditor();return;}
             if(editor is {IsEditingDetail:true} && editor.DataContext==row)
             {editor.EditingValue=dialog.FileName;await editor.CommitAsync();}
@@ -225,8 +225,8 @@ public partial class AliasesView : UserControl
     private async Task Copy(bool target)
     {
         if(!await CommitActive() || busy || !CheckEnabled() || Aliases.SelectedItems.Count==0) return;
-        try {Clipboard.SetDataObject(string.Join(Environment.NewLine,Aliases.SelectedItems.OfType<AliasRow>().OrderBy(rows.IndexOf).Select(row=>target ? row.Target : row.Name)),true);AliasStatus.Text="已复制。";}
-        catch(System.Runtime.InteropServices.ExternalException) {AliasStatus.Text="剪贴板暂时不可用。";}
+        try {Clipboard.SetDataObject(string.Join(Environment.NewLine,Aliases.SelectedItems.OfType<AliasRow>().OrderBy(rows.IndexOf).Select(row=>target ? row.Target : row.Name)),true);AliasStatus.Text=L.Get("已复制。");}
+        catch(System.Runtime.InteropServices.ExternalException) {AliasStatus.Text=L.Get("剪贴板暂时不可用。");}
     }
     private async void DeleteAlias(object sender,RoutedEventArgs e)
     {
@@ -234,7 +234,7 @@ public partial class AliasesView : UserControl
         var selected=Aliases.SelectedItems.OfType<AliasRow>().ToArray();
         autoSaveEpoch++;advanceToTarget=null;activeEditor?.CancelEdit();
         var removed=new List<ShimAlias>();
-        try {busy=true;UpdateActions();foreach(var row in selected) {if(!row.IsDraft) {await Task.Run(()=>manager.Remove(row.Name,row.Target));removed.Add(new(row.Name,row.Target));}rows.Remove(row);}AliasStatus.Text="已删除。";SnapshotChanged?.Invoke(this,EventArgs.Empty);}
+        try {busy=true;UpdateActions();foreach(var row in selected) {if(!row.IsDraft) {await Task.Run(()=>manager.Remove(row.Name,row.Target));removed.Add(new(row.Name,row.Target));}rows.Remove(row);}AliasStatus.Text=L.Get("已删除。");SnapshotChanged?.Invoke(this,EventArgs.Empty);}
         catch(Exception error) when(Expected(error)) {AliasStatus.Text=error.Message;}
         finally {if(removed.Count>0) RememberDeletedAliases(removed.ToArray());busy=false;UpdateActions();}
     }

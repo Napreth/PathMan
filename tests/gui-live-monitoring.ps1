@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$ResultPath='C:\PathManLiveTest\results.json',[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine'){throw 'Disposable Windows VM only. Restore the initial checkpoint afterwards.'}
@@ -14,7 +14,7 @@ if($PrepareFixture){
  $run=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\Run',$true)
  try{$run.SetValue('PathMan','"C:\PathManTestApp\internal\PathMan.Service.exe"')}finally{$run.Dispose()}
  New-Item -ItemType Directory -Path $data -Force|Out-Null
- @{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin'},@{id='other';name='其他变量';rule='fallback'},@{id='external';name='外部变量';rule='external';requiresMonitoring=$true});autoArrangeUserPath=$true;revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 10|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
+ @{preferences=@{language='zh-CN';theme='system';autoCheckUpdates=$false};groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin'},@{id='other';name='其他变量';rule='fallback'},@{id='external';name='外部变量';rule='external';requiresMonitoring=$true});autoArrangeUserPath=$true;revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 10|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
  return
 }
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes

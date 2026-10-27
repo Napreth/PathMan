@@ -11,7 +11,7 @@ public partial class VariablesView
     public void NotifyIncoming(IReadOnlyList<EnvironmentVariableInfo> current)
     {
         if(HasInlineEditor && !EnvironmentSnapshotWatcher.Equal(allVariables,current))
-        {StatusText.Text="检测到外部更改，结束当前行输入后更新。";}
+        {StatusText.Text=L.Get("检测到外部更改，结束当前行输入后更新。");}
     }
     public async Task<bool> ObserveRegistryAsync(IReadOnlyList<EnvironmentVariableInfo> current)
     {
@@ -43,7 +43,7 @@ public partial class VariablesView
             if(session.IsReviewMode) listMode=true;
             RefreshPathEntries();ScalarValueBox.Text=CurrentValue;
             LoadedRevision=state.Revision;
-            StatusText.Text=session.HasConflicts ? "外部修改与本地草稿重叠；已保留本地内容，请核对红、绿、蓝三种更改。" : "外部更改已合并到草稿；红色删除、绿色新增、蓝色为本地更改。保存后写入。";
+            StatusText.Text=session.HasConflicts ? L.Get("外部修改与本地草稿重叠；已保留本地内容，请核对红、绿、蓝三种更改。") : L.Get("外部更改已合并到草稿；红色删除、绿色新增、蓝色为本地更改。保存后写入。");
             SnapshotChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(Expected(error)) {StatusText.Text=error.Message;return false;}
@@ -62,13 +62,13 @@ public partial class VariablesView
         var before=new VariableSnapshot(root.Scope,root.Name,session.UserBranch(root.Scope,root.Name),(int)root.Kind);
         var plan=ExternalPathOrganizer.Plan(root.Scope,before,session.CurrentVariables(),settings,RuntimeValues(),root.Name);
         session.Stage(plan.Mutations,plan.Preconditions);
-        StatusText.Text=plan.Warning ?? (plan.ChangesPathOrder ? "已整理外部新增项的草稿；搜索顺序会改变，请核对后保存。" : "已整理外部新增项的草稿，保存后写入。");
+        StatusText.Text=plan.Warning ?? (plan.ChangesPathOrder ? L.Get("已整理外部新增项的草稿；搜索顺序会改变，请核对后保存。") : L.Get("已整理外部新增项的草稿，保存后写入。"));
     }
     private async void UndoExternalChanges(object sender,RoutedEventArgs e)
     {
         if(busy || activeEditor?.IsEditing==true && !await activeEditor.CommitAsync() || editingSession is not {} session) return;
         session.UndoExternal();RefreshPathEntries();updating=true;ScalarValueBox.Text=CurrentValue;updating=false;SetDirty();
-        StatusText.Text="已撤回外部更改的草稿，本地编辑已保留；保存后写入。";
+        StatusText.Text=L.Get("已撤回外部更改的草稿，本地编辑已保留；保存后写入。");
     }
     private async void CleanExternalChanges(object sender,RoutedEventArgs e)
     {

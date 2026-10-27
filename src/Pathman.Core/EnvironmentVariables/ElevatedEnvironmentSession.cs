@@ -39,7 +39,7 @@ public sealed class ElevatedEnvironmentSession : IDisposable
             using var parent=Process.GetCurrentProcess();
             var start=new ProcessStartInfo(Environment.ProcessPath!) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};
             foreach(var argument in new[]{"--environment-session",parent.Id.ToString(CultureInfo.InvariantCulture),parent.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture),pipeName,secret}) start.ArgumentList.Add(argument);
-            worker=await Task.Run(()=>Process.Start(start)) ?? throw new IOException("无法启动管理员操作。");
+            worker=await Task.Run(()=>Process.Start(start)) ?? throw new IOException(L.Get("无法启动管理员操作。"));
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(30));
             while(true)
             {
@@ -48,7 +48,7 @@ public sealed class ElevatedEnvironmentSession : IDisposable
                 server.Disconnect();
             }
             var hello=await ReadAsync<string>(server,timeout.Token);
-            if(!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(hello),Encoding.UTF8.GetBytes(secret))) throw new IOException("管理员连接认证失败。");
+            if(!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(hello),Encoding.UTF8.GetBytes(secret))) throw new IOException(L.Get("管理员连接认证失败。"));
             await WriteAsync(server,new EnvironmentSessionResult(null),timeout.Token);
             return new(server,worker);
         }
@@ -63,8 +63,8 @@ public sealed class ElevatedEnvironmentSession : IDisposable
             var result=await ReadAsync<EnvironmentSessionResult>(pipe,timeout.Token);
             if(result.Error is not null) throw new EnvironmentOperationException(result.Error);
         }
-        catch(OperationCanceledException error) {throw new IOException("管理员连接超时，请刷新确认写入结果后重试。",error);}
-        catch(EndOfStreamException error) {throw new IOException("管理员连接已断开，请刷新确认写入结果后重试。",error);}
+        catch(OperationCanceledException error) {throw new IOException(L.Get("管理员连接超时，请刷新确认写入结果后重试。"),error);}
+        catch(EndOfStreamException error) {throw new IOException(L.Get("管理员连接已断开，请刷新确认写入结果后重试。"),error);}
     }
     public void Dispose() {pipe.Dispose();worker.Dispose();}
 
@@ -106,16 +106,16 @@ public sealed class ElevatedEnvironmentSession : IDisposable
     private static async Task WriteAsync<T>(Stream stream,T value,CancellationToken token)
     {
         var payload=JsonSerializer.SerializeToUtf8Bytes(value,EnvironmentWorkspaceStore.JsonOptions);
-        if(payload.Length>MaximumFrame) throw new IOException("操作请求过大。");
+        if(payload.Length>MaximumFrame) throw new IOException(L.Get("操作请求过大。"));
         var header=new byte[4];BinaryPrimitives.WriteInt32LittleEndian(header,payload.Length);
         await stream.WriteAsync(header,token);await stream.WriteAsync(payload,token);await stream.FlushAsync(token);
     }
     private static async Task<T> ReadAsync<T>(Stream stream,CancellationToken token)
     {
         var header=new byte[4];await stream.ReadExactlyAsync(header,token);var size=BinaryPrimitives.ReadInt32LittleEndian(header);
-        if(size is <=0 or >MaximumFrame) throw new IOException("管理员请求格式无效。");
+        if(size is <=0 or >MaximumFrame) throw new IOException(L.Get("管理员请求格式无效。"));
         var payload=new byte[size];await stream.ReadExactlyAsync(payload,token);
-        return JsonSerializer.Deserialize<T>(payload,EnvironmentWorkspaceStore.JsonOptions) ?? throw new IOException("管理员请求为空。");
+        return JsonSerializer.Deserialize<T>(payload,EnvironmentWorkspaceStore.JsonOptions) ?? throw new IOException(L.Get("管理员请求为空。"));
     }
     private static string ImagePath(Process process)
     {var buffer=new StringBuilder(32768);var size=buffer.Capacity;return QueryFullProcessImageName(process.Handle,0,buffer,ref size) ? buffer.ToString() : "";}

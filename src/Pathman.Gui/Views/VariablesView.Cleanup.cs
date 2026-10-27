@@ -55,13 +55,13 @@ public partial class VariablesView
     {
         if (cleanupPlan is null) return;
         CleanupChanges.ItemsSource=cleanupPlan.Scopes.SelectMany(scope=>scope.Mutations.Select(change=>new CleanupChangeDisplay(
-            $"{(scope.Scope==VariableScope.User ? "用户" : "系统")} · {change.Name}{(change.Action=="create" ? "（新建）" : "")}",
+            $"{(scope.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统"))} · {change.Name}{(change.Action=="create" ? L.Get("（新建）") : "")}",
             DiffLines(change.Action=="create" ? null : change.ExpectedValue,change.Value ?? "")))).ToArray();
         CleanupEmpty.Visibility=cleanupPlan.HasChanges ? Visibility.Collapsed : Visibility.Visible;
-        var reordered=cleanupPlan.Scopes.Where(scope=>scope.ChangesPathOrder).Select(scope=>scope.Scope==VariableScope.User ? "用户 PATH" : "系统 PATH").ToArray();
+        var reordered=cleanupPlan.Scopes.Where(scope=>scope.ChangesPathOrder).Select(scope=>scope.Scope==VariableScope.User ? L.Get("用户 PATH") : L.Get("系统 PATH")).ToArray();
         var unknown=cleanupPlan.Scopes.Any(scope=>scope.Mutations.Count>0 && !scope.PathOrderResolved);
         CleanupOrderWarning.Visibility=reordered.Length>0 || unknown ? Visibility.Visible : Visibility.Collapsed;
-        CleanupOrderWarningText.Text=reordered.Length>0 ? $"清理会改变{string.Join("、",reordered)}的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。请确认预览后再应用。" : "部分引用无法完整展开，无法确认清理后 PATH 的搜索顺序是否保持不变。请检查预览后再应用。";
+        CleanupOrderWarningText.Text=reordered.Length>0 ? L.Format("清理会改变{0}的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。请确认预览后再应用。",string.Join("、",reordered)) : L.Get("部分引用无法完整展开，无法确认清理后 PATH 的搜索顺序是否保持不变。请检查预览后再应用。");
         ApplyCleanupButton.IsEnabled=cleanupPlan.HasChanges;
     }
     private void CloseCleanup(object sender, RoutedEventArgs e)
@@ -87,12 +87,12 @@ public partial class VariablesView
             foreach(var scope in plan.Scopes.Where(scope=>scope.Mutations.Count>0))
             {
                 await EnvironmentEditHost.ApplyBatchAsync(scope.Mutations,scope.Preconditions,store,layout.DataDirectory);
-                applied.Add(scope.Scope==VariableScope.Machine ? "系统 Path" : "用户 Path");
+                applied.Add(scope.Scope==VariableScope.Machine ? L.Get("系统 Path") : L.Get("用户 Path"));
             }
-            status="清理完成。原始值已备份。";
+            status=L.Get("清理完成。原始值已备份。");
         }
         catch(Exception error) when(Expected(error) || error is OperationCanceledException)
-        { status=(applied.Count>0 ? $"已清理{string.Join("、",applied)}；其余未应用。" : "未应用清理。") + error.Message; }
+        { status=(applied.Count>0 ? L.Format("已清理{0}；其余未应用。",string.Join("、",applied)) : L.Get("未应用清理。")) + error.Message; }
         finally { busy=false; CleanupButton.IsEnabled=true; }
         await ReloadAsync();
         cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues()); ShowCleanupPlan(); CleanupStatus.Text=status;

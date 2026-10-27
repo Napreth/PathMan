@@ -60,7 +60,7 @@ public static partial class EnvironmentHealth
             return new(label,[new("set",owner.Scope,owner.Name,value,ExpectedValue:owner.RawValue,ExpectedKind:owner.Kind)],guards);
         }
         EnvironmentHealthIssue Finding(EnvironmentIssueKind kind,string message,string suggestion,IEnumerable<Occurrence> items)=>new(kind,variable.Scope,variable.Name,message) {
-            Suggestion=suggestion,Sources=guards,DetailLocations=items.SelectMany(item=>item.Sources).DistinctBy(source=>source.Key,StringComparer.OrdinalIgnoreCase).Select(source=>source.Location()).ToArray(),Locations=items.Select(item=>item.Sources.LastOrDefault()).OfType<EntrySource>()
+            IdentityMessage=kind==EnvironmentIssueKind.EmptyPathEntry ? "列表包含空条目。" : message,Suggestion=suggestion,Sources=guards,DetailLocations=items.SelectMany(item=>item.Sources).DistinctBy(source=>source.Key,StringComparer.OrdinalIgnoreCase).Select(source=>source.Location()).ToArray(),Locations=items.Select(item=>item.Sources.LastOrDefault()).OfType<EntrySource>()
                 .DistinctBy(source=>source.Key,StringComparer.OrdinalIgnoreCase).Take(8).Select(source=>source.Location()).ToArray()};
         if(pathLike || variable.IsList)
         {
@@ -69,8 +69,8 @@ public static partial class EnvironmentHealth
             foreach(var group in empties.GroupBy(item=>item.Sources.LastOrDefault()?.Key ?? "",StringComparer.OrdinalIgnoreCase))
             {
                 var source=group.First().Sources.Reverse().FirstOrDefault(candidate=>bySource[candidate.Key].All(index=>string.IsNullOrWhiteSpace(occurrences[index].Value)));
-                var finding=Finding(EnvironmentIssueKind.EmptyPathEntry,"列表包含空条目。","删除这一行会移除对应的分号位置，其余条目保持原样。",group);
-                if(source is not null) finding=finding with {Fixes=[Fix(source,"删除空行")]};
+                var finding=Finding(EnvironmentIssueKind.EmptyPathEntry,L.Get("列表包含空条目。"),L.Get("删除这一行会移除对应的分号位置，其余条目保持原样。"),group);
+                if(source is not null) finding=finding with {Fixes=[Fix(source,L.Get("删除空行"))]};
                 issues.Add(finding);
             }
         }
@@ -91,8 +91,8 @@ public static partial class EnvironmentHealth
                 var candidate=occurrences[index].Sources.Reverse().FirstOrDefault(source=>removable[source.Key]);
                 if(candidate is not null) candidates.TryAdd(candidate.Key,candidate);
             }
-            var finding=Finding(EnvironmentIssueKind.Duplicate,$"展开后出现 {duplicate.Count()} 次：{duplicate.Key}",candidates.Count>0 ? "选择要删除的来源；保留的来源及其他路径不会改动。" : "此项来自复用的引用，请进入变量编辑调整引用，避免删除全部副本。",duplicate.Select(index=>occurrences[index]));
-            issues.Add(finding with {Fixes=candidates.Values.Take(8).Select(source=>Fix(source,$"删除{(source.Variable.Scope==VariableScope.User ? "用户" : "系统")} {source.Variable.Name} 第 {source.Index+1} 行")).ToArray()});
+            var finding=Finding(EnvironmentIssueKind.Duplicate,L.Format("展开后出现 {0} 次：{1}",duplicate.Count(),duplicate.Key),candidates.Count>0 ? L.Get("选择要删除的来源；保留的来源及其他路径不会改动。") : L.Get("此项来自复用的引用，请进入变量编辑调整引用，避免删除全部副本。"),duplicate.Select(index=>occurrences[index])) with {IdentityMessage=$"展开后出现 {duplicate.Count()} 次：{duplicate.Key}"};
+            issues.Add(finding with {Fixes=candidates.Values.Take(8).Select(source=>Fix(source,L.Format("删除{0} {1} 第 {2} 行",(source.Variable.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统")),source.Variable.Name,source.Index+1))).ToArray()});
         }
     }
 }

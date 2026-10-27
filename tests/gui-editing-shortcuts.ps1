@@ -13,6 +13,7 @@ if($PrepareFixture){
   $user.SetValue('Path',$path.TrimEnd(';')+';'+$shims,[Microsoft.Win32.RegistryValueKind]::ExpandString)
  }finally{$user.Dispose()}
  $state=Get-Content (Join-Path $PSScriptRoot 'groups.json') -Raw -Encoding UTF8|ConvertFrom-Json
+ $state|Add-Member -NotePropertyName preferences -NotePropertyValue @{language='zh-CN';theme='system';autoCheckUpdates=$false} -Force
  $state.groups+=@{id='work';name='工作';rule='manual';scope='User'}
  $state|Add-Member -NotePropertyName assignments -NotePropertyValue @{'User:EDIT_A'='work';'User:EDIT_B'='work';'User:EDIT_C'='work';'User:EDIT_LIST'='work';'User:EDIT_VALUE'='work'}
  $state|Add-Member -NotePropertyName versionProjects -NotePropertyValue @(@{name='tool';variableName='EDIT_VALUE';type='User';versions=@{one='v1';two='v2';three='v3'}},@{name='extra-one';variableName='EDIT_TARGET_B';type='User';versions=@{one='x'}},@{name='extra-two';variableName='EDIT_TARGET_C';type='User';versions=@{one='y'}})

@@ -39,7 +39,7 @@ public partial class AliasesView
                 if(await history.ApplyAsync(forward))
                 {
                     var saved=await Task.Run(manager.List);rows.Clear();foreach(var alias in saved) rows.Add(new(alias.Name,alias.Target));
-                    AliasStatus.Text="已保存。";SnapshotChanged?.Invoke(this,EventArgs.Empty);
+                    AliasStatus.Text=L.Get("已保存。");SnapshotChanged?.Invoke(this,EventArgs.Empty);
                 }
             }
             catch(Exception error) when(Expected(error)) {AliasStatus.Text=error.Message;}

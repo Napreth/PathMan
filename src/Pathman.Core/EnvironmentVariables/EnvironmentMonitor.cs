@@ -48,12 +48,12 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
                 WindowsEnvironmentVariableEditor.ApplyBatch(plan.Mutations,plan.Preconditions,store,state=>
                 {
                     if(!state.MonitoringEnabled || ExternalPathOrganizer.Policy(state,plan.Scope)!=plan.Policy || !state.PendingPathOrganizations.Any(item=>item.Id==plan.Id))
-                        throw new IOException("监控设置或待整理项目已改变，本次整理已跳过。");
+                        throw new IOException(L.Get("监控设置或待整理项目已改变，本次整理已跳过。"));
                 });
                 Complete(store,plan);
             }
             catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
-            {failedPlans.Add(plan.Id);ReportError("自动整理未完成："+error.Message);}
+            {failedPlans.Add(plan.Id);ReportError(L.Get("自动整理未完成：")+error.Message);}
         }
         failedPlans.RemoveWhere(id=>!saved.PendingPathOrganizations.Any(plan=>plan.Id==id));
     }
@@ -75,7 +75,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             if(writers.Any(writer=>writer.Excluded(state)) || pathChanged && RequiresOrigin(state,scope) && (origins?.IsReady!=true || writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)))
             {
                 updated|=state.PendingPathOrganizations.RemoveAll(item=>item.Scope==scope)>0;
-                if(writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)) Message(state,"未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。");
+                if(writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)) Message(state,L.Get("未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。"));
                 continue;
             }
             if(pending is null && (!changed || old?.Value==path?.RawValue)) continue;
@@ -101,7 +101,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
     public static void Complete(EnvironmentWorkspaceStore store,ExternalPathOrganizationPlan plan)=>store.Update(state=>
     {
         state.PendingPathOrganizations.RemoveAll(item=>item.Id==plan.Id);
-        if(plan.ChangesPathOrder) Message(state,"自动整理改变了 PATH 的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。原始值已备份，可在外部更改记录中核对。" );
+        if(plan.ChangesPathOrder) Message(state,L.Get("自动整理改变了 PATH 的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。原始值已备份，可在外部更改记录中核对。") );
         else if(state.PendingPathOrganizations.Count==0) {state.MonitorMessage=null;state.MonitorMessageTime=null;}
     });
     public void ReportError(string message)=>store.Inspect(state=>
@@ -119,13 +119,13 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             var key = EnvironmentWorkspace.Key(item.Scope, item.Name);
             if (!before.TryGetValue(key, out var old) || old.Value != item.RawValue || old.Kind != (int)item.Kind)
             {
-                changes.Add(new(DateTime.Now, item.Scope, item.Name, old is null ? "create" : "set", old?.Value, item.RawValue, "外部程序") {Origins=origins?.Take(item.Scope,item.Name) ?? []});
+                changes.Add(new(DateTime.Now, item.Scope, item.Name, old is null ? "create" : "set", old?.Value, item.RawValue, L.Get("外部程序")) {Origins=origins?.Take(item.Scope,item.Name) ?? []});
                 if(old is null) state.ExternalVariables.Add(key);
             }
         }
         foreach (var old in state.Snapshot.Where(item => !after.ContainsKey(EnvironmentWorkspace.Key(item.Scope, item.Name))))
         {
-            changes.Add(new(DateTime.Now, old.Scope, old.Name, "delete", old.Value, null, "外部程序") {Origins=origins?.Take(old.Scope,old.Name) ?? []});
+            changes.Add(new(DateTime.Now, old.Scope, old.Name, "delete", old.Value, null, L.Get("外部程序")) {Origins=origins?.Take(old.Scope,old.Name) ?? []});
             state.ExternalVariables.Remove(EnvironmentWorkspace.Key(old.Scope, old.Name));
         }
         if (changes.Count == 0) return false;

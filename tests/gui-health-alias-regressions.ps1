@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$ResultPath='C:\PathManFeaturesTest\regressions.json',[switch]$PrepareFixture)
 $ErrorActionPreference='Stop'
 if((Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine'){throw 'Run only in the disposable VM, then restore the initial checkpoint.'}
@@ -14,7 +14,7 @@ if($PrepareFixture){
  [IO.File]::WriteAllText('C:\PathManFeaturesTest\browse target.cmd',"@echo off`r`nexit /b 39`r`n")
  [IO.File]::WriteAllText('C:\PathManFeaturesTest\browse target.txt','ordinary file')
  [IO.File]::WriteAllText('C:\PathManFeaturesTest\browse-target','no extension')
- @{groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'});revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
+ @{preferences=@{language='zh-CN';theme='system';autoCheckUpdates=$false};groups=@(@{id='paths';name='路径变量';rule='paths'},@{id='system';name='系统变量';rule='builtin';collapsed=$true},@{id='other';name='其他变量';rule='fallback'});revision=[guid]::NewGuid().ToString('N')}|ConvertTo-Json -Depth 6|Set-Content (Join-Path $data 'environment.json') -Encoding UTF8
  return
 }
 $common=(Get-Content C:\PathManFeaturesTest\gui-health-actions.ps1 -Raw).Replace("`r`n","`n")

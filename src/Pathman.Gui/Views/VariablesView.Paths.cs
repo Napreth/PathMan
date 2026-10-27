@@ -77,14 +77,14 @@ public partial class VariablesView
             foreach(var scope in mutations.GroupBy(item=>item.Scope).OrderBy(group=>group.Key==VariableScope.Machine ? 0 : 1))
             {
                 await EnvironmentEditHost.ApplyBatchAsync(scope.ToArray(),session.Preconditions(scope.Key),store,layout.DataDirectory);
-                session.Accept(scope.Key); applied.Add(scope.Key==VariableScope.Machine ? "系统变量" : "用户变量");
+                session.Accept(scope.Key); applied.Add(scope.Key==VariableScope.Machine ? L.Get("系统变量") : L.Get("用户变量"));
             }
-            succeeded=true; StatusText.Text="已保存。";
+            succeeded=true; StatusText.Text=L.Get("已保存。");
         }
         catch(Exception error) when(Expected(error) || error is OperationCanceledException)
         {
             allVariables=session.Originals;
-            StatusText.Text=(applied.Count>0 ? $"已保存{string.Join("、",applied)}；其余更改仍在编辑区。" : "未保存。")+error.Message;
+            StatusText.Text=(applied.Count>0 ? L.Format("已保存{0}；其余更改仍在编辑区。",string.Join("、",applied)) : L.Get("未保存。"))+error.Message;
             SnapshotChanged?.Invoke(this,EventArgs.Empty);
         }
         finally {busy=false; IsEnabled=true; SetDirty();}

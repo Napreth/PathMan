@@ -45,9 +45,9 @@ public partial class VersionTargetDialog : Window
         selected=e.NewValue as VersionTargetNode;updating=false;
         Target=e.NewValue is VersionTargetNode {Enabled:true,Variable:{} variable} ? variable : null;
         ChooseTargetButton.IsEnabled=Target is not null;
-        SelectedTargetText.Text=Target is null ? "" : $"{Target.Name} · {(Target.Scope==VariableScope.User ? "用户" : "系统")}";
+        SelectedTargetText.Text=Target is null ? "" : $"{Target.Name} · {(Target.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统"))}";
         TargetWarning.Visibility=Target is not null && VersionTargetPolicy.IsBuiltIn(Target.Name) ? Visibility.Visible : Visibility.Collapsed;
-        TargetWarningText.Text="这是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。";
+        TargetWarningText.Text=L.Get("这是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。");
     }
     private void DoubleClickTarget(object sender,MouseButtonEventArgs e)
     {if(Target is not null && ItemsControl.ContainerFromElement((TreeView)sender,e.OriginalSource as DependencyObject) is TreeViewItem) ChooseTarget(sender,e);}

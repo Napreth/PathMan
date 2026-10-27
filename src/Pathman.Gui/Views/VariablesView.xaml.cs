@@ -43,7 +43,7 @@ public partial class VariablesView : UserControl
     }
     private Window OwnerWindow => Window.GetWindow(this);
     private static bool Expected(Exception error) => error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or System.Text.Json.JsonException or InvalidOperationException;
-    private void Error(Exception error) { StatusText.Text=error.Message; MessageBox.Show(OwnerWindow,error.Message,"操作未完成",MessageBoxButton.OK,MessageBoxImage.Error); }
+    private void Error(Exception error) { StatusText.Text=error.Message; MessageBox.Show(OwnerWindow,error.Message,L.Get("操作未完成"),MessageBoxButton.OK,MessageBoxImage.Error); }
     private static Dictionary<string,string> RuntimeValues() => Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
         .Where(item => item.Key is string && item.Value is string).ToDictionary(item => (string)item.Key,item => (string)item.Value!,StringComparer.OrdinalIgnoreCase);
     public async Task ReloadAsync(bool external = false)
@@ -86,7 +86,7 @@ public partial class VariablesView : UserControl
         if (activeEditor?.IsEditing == true) { _ = activeEditor.CommitAsync(); return false; }
         dirty=editingSession?.HasChanges==true;
         if (!dirty) return true;
-        if(new ConfirmDialog(OwnerWindow,"未保存的更改","有未保存的更改，是否放弃？","放弃").ShowDialog()!=true) return false;
+        if(new ConfirmDialog(OwnerWindow,L.Get("未保存的更改"),L.Get("有未保存的更改，是否放弃？"),L.Get("放弃")).ShowDialog()!=true) return false;
         ShowSelection(selected); return true;
     }
     public async Task<bool> ConfirmLeaveAsync()
@@ -117,7 +117,7 @@ public partial class VariablesView : UserControl
         if (selected!=node && selected is not null) selected.IsSelected=false;
         selected=node; if(node is not null) node.IsSelected=true;
         MarkSingleNode(node);
-        VariableTitle.Text=node?.Title ?? "环境变量";
+        VariableTitle.Text=node?.Title ?? L.Get("环境变量");
         var variable=node?.Variable is {} original ? allVariables.FirstOrDefault(item=>item.Scope==original.Scope && item.Name==original.Name) ?? original : null;
         var restoreTargets=editingSession is {} previous && variable is not null && previous.Root.Scope==variable.Scope && previous.Root.Name.Equals(variable.Name,StringComparison.OrdinalIgnoreCase)
             ? entries.Where(entry=>entry.IsExpanded && entry.Row?.TargetScope is not null).Select(entry=>$"{entry.Row!.TargetScope}:{entry.Row.TargetName}").ToHashSet(StringComparer.OrdinalIgnoreCase) : [];
@@ -157,7 +157,7 @@ public partial class VariablesView : UserControl
     {
         if (SaveButton is null) return;
         SaveButton.IsEnabled=(dirty || HasInlineEditor || editingSession?.IsReviewMode==true) && !busy; RevertButton.IsEnabled=(dirty || editingSession?.IsReviewMode==true) && !busy;
-        System.Windows.Automation.AutomationProperties.SetItemStatus(SaveButton,busy ? "保存中" : dirty || HasInlineEditor || editingSession?.IsReviewMode==true ? "待保存" : "已保存");
+        System.Windows.Automation.AutomationProperties.SetItemStatus(SaveButton,busy ? L.Get("保存中") : dirty || HasInlineEditor || editingSession?.IsReviewMode==true ? L.Get("待保存") : L.Get("已保存"));
         EditEntryButton.IsEnabled=ValuesList.SelectedItems.Count==1 && ValuesList.SelectedItem is EnvironmentEntry {CanEdit:true} && !busy;
         DeleteEntryButton.IsEnabled=ValuesList.SelectedItems.OfType<EnvironmentEntry>().Any(entry=>entry.CanEdit) && !busy;
         BrowseEntryButton.IsEnabled=ValuesList.SelectedItems.Count<=1 && ValuesList.SelectedItem is not EnvironmentEntry {IsGhost:true} && !busy;
@@ -181,14 +181,14 @@ public partial class VariablesView : UserControl
         ScalarValueBox.Visibility=variable is not null && !listMode ? Visibility.Visible : Visibility.Collapsed;
         ListButtons.Visibility=DeleteEntryButton.Visibility=listMode ? Visibility.Visible : Visibility.Collapsed;
         ToggleModeButton.Visibility=variable is not null ? Visibility.Visible : Visibility.Collapsed;
-        ToggleModeButton.Content=listMode ? "文本模式" : "多行模式";
-        ToggleModeButton.ToolTip=listMode ? "直接编辑以分号分隔的原始文本" : "按分号拆分为多行编辑";
+        ToggleModeButton.Content=listMode ? L.Get("文本模式") : L.Get("多行模式");
+        ToggleModeButton.ToolTip=listMode ? L.Get("直接编辑以分号分隔的原始文本") : L.Get("按分号拆分为多行编辑");
     }
     private async Task<bool> ApplyAsync(EnvironmentMutation change)
     {
         if (busy) return false;
         busy=true; IsEnabled=false;
-        try { await EnvironmentEditHost.ApplyAsync(change,store,layout.DataDirectory); StatusText.Text="已保存。"; return true; }
+        try { await EnvironmentEditHost.ApplyAsync(change,store,layout.DataDirectory); StatusText.Text=L.Get("已保存。"); return true; }
         catch(OperationCanceledException error) { StatusText.Text=error.Message; return false; }
         catch(Exception error) when(Expected(error)) { Error(error); return false; }
         finally { busy=false; IsEnabled=true; UpdateActions(); }
@@ -201,10 +201,10 @@ public partial class VariablesView : UserControl
     private async void RevertValue(object sender,RoutedEventArgs e) {dirty=false; await ReloadAsync();}
     private string? Prompt(string title,string initial="",bool multiline=false,Func<string,string?>? validator=null)
     {
-        var dialog=new TextDialog(OwnerWindow,title,multiline ? "文本" : "名称",initial,multiline,validator);
+        var dialog=new TextDialog(OwnerWindow,title,multiline ? L.Get("文本") : L.Get("名称"),initial,multiline,validator);
         return dialog.ShowDialog()==true ? dialog.Value : null;
     }
-    private static string? GroupNameError(string value) => string.IsNullOrWhiteSpace(value) || value.Length>80 ? "分组名不能为空，最长 80 个字符。" : null;
+    private static string? GroupNameError(string value) => string.IsNullOrWhiteSpace(value) || value.Length>80 ? L.Get("分组名不能为空，最长 80 个字符。") : null;
     private async void AddEntry(object sender,RoutedEventArgs e)
     {
         if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
@@ -227,7 +227,7 @@ public partial class VariablesView : UserControl
     }
     private void BrowseEntry(object sender,RoutedEventArgs e)
     {
-        var dialog=new Microsoft.Win32.OpenFolderDialog { Title="选择目录" };
+        var dialog=new Microsoft.Win32.OpenFolderDialog { Title=L.Get("选择目录") };
         if(dialog.ShowDialog(OwnerWindow)!=true) return;
         if(editingSession is not {} session) return;
         if(ValuesList.SelectedItem is EnvironmentEntry entry) {session.Update(entry.ItemId,dialog.FolderName); RefreshPathEntries(entry.ItemId);}
@@ -249,7 +249,7 @@ public partial class VariablesView : UserControl
     private void CopyValue(object sender,RoutedEventArgs e)
     {
         var value=listMode && ValuesList.SelectedItems.Count>0 ? string.Join(Environment.NewLine,ValuesList.SelectedItems.OfType<EnvironmentEntry>().OrderBy(entries.IndexOf).Select(entry=>entry.Value)) : CurrentValue;
-        try { Clipboard.SetDataObject(value,true); StatusText.Text="已复制。"; } catch(ExternalException) { StatusText.Text="剪贴板暂时不可用。"; }
+        try { Clipboard.SetDataObject(value,true); StatusText.Text=L.Get("已复制。"); } catch(ExternalException) { StatusText.Text=L.Get("剪贴板暂时不可用。"); }
     }
     private async void ScopeActionRequested(object? sender, ScopeActionEventArgs e)
     {
@@ -263,7 +263,7 @@ public partial class VariablesView : UserControl
     private async Task NewGroup(VariableScope scope)
     {
         if(!await ConfirmLeaveAsync()) return;
-        var name=Prompt("新建分组",validator:GroupNameError); if(name is null) return;
+        var name=Prompt(L.Get("新建分组"),validator:GroupNameError); if(name is null) return;
         var group=new VariableGroupDefinition { Name=name,Scope=scope };
         try { store.Update(state=>state.Groups.Add(group)); preferredKey=$"group:{scope}:{group.Id}"; dirty=false; await ReloadAsync(); }
         catch(Exception error) when(Expected(error)) { Error(error); }
@@ -294,7 +294,7 @@ public partial class VariablesView : UserControl
     {
         if (sender is not EditableRow { DataContext: EnvironmentEntry entry } || selected?.Variable is null) return;
         if (e.Value.Contains(';') || e.Value.Contains('\0') || e.Value.Contains('\r') || e.Value.Contains('\n'))
-        { e.Completion=Task.FromResult<string?>("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。"); return; }
+        { e.Completion=Task.FromResult<string?>(L.Get("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。")); return; }
         if(editingSession is not {} session) return;
         session.Update(entry.ItemId,e.Value,e.WasChanged); RefreshPathEntries(entry.ItemId); SetDirty();
         Dispatcher.BeginInvoke(()=>ValuesList.Focus(),DispatcherPriority.Input);
@@ -325,7 +325,7 @@ public partial class VariablesView : UserControl
     }
     private async Task<string?> RenameNode(EnvironmentTreeNode node, string name)
     {
-        if(busy) return "请稍后重试。";
+        if(busy) return L.Get("请稍后重试。");
         if(name==node.Title) return null;
         if(node.IsGroup && GroupNameError(name) is {} groupError) return groupError;
         try
@@ -362,8 +362,8 @@ public partial class VariablesView : UserControl
     private async Task DeleteNode(EnvironmentTreeNode node)
     {
         if(busy || !node.CanDelete || !await ConfirmLeaveAsync()) return;
-        var message=node.IsGroup ? $"删除分组“{node.Title}”？组内环境变量将移到默认分组。" : $"删除环境变量“{node.Title}”？";
-        if(new ConfirmDialog(OwnerWindow,"删除",message,"删除").ShowDialog()!=true) return;
+        var message=node.IsGroup ? L.Format("删除分组“{0}”？组内环境变量将移到默认分组。",node.Title) : L.Format("删除环境变量“{0}”？",node.Title);
+        if(new ConfirmDialog(OwnerWindow,L.Get("删除"),message,L.Get("删除")).ShowDialog()!=true) return;
         try
         {
             if(node.IsGroup) store.Update(state=>

@@ -13,7 +13,7 @@ public partial class VersionsView
     private static string VersionConfig(EnvironmentWorkspace state)=>JsonSerializer.Serialize(state.VersionProjects,EnvironmentWorkspaceStore.JsonOptions);
     private Task RestoreVersionConfig(string expected,string value)=>Task.Run(()=>store.Update(state=>
     {
-        if(VersionConfig(state)!=expected) throw new InvalidOperationException("版本配置已被其他程序修改，无法撤销或重做。请重新载入后操作。");
+        if(VersionConfig(state)!=expected) throw new InvalidOperationException(L.Get("版本配置已被其他程序修改，无法撤销或重做。请重新载入后操作。"));
         state.VersionProjects=JsonSerializer.Deserialize<List<VersionProject>>(value,EnvironmentWorkspaceStore.JsonOptions)!;
     }));
     private async void VersionKeyDown(object sender,KeyEventArgs e)
@@ -53,7 +53,7 @@ public partial class VersionsView
             e.Handled=true;
             if(!left) CopyVersion(this,new());
             else try {Clipboard.SetDataObject(string.Join(Environment.NewLine,ProjectsList.SelectedItems.OfType<ProjectRow>().OrderBy(projects.IndexOf).Select(row=>$"{row.Name}\t{row.BindingText}")),true);}
-                catch(System.Runtime.InteropServices.ExternalException) {VersionStatus.Text="剪贴板暂时不可用。";}
+                catch(System.Runtime.InteropServices.ExternalException) {VersionStatus.Text=L.Get("剪贴板暂时不可用。");}
         }
         else if(EditingKeys.Control && e.Key==Key.S) {e.Handled=true;await CommitActive();}
     }

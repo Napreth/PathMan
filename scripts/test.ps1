@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$PublishDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/publish/win-x64'),[string]$CoreAssembly = (Join-Path (Split-Path -Parent $PSScriptRoot) 'src/Pathman.Core/bin/Release/net10.0-windows/Pathman.Core.dll'))
+param([ValidateSet('x86','x64','arm64')][string]$Architecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant(),[string]$PublishDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/publish/win-x64'),[string]$CoreAssembly = (Join-Path (Split-Path -Parent $PSScriptRoot) 'src/Pathman.Core/bin/Release/net10.0-windows/Pathman.Core.dll'))
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $testRoot = Join-Path $projectRoot ('artifacts/tests/' + [guid]::NewGuid().ToString('N'))
@@ -28,7 +28,13 @@ function Invoke-Program([string]$Executable, [string[]]$Arguments, [string]$Inpu
     # Use the SDK's runtime for isolated framework-dependent tests, without modifying system registration.
     $sdkRuntime = Split-Path -Parent (Get-Command dotnet).Source
     $start.Environment['DOTNET_ROOT'] = $sdkRuntime
-    $start.Environment['DOTNET_ROOT_X64'] = $sdkRuntime
+    $hostArchitecture=[Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToUpperInvariant()
+    $start.Environment['DOTNET_ROOT_'+$hostArchitecture] = $sdkRuntime
+    if($Architecture -eq 'x86' -and $hostArchitecture -ne 'X86') {
+        $x86Root=[Environment]::GetEnvironmentVariable('DOTNET_ROOT_X86')
+        if(!$x86Root){$x86Root=Join-Path ${env:ProgramFiles(x86)} 'dotnet'}
+        $start.Environment['DOTNET_ROOT_X86']=$x86Root
+    }
     foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
     $process = [Diagnostics.Process]::Start($start)
     try {

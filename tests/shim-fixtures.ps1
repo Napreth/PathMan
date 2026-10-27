@@ -16,6 +16,7 @@ function New-TestShim([string]$Installation,[string]$DataDirectory,[string]$Name
 }
 function Remove-TestShim([string]$DataDirectory,[string]$Name) {
  if([IO.Path]::GetFileName($Name) -ne $Name -or $Name -in '.','..'){throw 'Invalid fixture name'}
+  if(!(Test-Path -LiteralPath (Join-Path $DataDirectory 'shims'))){return}
  [IO.File]::Delete((Join-Path $DataDirectory ('shims\'+$Name+'.exe')));[IO.File]::Delete((Join-Path $DataDirectory ('shims\'+$Name+'.shim')))
 }
 function Test-BackgroundEventName([string]$Installation,[string]$Event) {

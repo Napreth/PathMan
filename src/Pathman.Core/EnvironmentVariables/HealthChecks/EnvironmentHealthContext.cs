@@ -31,6 +31,6 @@ public sealed class EnvironmentHealthContext
     public IEnumerable<EnvironmentHealthLocation> ReferenceLocations(EnvironmentVariableInfo variable,string name)=>variable.Entries
         .Select((value,index)=>(value,index)).Where(item=>EnvironmentPathResolver.ReferenceNames(item.value).Contains(name,StringComparer.OrdinalIgnoreCase)).Select(item=>Location(variable,item.index));
     public EnvironmentHealthIssue Issue(EnvironmentVariableInfo variable,EnvironmentIssueKind kind,string message,string suggestion,
-        IEnumerable<EnvironmentHealthLocation>? detailLocations=null)=>new(kind,variable.Scope,variable.Name,message)
-    {Suggestion=suggestion,Sources=SourcesFor(variable),DetailLocations=(detailLocations ?? variable.Entries.Select((_,index)=>Location(variable,index))).ToArray()};
+        IEnumerable<EnvironmentHealthLocation>? detailLocations=null,string? identityMessage=null)=>new(kind,variable.Scope,variable.Name,message)
+    {IdentityMessage=identityMessage ?? (kind switch {EnvironmentIssueKind.RegistryType=>$"含引用的值当前为 {(variable.Kind==Microsoft.Win32.RegistryValueKind.String ? "REG_SZ" : variable.Kind.ToString())}，不会按可展开字符串处理。",EnvironmentIssueKind.ExpansionLimit=>"引用展开超过安全限制。",_=>message}),Suggestion=suggestion,Sources=SourcesFor(variable),DetailLocations=(detailLocations ?? variable.Entries.Select((_,index)=>Location(variable,index))).ToArray()};
 }

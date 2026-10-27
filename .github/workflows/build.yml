@@ -1,0 +1,92 @@
+name: Windows build and acceptance
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Windows ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            runner: windows-2025
+          - arch: x64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-vs2026-arm
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      PATHMAN_ARCH: ${{ matrix.arch }}
+      PATHMAN_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Bootstrap PowerShell 7.6
+        run: ./scripts/bootstrap-ci.ps1
+      - name: Set up .NET 10
+        if: ${{ !env.ACT }}
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+          architecture: ${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}
+      - name: Prepare build tools
+        run: |
+          ./scripts/prepare-ci.ps1
+          . ./scripts/version.ps1
+          $version = Get-BuildVersion $env:PATHMAN_VERSION
+          "PATHMAN_VERSION=$($version.Version)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          if ($env:PATHMAN_ARCH -eq 'arm64' -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'Arm64') { throw 'ARM64 validation requires an ARM64 runner.' }
+      - name: Install the target Desktop Runtime
+        run: ./scripts/prepare-runtime.ps1 -Architecture $env:PATHMAN_ARCH
+      - name: Test build and release metadata
+        run: ./tests/release-metadata.ps1
+      - name: Build baseline installers
+        if: ${{ !env.ACT }}
+        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -Version '0.0.0'
+      - name: Build, run and package
+        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -Version $env:PATHMAN_VERSION -Test
+      - name: Accept final installers
+        if: ${{ !env.ACT }}
+        run: ./tests/installer-acceptance.ps1 -Architecture $env:PATHMAN_ARCH -Version $env:PATHMAN_VERSION
+      - name: Verify final packages
+        run: |
+          foreach ($suffix in '', '-SelfContained') {
+            $file = "artifacts/setup/PathMan-$env:PATHMAN_VERSION-$env:PATHMAN_ARCH$suffix.exe"
+            $manifest = Get-Content ($file + '.json') -Raw | ConvertFrom-Json
+            if ((Get-FileHash $file).Hash -ne $manifest.SHA256) { throw 'Package checksum mismatch.' }
+          }
+      - name: Upload final installers
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: PathMan-${{ matrix.arch }}
+          path: |
+            artifacts/setup/PathMan-${{ env.PATHMAN_VERSION }}-${{ matrix.arch }}.exe
+            artifacts/setup/PathMan-${{ env.PATHMAN_VERSION }}-${{ matrix.arch }}.exe.json
+            artifacts/setup/PathMan-${{ env.PATHMAN_VERSION }}-${{ matrix.arch }}-SelfContained.exe
+            artifacts/setup/PathMan-${{ env.PATHMAN_VERSION }}-${{ matrix.arch }}-SelfContained.exe.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload acceptance results
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: acceptance-${{ matrix.arch }}
+          path: artifacts/installer-acceptance/**/results.json
+          if-no-files-found: ignore
+          retention-days: 14

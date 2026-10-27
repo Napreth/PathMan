@@ -16,13 +16,13 @@ public partial class VariablesView
         {
             var reference = entry.References[0];
             if (reference.Scope is { } scope) await OpenVariable(scope, reference.Name);
-            else StatusText.Text=$"当前变量列表中没有 {reference.Name}。";
+            else StatusText.Text=L.Format("当前变量列表中没有 {0}。",reference.Name);
             return;
         }
         var menu = new ContextMenu { PlacementTarget=row, Placement=PlacementMode.Bottom };
         foreach (var reference in entry.References)
         {
-            var label=reference.Scope is { } scope ? $"{(scope==VariableScope.User ? "用户" : "系统")} · {reference.Name}" : $"{reference.Name}（未列出）";
+            var label=reference.Scope is { } scope ? $"{(scope==VariableScope.User ? L.Get("用户") : L.Get("系统"))} · {reference.Name}" : L.Format("{0}（未列出）",reference.Name);
             var item = new MenuItem { Header=new TextBlock { Text=label }, IsEnabled=reference.Scope is not null };
             System.Windows.Automation.AutomationProperties.SetName(item,label);
             item.Click += async (_, _) => await OpenVariable(reference.Scope!.Value, reference.Name);
@@ -46,7 +46,7 @@ public partial class VariablesView
         var groups=scope==VariableScope.User ? userGroups : systemGroups;
         var group=groups.FirstOrDefault(group=>group.Children.Any(node=>node.Title.Equals(name,StringComparison.OrdinalIgnoreCase)));
         var node=group?.Children.FirstOrDefault(node=>node.Title.Equals(name,StringComparison.OrdinalIgnoreCase));
-        if (node is null) { StatusText.Text=$"找不到变量 {name}，请刷新后重试。"; return false; }
+        if (node is null) { StatusText.Text=L.Format("找不到变量 {0}，请刷新后重试。",name); return false; }
         EditorPanel.Visibility=Visibility.Visible; CleanupPanel.Visibility=Visibility.Collapsed;
         group!.IsExpanded=true; ShowSelection(node);
         var tree=scope==VariableScope.User ? UserVariablesTree : SystemVariablesTree;

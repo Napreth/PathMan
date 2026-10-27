@@ -1,4 +1,4 @@
-<UserControl x:Class="Pathman.Gui.Controls.EditableRow"
+<UserControl xmlns:loc="clr-namespace:Pathman.Gui.Controls" x:Class="Pathman.Gui.Controls.EditableRow"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pathman.Gui.Controls"
@@ -14,14 +14,14 @@
                 <controls:ReferenceText x:Name="DetailLabel" Grid.Column="1" Text="{Binding Detail, ElementName=Root}" Margin="12,0,0,0" Opacity=".65" VerticalAlignment="Center" ToolTip="{Binding Detail, ElementName=Root}"/>
             </Grid>
             <controls:ReferenceTextBox x:Name="Input" Visibility="Collapsed" Padding="2,0" MinHeight="0" Height="23" FontSize="13"
-                     VerticalContentAlignment="Center" BorderThickness="1" AutomationProperties.Name="行内编辑"
+                     VerticalContentAlignment="Center" BorderThickness="1" AutomationProperties.Name="{loc:Translate '行内编辑'}"
                      PreviewKeyDown="InputKeyDown" LostKeyboardFocus="InputLostFocus"/>
         </Grid>
         <StackPanel x:Name="Actions" Grid.Column="1" Orientation="Horizontal">
-            <Button x:Name="PinButton" Content="&#xE718;" ToolTip="置顶" AutomationProperties.Name="置顶" Click="Pin"/>
-            <Button x:Name="EditButton" Content="&#xE70F;" ToolTip="重命名" AutomationProperties.Name="编辑" Click="Edit"/>
-            <Button x:Name="DeleteButton" Content="&#xE74D;" ToolTip="删除" AutomationProperties.Name="删除" Click="Delete" IsEnabled="{Binding CanDelete, ElementName=Root}"/>
-            <Button x:Name="JumpButton" Content="&#xE8A7;" Visibility="Collapsed" ToolTip="{Binding JumpToolTip, ElementName=Root}" AutomationProperties.Name="转到引用变量" Click="Jump"/>
+            <Button x:Name="PinButton" Content="&#xE718;" ToolTip="{loc:Translate '置顶'}" AutomationProperties.Name="{loc:Translate '置顶'}" Click="Pin"/>
+            <Button x:Name="EditButton" Content="&#xE70F;" ToolTip="{loc:Translate '重命名'}" AutomationProperties.Name="{loc:Translate '编辑'}" Click="Edit"/>
+            <Button x:Name="DeleteButton" Content="&#xE74D;" ToolTip="{loc:Translate '删除'}" AutomationProperties.Name="{loc:Translate '删除'}" Click="Delete" IsEnabled="{Binding CanDelete, ElementName=Root}"/>
+            <Button x:Name="JumpButton" Content="&#xE8A7;" Visibility="Collapsed" ToolTip="{Binding JumpToolTip, ElementName=Root}" AutomationProperties.Name="{loc:Translate '转到引用变量'}" Click="Jump"/>
         </StackPanel>
     </Grid>
     <UserControl.Resources>

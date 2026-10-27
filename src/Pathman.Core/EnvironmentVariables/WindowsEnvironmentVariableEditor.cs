@@ -14,8 +14,8 @@ public static class WindowsEnvironmentVariableEditor
     public static void ApplyMachineRegistry(IReadOnlyList<EnvironmentMutation> mutations,IReadOnlyList<VariableSnapshot> preconditions)
     {
         if(mutations.Count is 0 or >1024 || mutations.Any(item=>item.Scope!=VariableScope.Machine) || preconditions.Any(item=>item.Scope!=VariableScope.Machine))
-            throw new ArgumentException("管理员操作仅支持系统环境变量。");
-        using var key=Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",true) ?? throw new IOException("找不到系统环境变量注册表项。");
+            throw new ArgumentException(L.Get("管理员操作仅支持系统环境变量。"));
+        using var key=Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",true) ?? throw new IOException(L.Get("找不到系统环境变量注册表项。"));
         if(mutations.Count==1 && preconditions.Count==0) ApplyKey(key,mutations[0]);
         else ApplyBatchKeys(new Dictionary<VariableScope,RegistryKey>{{VariableScope.Machine,key}},mutations,preconditions);
         Broadcast();
@@ -25,7 +25,7 @@ public static class WindowsEnvironmentVariableEditor
     public static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 255 || name.IndexOfAny(['=', '\0', '\r', '\n']) >= 0)
-            throw new ArgumentException("变量名不能为空，最长 255 个字符，不能包含等号、空字符或换行。");
+            throw new ArgumentException(L.Get("变量名不能为空，最长 255 个字符，不能包含等号、空字符或换行。"));
     }
     public static void Apply(EnvironmentMutation mutation, EnvironmentWorkspaceStore store)
     {
@@ -34,7 +34,7 @@ public static class WindowsEnvironmentVariableEditor
         {
             using var key = mutation.Scope == VariableScope.User ? Registry.CurrentUser.CreateSubKey("Environment", writable: true) :
                 Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", writable: true)
-                    ?? throw new IOException("找不到系统环境变量注册表项。");
+                    ?? throw new IOException(L.Get("找不到系统环境变量注册表项。"));
             ApplyKey(key, mutation);
             RecordOwnChange(state, mutation);
         });
@@ -45,7 +45,7 @@ public static class WindowsEnvironmentVariableEditor
         if (mutations.Count == 0) return;
         var scope = mutations[0].Scope;
         if (scope is not (VariableScope.User or VariableScope.Machine) || mutations.Any(item => item.Scope != scope || item.Action is not ("create" or "set")))
-            throw new ArgumentException("批量保存仅支持同一作用域的创建和修改。");
+            throw new ArgumentException(L.Get("批量保存仅支持同一作用域的创建和修改。"));
         var keys = new Dictionary<VariableScope, RegistryKey>();
         Action? rollback = null;
         try
@@ -56,7 +56,7 @@ public static class WindowsEnvironmentVariableEditor
                 keys[requiredScope] = requiredScope == VariableScope.User
                     ? Registry.CurrentUser.CreateSubKey("Environment", writable)
                     : Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", writable)
-                        ?? throw new IOException("找不到环境变量注册表项。");
+                        ?? throw new IOException(L.Get("找不到环境变量注册表项。"));
             }
             store.Update(state =>
             {
@@ -74,17 +74,17 @@ public static class WindowsEnvironmentVariableEditor
         IReadOnlyList<EnvironmentMutation> mutations, IReadOnlyList<VariableSnapshot> preconditions)
     {
         if (mutations.Select(item => EnvironmentWorkspace.Key(item.Scope, item.Name)).Distinct(StringComparer.OrdinalIgnoreCase).Count() != mutations.Count)
-            throw new ArgumentException("同一批次不能多次修改一个变量。");
+            throw new ArgumentException(L.Get("同一批次不能多次修改一个变量。"));
         foreach (var guard in preconditions)
         {
             var key = keys[guard.Scope];
             if (key.GetValue(guard.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) is not string value ||
                 value != guard.Value || (int)key.GetValueKind(guard.Name) != guard.Kind)
-                throw new IOException($"{guard.Name} 已被其他程序修改，请重新预览清理结果。");
+                throw new IOException(L.Format("{0} 已被其他程序修改，请重新预览清理结果。",guard.Name));
         }
         foreach (var mutation in mutations)
         {
-            if (mutation.Action is not ("create" or "set")) throw new ArgumentException("不支持此批量操作。");
+            if (mutation.Action is not ("create" or "set")) throw new ArgumentException(L.Get("不支持此批量操作。"));
             ValidateKey(keys[mutation.Scope], mutation);
         }
         var backups = mutations.Select(mutation =>
@@ -124,31 +124,31 @@ public static class WindowsEnvironmentVariableEditor
             case "rename":
                 ValidateName(mutation.NewName ?? "");
                 var conflict = key.GetValueNames().FirstOrDefault(name => name.Equals(mutation.NewName, StringComparison.OrdinalIgnoreCase));
-                if (conflict is not null && !conflict.Equals(existingName, StringComparison.OrdinalIgnoreCase)) throw new IOException("新名称已经存在。");
+                if (conflict is not null && !conflict.Equals(existingName, StringComparison.OrdinalIgnoreCase)) throw new IOException(L.Get("新名称已经存在。"));
                 var originalKind = key.GetValueKind(existingName!);
                 var caseOnly = mutation.Name.Equals(mutation.NewName, StringComparison.OrdinalIgnoreCase);
                 if (caseOnly) break;
                 try { key.SetValue(mutation.NewName!, existing!, originalKind); key.DeleteValue(existingName!); }
                 catch { key.SetValue(existingName!, existing!, originalKind); key.DeleteValue(mutation.NewName!, false); throw; }
                 break;
-            default: throw new ArgumentException("未知的环境变量操作。");
+            default: throw new ArgumentException(L.Get("未知的环境变量操作。"));
         }
     }
     private static void ValidateKey(RegistryKey key, EnvironmentMutation mutation)
     {
         ValidateName(mutation.Name);
-        if (mutation.Value?.Contains('\0') == true || mutation.Value?.Length > 32767) throw new ArgumentException("变量值不能包含空字符，且最长为 32767 个字符。");
+        if (mutation.Value?.Contains('\0') == true || mutation.Value?.Length > 32767) throw new ArgumentException(L.Get("变量值不能包含空字符，且最长为 32767 个字符。"));
         var existingName = key.GetValueNames().FirstOrDefault(name => name.Equals(mutation.Name, StringComparison.OrdinalIgnoreCase));
         var existing = existingName is null ? null : key.GetValue(existingName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
         if (mutation.Action == "create")
         {
-            if (existingName is not null) throw new IOException("该作用域中已存在同名环境变量。");
+            if (existingName is not null) throw new IOException(L.Get("该作用域中已存在同名环境变量。"));
         }
         else
         {
             if (existingName is null || existing is not string text || text != mutation.ExpectedValue ||
                 mutation.ExpectedKind is not null && key.GetValueKind(existingName) != mutation.ExpectedKind)
-                throw new IOException("此变量已被其他程序修改或删除，请刷新后重试。");
+                throw new IOException(L.Get("此变量已被其他程序修改或删除，请刷新后重试。"));
         }
     }
     private static void RecordOwnChange(EnvironmentWorkspace state, EnvironmentMutation mutation)

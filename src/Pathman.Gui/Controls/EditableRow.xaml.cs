@@ -17,7 +17,7 @@ public sealed class InlineEditRegionEventArgs(bool isDetail) : EventArgs {public
 public partial class EditableRow : UserControl
 {
     public static readonly DependencyProperty TextProperty = DependencyProperty.Register(nameof(Text), typeof(string), typeof(EditableRow), new PropertyMetadata(""));
-    public static readonly DependencyProperty EmptyPlaceholderProperty=DependencyProperty.Register(nameof(EmptyPlaceholder),typeof(string),typeof(EditableRow),new PropertyMetadata("（空条目）"));
+    public static readonly DependencyProperty EmptyPlaceholderProperty=DependencyProperty.Register(nameof(EmptyPlaceholder),typeof(string),typeof(EditableRow),new PropertyMetadata(L.Get("（空条目）")));
     public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(nameof(Detail), typeof(string), typeof(EditableRow), new PropertyMetadata("", UpdateDetail));
     public static readonly DependencyProperty NameWidthProperty=DependencyProperty.Register(nameof(NameWidth),typeof(double),typeof(EditableRow),new PropertyMetadata(double.NaN,UpdateDetail));
     public static readonly DependencyProperty CanEditProperty=DependencyProperty.Register(nameof(CanEdit),typeof(bool),typeof(EditableRow),new PropertyMetadata(true));
@@ -31,7 +31,7 @@ public partial class EditableRow : UserControl
     public static readonly DependencyProperty ShowEditProperty = DependencyProperty.Register(nameof(ShowEdit), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdateActions));
     public static readonly DependencyProperty ShowDeleteProperty = DependencyProperty.Register(nameof(ShowDelete), typeof(bool), typeof(EditableRow), new PropertyMetadata(true, UpdateActions));
     public static readonly DependencyProperty ShowJumpProperty = DependencyProperty.Register(nameof(ShowJump), typeof(bool), typeof(EditableRow), new PropertyMetadata(false, UpdateActions));
-    public static readonly DependencyProperty JumpToolTipProperty = DependencyProperty.Register(nameof(JumpToolTip), typeof(string), typeof(EditableRow), new PropertyMetadata("转到引用变量"));
+    public static readonly DependencyProperty JumpToolTipProperty = DependencyProperty.Register(nameof(JumpToolTip), typeof(string), typeof(EditableRow), new PropertyMetadata(L.Get("转到引用变量")));
     public string Text { get => (string)GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public string EmptyPlaceholder {get=>(string)GetValue(EmptyPlaceholderProperty);set=>SetValue(EmptyPlaceholderProperty,value);}
     public string Detail { get => (string)GetValue(DetailProperty); set => SetValue(DetailProperty, value); }
@@ -87,8 +87,8 @@ public partial class EditableRow : UserControl
         if (PinButton is null) return;
         PinButton.Visibility = ShowPin ? Visibility.Visible : Visibility.Collapsed;
         PinButton.Content = IsPinned ? "\uE77A" : "\uE718";
-        PinButton.ToolTip = IsPinned ? "取消置顶" : "置顶";
-        System.Windows.Automation.AutomationProperties.SetName(PinButton, IsPinned ? "取消置顶" : "置顶");
+        PinButton.ToolTip = IsPinned ? L.Get("取消置顶") : L.Get("置顶");
+        System.Windows.Automation.AutomationProperties.SetName(PinButton, IsPinned ? L.Get("取消置顶") : L.Get("置顶"));
     }
     public void BeginEdit(bool detail=false)
     {

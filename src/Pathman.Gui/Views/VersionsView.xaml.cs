@@ -25,8 +25,8 @@ public partial class VersionsView : UserControl
         public bool IsDraft {get;set;}
         public bool CanEdit {get;set;}=true;
         public VersionProjectStatus? Status {get;set;}
-        public string ScopeText=>Scope==VariableScope.User ? "用户" : "系统";
-        public string BindingText=>VariableName.Length==0 ? "选择变量" : $"{VariableName}（{ScopeText}）";
+        public string ScopeText=>Scope==VariableScope.User ? L.Get("用户") : L.Get("系统");
+        public string BindingText=>VariableName.Length==0 ? L.Get("选择变量") : $"{VariableName}（{ScopeText}）";
         public event PropertyChangedEventHandler? PropertyChanged;
         public void Refresh()=>PropertyChanged?.Invoke(this,new(""));
     }
@@ -38,7 +38,7 @@ public partial class VersionsView : UserControl
         public bool IsDraft {get;set;}
         public bool Current {get;set;}
         public bool CanEdit {get;set;}=true;
-        public string CurrentLabel=>Current ? "当前" : "";
+        public string CurrentLabel=>Current ? L.Get("当前") : "";
         public event PropertyChangedEventHandler? PropertyChanged;
         public void Refresh()=>PropertyChanged?.Invoke(this,new(""));
     }
@@ -95,11 +95,11 @@ public partial class VersionsView : UserControl
     }
     private void ShowProject(string? selectVersion=null)
     {
-        versions.Clear();var row=Selected;ProjectTitle.Text=string.IsNullOrEmpty(row?.Name) ? "版本" : row.Name;
+        versions.Clear();var row=Selected;ProjectTitle.Text=string.IsNullOrEmpty(row?.Name) ? L.Get("版本") : row.Name;
         if(row?.Status is {} status)
         {
             foreach(var pair in status.Project.Versions) versions.Add(new() {Project=row!,Name=pair.Key,Value=pair.Value,Current=status.CurrentVersions.Contains(pair.Key,StringComparer.OrdinalIgnoreCase)});
-            CurrentValue.Text="当前："+(status.Current is null ? "未定义" : status.Current.Replace("\r\n"," ↵ ").Replace("\n"," ↵ "))+(status.CurrentVersions.Count>0 ? $" ({string.Join(", ",status.CurrentVersions)})" : "");
+            CurrentValue.Text=L.Get("当前：")+(status.Current is null ? L.Get("未定义") : status.Current.Replace("\r\n"," ↵ ").Replace("\n"," ↵ "))+(status.CurrentVersions.Count>0 ? $" ({string.Join(", ",status.CurrentVersions)})" : "");
             CurrentValue.ToolTip=status.Current;
         }
         else CurrentValue.Text="";
@@ -186,7 +186,7 @@ public partial class VersionsView : UserControl
     }
     private async Task<string?> Metadata(Action<EnvironmentWorkspace> change,Action applied)
     {
-        if(busy) return "正在保存，请稍候。";busy=true;UpdateActions();
+        if(busy) return L.Get("正在保存，请稍候。");busy=true;UpdateActions();
         try {
             string before="",after="";
             await Task.Run(()=>store.Update(state=> {before=VersionConfig(state);change(state);after=VersionConfig(state);}));
@@ -211,15 +211,15 @@ public partial class VersionsView : UserControl
     {
         try
         {
-            if(row.IsDraft) return "请先填写项目名称。";
+            if(row.IsDraft) return L.Get("请先填写项目名称。");
             if(variable.Length>0)
             {
                 VersionTargetPolicy.EnsureAllowed(variable,store.Read());
-                if(!EnvironmentMonitor.ReadAll().Any(item=>item.Scope==scope && item.Name.Equals(variable,StringComparison.OrdinalIgnoreCase))) return "该范围内不存在此变量，请浏览选择列出的变量。";
+                if(!EnvironmentMonitor.ReadAll().Any(item=>item.Scope==scope && item.Name.Equals(variable,StringComparison.OrdinalIgnoreCase))) return L.Get("该范围内不存在此变量，请浏览选择列出的变量。");
                 if(VersionTargetPolicy.IsBuiltIn(variable) && (row.VariableName!=variable || row.Scope!=scope))
                 {
                     browsing=true;autoSaveEpoch++;
-                    try {if(new DangerConfirmDialog(Window.GetWindow(this),"选择内置系统变量",$"{variable} 是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。","仍然选择").ShowDialog()!=true) return "已取消选择。";}
+                    try {if(new DangerConfirmDialog(Window.GetWindow(this),L.Get("选择内置系统变量"),L.Format("{0} 是内置系统变量。切换其值可能导致 Windows 或应用无法正常运行。",variable),L.Get("仍然选择")).ShowDialog()!=true) return L.Get("已取消选择。");}
                     finally {browsing=false;}
                 }
             }
@@ -309,7 +309,7 @@ public partial class VersionsView : UserControl
         var editor=activeEditor;browsing=true;autoSaveEpoch++;UpdateActions();
         try
         {
-            var dialog=new OpenFolderDialog {Title="选择版本目录",Multiselect=false};
+            var dialog=new OpenFolderDialog {Title=L.Get("选择版本目录"),Multiselect=false};
             if(dialog.ShowDialog(Window.GetWindow(this))!=true) {editor?.FocusEditor();return;}
             if(editor is {IsEditingDetail:true} && editor.DataContext==row)
             {editor.EditingValue=dialog.FolderName;await editor.CommitAsync();}
@@ -321,8 +321,8 @@ public partial class VersionsView : UserControl
     private async void CopyVersion(object sender,RoutedEventArgs e)
     {
         if(IsBusy || !await CommitActive() || VersionsList.SelectedItems.Count==0) return;
-        try {Clipboard.SetDataObject(string.Join(Environment.NewLine,VersionsList.SelectedItems.OfType<VersionRow>().OrderBy(versions.IndexOf).Select(row=>row.Value)),true);VersionStatus.Text="已复制变量值。";}
-        catch(System.Runtime.InteropServices.ExternalException) {VersionStatus.Text="剪贴板暂时不可用。";}
+        try {Clipboard.SetDataObject(string.Join(Environment.NewLine,VersionsList.SelectedItems.OfType<VersionRow>().OrderBy(versions.IndexOf).Select(row=>row.Value)),true);VersionStatus.Text=L.Get("已复制变量值。");}
+        catch(System.Runtime.InteropServices.ExternalException) {VersionStatus.Text=L.Get("剪贴板暂时不可用。");}
     }
     private async void SwitchVersion(object sender,RoutedEventArgs e)
     {
@@ -332,9 +332,9 @@ public partial class VersionsView : UserControl
         try
         {
             var mutation=await Task.Run(()=>VersionCatalog.PrepareSwitch(store.Read(),project.Name,row.Name,EnvironmentMonitor.ReadAll()));
-            await EnvironmentEditHost.ApplyAsync(mutation,store,layout.DataDirectory);VersionStatus.Text=$"已切换 {project.Name} → {row.Name}。";SnapshotChanged?.Invoke(this,EventArgs.Empty);
+            await EnvironmentEditHost.ApplyAsync(mutation,store,layout.DataDirectory);VersionStatus.Text=L.Format("已切换 {0} → {1}。",project.Name,row.Name);SnapshotChanged?.Invoke(this,EventArgs.Empty);
         }
-        catch(OperationCanceledException) {VersionStatus.Text="已取消切换，原值保留。";}
+        catch(OperationCanceledException) {VersionStatus.Text=L.Get("已取消切换，原值保留。");}
         catch(Exception error) when(Expected(error)) {VersionStatus.Text=error.Message;}
         finally {busy=false;await ReloadAsync();}
     }
