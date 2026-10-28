@@ -8,9 +8,12 @@ namespace Pathman.Gui;
 
 internal static class AppInfo
 {
-    public static string Version {get;}=typeof(App).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(item=>item.Key=="PathMan.ReleaseVersion")?.Value
+    public static string Version {get;}=Metadata("PathMan.VersionName")
         ?? (typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(App).Assembly.GetName().Version!.ToString(3)).Split('+')[0];
+    public static string VersionNumber {get;}=Metadata("PathMan.VersionNumber") ?? typeof(App).Assembly.GetName().Version!.ToString(3);
+    public static string DisplayVersion=>$"{Version} ({VersionNumber})";
+    private static string? Metadata(string key)=>typeof(App).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(item=>item.Key==key)?.Value;
     public static UpdatePackage Package {get;}=new(RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),
         typeof(App).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Any(item=>item.Key=="PathMan.PackageType" && item.Value=="SelfContained"));
     public static PathmanLayout Layout()

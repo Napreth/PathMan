@@ -3,3 +3,4 @@
 artifacts/
 .vs/
 *.user
+.pathman/

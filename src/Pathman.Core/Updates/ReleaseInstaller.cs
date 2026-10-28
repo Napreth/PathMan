@@ -8,9 +8,18 @@ public sealed record UpdatePackage(string Architecture,bool SelfContained)
     public string FileName(string tag)=>$"PathMan-{ReleaseIdentity.Normalize(tag)}-{Architecture.ToLowerInvariant()}{(SelfContained ? "-SelfContained" : "")}.exe";
     public ReleaseAsset? Select(AvailableRelease release)
     {
+        if(release.Manifest is {} manifest)
+        {
+            var package=manifest.Installers.FirstOrDefault(item=>item.Architecture.Equals(Architecture,StringComparison.OrdinalIgnoreCase) && item.SelfContained==SelfContained);
+            if(package is null)return null;
+            var asset=release.Assets.FirstOrDefault(item=>item.Name.Equals(package.FileName,StringComparison.Ordinal));
+            if(asset is null)return null;
+            if(asset.Size!=package.Size)throw new InvalidDataException(L.Get("安装包信息无效。"));
+            return asset with {Digest="sha256:"+package.Sha256};
+        }
         var version=ReleaseIdentity.Normalize(release.Tag);
         if(version.Length==0 || version.IndexOfAny(Path.GetInvalidFileNameChars())>=0) return null;
-        return release.Assets.FirstOrDefault(asset=>string.Equals(asset.Name,FileName(release.Tag),StringComparison.OrdinalIgnoreCase));
+        return release.Assets.FirstOrDefault(asset=>string.Equals(asset.Name,FileName(version),StringComparison.OrdinalIgnoreCase));
     }
 }
 

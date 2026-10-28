@@ -154,6 +154,7 @@ public sealed class ApplicationPreferences
     public string Language {get;set;}="system";
     public string Theme {get;set;}="system";
     public bool AutoCheckUpdates {get;set;}=true;
+    public bool ReceivePrereleaseUpdates {get;set;}
 }
 
 public sealed class EnvironmentWorkspaceStore

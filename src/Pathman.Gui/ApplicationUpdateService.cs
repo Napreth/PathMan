@@ -15,8 +15,10 @@ public sealed class ApplicationUpdateService : IDisposable
     private AvailableRelease? latest;
     private CancellationTokenSource? request;
     private bool automaticRequest;
-    public AvailableRelease? Available=>latest is {} release && ReleaseIdentity.IsDifferent(release.Tag,AppInfo.Version) ? release : null;
-    public AvailableRelease? Latest=>latest;
+    private bool receivePrerelease;
+    private int generation;
+    public AvailableRelease? Available=>latest is {} release && ReleaseIdentity.IsUpdate(release,AppInfo.Version,AppInfo.VersionNumber,receivePrerelease) ? release : null;
+    public AvailableRelease? Latest=>latest is {} release && (!release.Prerelease && release.Manifest?.Prerelease!=true || receivePrerelease) ? release : null;
     public bool IsChecking=>request is not null;
     private enum CheckState {None,Checking,Complete,Failed}
     private CheckState state;
@@ -24,10 +26,10 @@ public sealed class ApplicationUpdateService : IDisposable
     public bool HasResult=>state==CheckState.Complete;
     public DateTime LastChecked {get;private set;}
     public event EventHandler? Changed;
-    public ApplicationUpdateService(string dataDirectory,Func<AvailableRelease,bool> notify)
+    public ApplicationUpdateService(string dataDirectory,Func<AvailableRelease,bool> notify,bool receivePrerelease=false)
     {
-        this.dataDirectory=dataDirectory;this.notify=notify;store=new(dataDirectory);
-        try {var saved=store.Read();latest=saved.Latest;LastChecked=saved.LastCheckedUtc ?? default;if(saved.LastCheckedUtc is not null) state=CheckState.Complete;}
+        this.dataDirectory=dataDirectory;this.notify=notify;this.receivePrerelease=receivePrerelease;store=new(dataDirectory);
+        try {var saved=store.Read();if(saved.ReceivePrerelease==receivePrerelease){latest=saved.Latest;LastChecked=saved.LastCheckedUtc ?? default;if(saved.LastCheckedUtc is not null) state=CheckState.Complete;}}
         catch(Exception error) when(error is IOException or UnauthorizedAccessException or JsonException) {}
 #if PATHMAN_UPDATE_TEST
         download=new(new UpdateTestDownloadHandler(dataDirectory)) {Timeout=TimeSpan.FromMinutes(10)};
@@ -39,11 +41,13 @@ public sealed class ApplicationUpdateService : IDisposable
     {
         if(request is not null) return;
         request=new();automaticRequest=automatic;state=CheckState.Checking;Changed?.Invoke(this,EventArgs.Empty);
+        var currentGeneration=generation;
         try
         {
-            latest=await GetLatestAsync(request.Token);
+            var result=await GetLatestAsync(request.Token);
             request.Token.ThrowIfCancellationRequested();
-            store.Record(latest,DateTime.UtcNow);
+            latest=result;
+            store.Record(latest,DateTime.UtcNow,receivePrerelease);
             LastChecked=DateTime.UtcNow;state=CheckState.Complete;
             if(automatic && Available is {} release && store.ReserveNotification(release.Tag))
             {
@@ -52,7 +56,7 @@ public sealed class ApplicationUpdateService : IDisposable
             }
         }
         catch(Exception error) when(error is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or JsonException or OperationCanceledException)
-        {LastChecked=DateTime.UtcNow;state=CheckState.Failed;}
+        {if(generation==currentGeneration){LastChecked=DateTime.UtcNow;state=CheckState.Failed;}}
         finally {request.Dispose();request=null;Changed?.Invoke(this,EventArgs.Empty);}
     }
     private Task<AvailableRelease?> GetLatestAsync(CancellationToken cancellationToken)
@@ -60,7 +64,7 @@ public sealed class ApplicationUpdateService : IDisposable
 #if PATHMAN_UPDATE_TEST
         return Task.Run<AvailableRelease?>(()=>UpdateTestReleaseSource.GetLatest(dataDirectory),cancellationToken);
 #else
-        return new GitHubReleaseClient(http).GetLatestAsync(AppInfo.Version,cancellationToken);
+        return new GitHubReleaseClient(http).GetLatestAsync(AppInfo.Version,receivePrerelease,cancellationToken);
 #endif
     }
     public async Task<string?> DownloadAsync(AvailableRelease release,CancellationToken cancellationToken)
@@ -69,5 +73,10 @@ public sealed class ApplicationUpdateService : IDisposable
         return asset is null ? null : await new ReleaseInstaller(download,dataDirectory).DownloadAsync(asset,cancellationToken);
     }
     public void CancelAutomaticCheck() {if(automaticRequest) request?.Cancel();}
+    public void SetReceivePrerelease(bool value)
+    {
+        if(receivePrerelease==value)return;
+        receivePrerelease=value;generation++;request?.Cancel();latest=null;state=CheckState.None;LastChecked=default;Changed?.Invoke(this,EventArgs.Empty);
+    }
     public void Dispose() {request?.Cancel();http.Dispose();download.Dispose();}
 }

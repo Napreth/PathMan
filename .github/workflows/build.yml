@@ -5,6 +5,15 @@ on:
       version:
         type: string
         default: ''
+      version_number:
+        type: string
+        default: ''
+      release_type:
+        type: string
+        default: ''
+      source_ref:
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -30,11 +39,26 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
       PATHMAN_ARCH: ${{ matrix.arch }}
       PATHMAN_VERSION: ${{ inputs.version }}
+      PATHMAN_VERSION_NUMBER: ${{ inputs.version_number }}
+      PATHMAN_RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Check out sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
+      - name: Resolve runtime cache version
+        id: runtime
+        run: ./scripts/prepare-runtime.ps1 -Architecture $env:PATHMAN_ARCH -ResolveOnly
+      - name: Cache verified tool downloads
+        if: ${{ !env.ACT }}
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            artifacts/tools/nsis-3.12.zip
+            artifacts/tools/pwsh-7.6.0.zip
+            artifacts/tools/windowsdesktop-runtime-*.exe
+          key: tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.arch }}-${{ steps.runtime.outputs.version }}-${{ hashFiles('scripts/bootstrap-ci.ps1', 'scripts/prepare-ci.ps1', 'scripts/prepare-runtime.ps1') }}
       - name: Bootstrap PowerShell 7.6
         run: ./scripts/bootstrap-ci.ps1
       - name: Set up .NET 10
@@ -43,22 +67,35 @@ jobs:
         with:
           dotnet-version: '10.0.x'
           architecture: ${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}
+      - name: Cache NuGet packages
+        if: ${{ !env.ACT }}
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ runner.arch }}-${{ matrix.arch }}-net10-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json', 'NuGet.config') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-${{ runner.arch }}-${{ matrix.arch }}-net10-
       - name: Prepare build tools
         run: |
           ./scripts/prepare-ci.ps1
           . ./scripts/version.ps1
-          $version = Get-BuildVersion $env:PATHMAN_VERSION
+          $version = Get-BuildVersion $env:PATHMAN_VERSION $env:PATHMAN_VERSION_NUMBER $env:PATHMAN_RELEASE_TYPE
           "PATHMAN_VERSION=$($version.Version)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PATHMAN_VERSION_NUMBER=$($version.VersionNumber)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "PATHMAN_RELEASE_TYPE=$($version.ReleaseType)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           if ($env:PATHMAN_ARCH -eq 'arm64' -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'Arm64') { throw 'ARM64 validation requires an ARM64 runner.' }
       - name: Install the target Desktop Runtime
         run: ./scripts/prepare-runtime.ps1 -Architecture $env:PATHMAN_ARCH
       - name: Test build and release metadata
-        run: ./tests/release-metadata.ps1
+        run: |
+          ./tests/release-metadata.ps1
+          ./tests/public-build-counter.ps1
+          ./tests/local-build.ps1
       - name: Build baseline installers
         if: ${{ !env.ACT }}
-        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -Version '0.0.0'
+        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -VersionName '0.0.0' -VersionNumber '0.0.0' -ReleaseType official
       - name: Build, run and package
-        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -Version $env:PATHMAN_VERSION -Test
+        run: ./build.ps1 -Arch $env:PATHMAN_ARCH -VersionName $env:PATHMAN_VERSION -VersionNumber $env:PATHMAN_VERSION_NUMBER -ReleaseType $env:PATHMAN_RELEASE_TYPE -Test
       - name: Accept final installers
         if: ${{ !env.ACT }}
         run: ./tests/installer-acceptance.ps1 -Architecture $env:PATHMAN_ARCH -Version $env:PATHMAN_VERSION

@@ -38,7 +38,7 @@ internal static class UpdateToast
             var xml=new XmlDocument();
             xml.LoadXml(new XElement("toast",new XAttribute("activationType","protocol"),new XAttribute("launch",UpdateActivation.Link(release.Tag)),
                 new XElement("visual",new XElement("binding",new XAttribute("template","ToastGeneric"),
-                    new XElement("text",L.Format("PathMan v{0} 已发布！",ReleaseIdentity.Normalize(release.Tag))),new XElement("text",L.Get("点击查看新版本内容"))))).ToString(SaveOptions.DisableFormatting));
+                    new XElement("text",L.Format("PathMan v{0} 已发布！",release.Manifest is {} manifest ? $"{manifest.VersionName} ({manifest.VersionNumber})" : ReleaseIdentity.Normalize(release.Tag))),new XElement("text",L.Get("点击查看新版本内容"))))).ToString(SaveOptions.DisableFormatting));
             var notifier=ToastNotificationManager.CreateToastNotifier(AppId);
             try {if(notifier.Setting!=NotificationSetting.Enabled) return false;}
             // Windows has no per-app notification settings until the first toast is sent.

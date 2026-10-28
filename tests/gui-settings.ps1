@@ -32,7 +32,8 @@ function StartApp{
 }
 try{
  StartApp
- $expected=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $AppDirectory 'PathMan.exe')).ProductVersion.Split('+')[0]
+ $info=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $AppDirectory 'PathMan.exe'))
+ $expected=$info.ProductVersion.Split('+')[0]+' ('+([version]$info.FileVersion).ToString(3)+')'
  Assert ((Id 'AppVersion').Current.Name -eq $expected) 'Sidebar version is read from assembly metadata'
  $nav=(Id 'Navigation').FindAll([Windows.Automation.TreeScope]::Children,[Windows.Automation.Condition]::TrueCondition)
  Assert ($nav.Count -eq 7 -and $nav[$nav.Count-2].Current.Name -eq '设置' -and $nav[$nav.Count-1].Current.Name -eq '关于') 'Settings is immediately above About'
@@ -52,6 +53,8 @@ try{
  Click (Id 'AutoCheckUpdates');WaitFor {(State).preferences.autoCheckUpdates} 'Automatic update option was not saved'
  Click (Id 'AutoCheckUpdates');WaitFor {!((State).preferences.autoCheckUpdates)} 'Automatic update option did not disable'
  Assert (!((State).preferences.autoCheckUpdates)) 'Automatic update preference can be enabled and disabled'
+ Click (Id 'ReceivePrereleaseUpdates');WaitFor {(State).preferences.receivePrereleaseUpdates} 'Prerelease update preference was not saved'
+ Click (Id 'ReceivePrereleaseUpdates');WaitFor {!((State).preferences.receivePrereleaseUpdates)} 'Prerelease update preference did not disable'
  Click (Id 'AdvancedSettingsLink');WaitFor {$null -ne (Id 'AllowBuiltInVersionTargets')} 'Advanced page missing'
  Assert ($null -ne (Find $window 'Allow built-in system variables')) 'Advanced settings are localized and moved into Settings'
  Go 'About';WaitFor {$null -ne (Id 'SourceCodeLink')} 'About page missing'

@@ -9,7 +9,9 @@ if(!$hashes.ContainsKey($arch)){throw 'Unsupported PowerShell host architecture.
 $directory=Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/tools/pwsh-7.6.0'
 $archive=$directory+'.zip'
 New-Item -ItemType Directory -Force -Path $directory|Out-Null
-Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.6.0/PowerShell-7.6.0-win-$arch.zip" -OutFile $archive
+if(!(Test-Path -LiteralPath $archive) -or (Get-FileHash -LiteralPath $archive).Hash -ine $hashes[$arch]){
+    Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.6.0/PowerShell-7.6.0-win-$arch.zip" -OutFile $archive
+}
 if((Get-FileHash -LiteralPath $archive).Hash -ine $hashes[$arch]){throw 'PowerShell archive checksum mismatch.'}
 Expand-Archive -LiteralPath $archive -DestinationPath $directory -Force
 if(!$env:GITHUB_PATH){throw 'Run the remaining steps with the prepared PowerShell executable.'}

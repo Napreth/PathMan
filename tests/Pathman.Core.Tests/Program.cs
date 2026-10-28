@@ -8,6 +8,7 @@ static void RejectMove(Action action,string message) { try { action(); } catch(A
 Pathman.Core.Localization.Text.SetLanguage("zh-CN");
 UpdateAndLocalizationTests.Run(Assert);
 UpdateDeliveryTests.Run(Assert);
+ReleaseIdentityTests.Run(Assert);
 var cases=new (string Name,string Raw,bool List,string[] Entries)[]
 {
     ("Path",@"%SystemRoot%\System32; C:\工具 ;C:\工具;;",true,[@"%SystemRoot%\System32",@" C:\工具 ",@"C:\工具","",""]),

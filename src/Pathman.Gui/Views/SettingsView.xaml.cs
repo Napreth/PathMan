@@ -19,16 +19,17 @@ public partial class SettingsView : UserControl
         LanguageChoice.SelectedValue=state.Preferences.Language is "zh-CN" or "en-US" ? state.Preferences.Language : "system";
         ThemeChoice.SelectedValue=state.Preferences.Theme is "light" or "dark" ? state.Preferences.Theme : "system";
         AutoCheckUpdates.IsChecked=state.Preferences.AutoCheckUpdates;
+        ReceivePrereleaseUpdates.IsChecked=state.Preferences.ReceivePrereleaseUpdates;
         AllowBuiltInVersionTargets.IsChecked=state.AllowBuiltInVersionTargets;
         BuiltInWarning.Visibility=state.AllowBuiltInVersionTargets ? Visibility.Visible : Visibility.Collapsed;
         updating=false;
     }
     private void ChangePreferences(object sender,RoutedEventArgs e)
     {
-        if(updating || LanguageChoice?.SelectedValue is not string language || ThemeChoice?.SelectedValue is not string theme || AutoCheckUpdates is null) return;
+        if(updating || LanguageChoice?.SelectedValue is not string language || ThemeChoice?.SelectedValue is not string theme || AutoCheckUpdates is null || ReceivePrereleaseUpdates is null) return;
         try
         {
-            store.Update(state=> {state.Preferences.Language=language;state.Preferences.Theme=theme;state.Preferences.AutoCheckUpdates=AutoCheckUpdates.IsChecked==true;});
+            store.Update(state=> {state.Preferences.Language=language;state.Preferences.Theme=theme;state.Preferences.AutoCheckUpdates=AutoCheckUpdates.IsChecked==true;state.Preferences.ReceivePrereleaseUpdates=ReceivePrereleaseUpdates.IsChecked==true;});
             SettingsStatus.Text="";PreferencesChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) {SettingsStatus.Text=error.Message;Update(store.Read());}

@@ -3,11 +3,15 @@ param(
     [ValidateSet('x86', 'x64', 'arm64')][string[]]$Arch = @('x86', 'x64', 'arm64'),
     [ValidateSet('FrameworkDependent', 'SelfContained')][string[]]$PackageType = @('FrameworkDependent', 'SelfContained'),
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
-    [string]$Version = ''
+    [Alias('Version')][string]$VersionName = '',
+    [string]$VersionNumber = '',
+    [ValidateSet('official','beta')][string]$ReleaseType = ''
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'version.ps1')
-$versionInfo=Get-BuildVersion $Version
+. (Join-Path $PSScriptRoot 'local-build.ps1')
+if(!$VersionNumber){$last=Get-LastLocalBuild (Join-Path (Split-Path -Parent $PSScriptRoot) '.pathman/build-state.json');if($last){$VersionNumber=$last.VersionNumber}}
+$versionInfo=Get-BuildVersion $VersionName $VersionNumber $ReleaseType
 $Version=$versionInfo.Version
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $Arch = @($Arch | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
@@ -30,7 +34,7 @@ if ($LASTEXITCODE -ne 0 -or $compilerVersion -notmatch '^v3\.(\d+)' -or [int]$Ma
     throw "NSIS 3.12 or newer is required; found $compilerVersion"
 }
 $nativeBuild = Join-Path $projectRoot 'artifacts/native-setup'
-& cmake -S (Join-Path $projectRoot 'packaging/native') -B $nativeBuild -A Win32 -DBUILD_TESTING=ON
+& cmake -S (Join-Path $projectRoot 'packaging/native') -B $nativeBuild -A Win32 -DBUILD_TESTING=ON "-DPATHMAN_VERSION_NUMBER=$($versionInfo.VersionNumber)" "-DPATHMAN_VERSION_NAME=$Version"
 if ($LASTEXITCODE -ne 0) { throw 'Setup helper CMake configuration failed.' }
 & cmake --build $nativeBuild --config $Configuration
 if ($LASTEXITCODE -ne 0) { throw 'Setup helper build failed.' }
@@ -39,6 +43,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Setup helper PATH tests failed.' }
 $helper = Join-Path $nativeBuild "$Configuration/PathMan.SetupActions.dll"
 $destination = Join-Path $projectRoot 'artifacts/setup'
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
+$installers=@()
 foreach ($cpu in @($Arch | Select-Object -Unique)) {
     foreach ($kind in @($PackageType | Select-Object -Unique)) {
         $publish = Join-Path $projectRoot "artifacts/publish/win-$cpu/$kind"
@@ -48,13 +53,18 @@ foreach ($cpu in @($Arch | Select-Object -Unique)) {
             if (!(Test-Path -LiteralPath (Join-Path $publish $file))) { throw "Missing payload: $publish/$file. Run build.ps1 first." }
         }
         if (@(Get-ChildItem -LiteralPath (Join-Path $publish 'bin') -File).Count -ne 1) { throw 'bin must contain only pathman.exe.' }
+        $identity=Get-Content (Join-Path $publish 'release.json') -Raw|ConvertFrom-Json
+        if($identity.versionName -ne $Version -or $identity.versionNumber -ne $versionInfo.VersionNumber -or $identity.type -ne $versionInfo.Type){throw 'Published payload identity does not match the requested installer identity.'}
         & $compiler /V2 /INPUTCHARSET UTF8 "/DARCH=$cpu" "/DPACKAGE_TYPE=$kind" "/DVERSION=$Version" "/DVERSION_NUMERIC=$($versionInfo.Numeric)" "/DPUBLISH_DIR=$publish" "/DHELPER_DLL=$helper" "/DOUTPUT_FILE=$output" (Join-Path $projectRoot 'packaging/PathMan.nsi')
         if ($LASTEXITCODE -ne 0) { throw "NSIS packaging failed: $cpu / $kind" }
         $payload = @(Get-ChildItem -LiteralPath $publish -File -Recurse | ForEach-Object {
             [ordered]@{ Path = [IO.Path]::GetRelativePath($publish, $_.FullName); SHA256 = (Get-FileHash -LiteralPath $_.FullName).Hash }
         })
-        [ordered]@{ Architecture=$cpu; PackageType=$kind; Version=$Version; Compiler=$compilerVersion; SHA256=(Get-FileHash -LiteralPath $output).Hash; Payload=$payload } |
+        $installer=Get-ReleaseInstaller $output $cpu ($kind -eq 'SelfContained')
+        $installers+=$installer
+        [ordered]@{ Architecture=$cpu; PackageType=$kind; Version=$Version; VersionName=$Version; VersionNumber=$versionInfo.VersionNumber; ReleaseType=$versionInfo.ReleaseType; Compiler=$compilerVersion; SHA256=$installer.sha256; Payload=$payload } |
             ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$output.json" -Encoding utf8
         Write-Host "Packaged $output"
     }
 }
+Write-ReleaseManifest $versionInfo (Join-Path $destination 'release.json') $installers

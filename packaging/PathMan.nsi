@@ -33,7 +33,8 @@ OutFile "${OUTPUT_FILE}"
 VIProductVersion "${VERSION_NUMERIC}.0"
 VIAddVersionKey /LANG=1033 "ProductName" "PathMan"
 VIAddVersionKey /LANG=1033 "FileDescription" "PathMan Setup (${ARCH}, ${PACKAGE_TYPE})"
-VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION}"
+VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION_NUMERIC}.0"
+VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "PathMan contributors"
 SetCompressor /SOLID zlib
 ShowInstDetails nevershow
@@ -417,11 +418,11 @@ Function CheckInstalledVersion
   ${If} $OldDirectory == ""
     Return
   ${EndIf}
-  ReadRegStr $1 SHCTX "${UNINSTALLKEY}" "DisplayVersion"
+  ReadRegStr $1 SHCTX "${UNINSTALLKEY}" "VersionNumber"
   ${If} $1 == ""
     StrCpy $1 "0.0.0"
   ${EndIf}
-  System::Call '$Helper::CompareVersions(w r1, w "${VERSION}") i.r0'
+  System::Call '$Helper::CompareVersions(w r1, w "${VERSION_NUMERIC}") i.r0'
   ${If} $0 == 1
     MessageBox MB_OK|MB_ICONSTOP "$(DowngradeBlocked)" /SD IDOK
     SetErrorLevel 1638
@@ -641,6 +642,7 @@ Section "PathMan" Main
   WriteRegDWORD SHCTX "${APPKEY}" "Language" $LANGUAGE
   WriteRegStr SHCTX "${UNINSTALLKEY}" "DisplayName" "PathMan"
   WriteRegStr SHCTX "${UNINSTALLKEY}" "DisplayVersion" "${VERSION}"
+  WriteRegStr SHCTX "${UNINSTALLKEY}" "VersionNumber" "${VERSION_NUMERIC}"
   WriteRegStr SHCTX "${UNINSTALLKEY}" "Publisher" "PathMan"
   WriteRegStr SHCTX "${UNINSTALLKEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr SHCTX "${UNINSTALLKEY}" "DisplayIcon" "$INSTDIR\PathMan.exe"
@@ -761,6 +763,7 @@ Section "Uninstall"
   ClearErrors
   !insertmacro DeleteInstalledFile "PathMan.exe"
   !insertmacro DeleteInstalledFile "LICENSE"
+  !insertmacro DeleteInstalledFile "release.json"
   !insertmacro DeleteInstalledFile "THIRD-PARTY-NOTICES.txt"
   !insertmacro DeleteInstalledFile "licenses\dotnet-THIRD-PARTY-NOTICES.txt"
   !insertmacro DeleteInstalledFile "bin\pathman.exe"

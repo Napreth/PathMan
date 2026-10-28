@@ -12,7 +12,7 @@ public partial class AboutView : UserControl
     private UpdateDialog? releaseDialog;
     public AboutView(ApplicationUpdateService updates,Func<string,Task<bool>> install)
     {
-        this.updates=updates;this.install=install;InitializeComponent();VersionText.Text=AppInfo.Version;
+        this.updates=updates;this.install=install;InitializeComponent();VersionText.Text=AppInfo.DisplayVersion;
         AppIcon.Source=System.Windows.Media.Imaging.BitmapDecoder.Create(new Uri("pack://application:,,,/Assets/PathMan.ico"),System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,System.Windows.Media.Imaging.BitmapCacheOption.OnLoad).Frames.MaxBy(frame=>frame.PixelWidth);
         updates.Changed+=(_,_)=>Update();L.Current.PropertyChanged+=(_,_)=>Update();Loaded+=(_,_)=>Update();
     }

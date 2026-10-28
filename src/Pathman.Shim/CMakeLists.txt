@@ -1,12 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
-project(Pathman.Shim LANGUAGES CXX)
+project(Pathman.Shim LANGUAGES CXX RC)
 
 if(NOT WIN32)
     message(FATAL_ERROR "PathMan.Shim only supports Windows")
 endif()
 
 
-add_executable(Pathman.Shim main.cpp)
+set(PATHMAN_VERSION_NUMBER "0.0.0" CACHE STRING "Numeric build identity")
+set(PATHMAN_VERSION_NAME "0.0.0" CACHE STRING "Product version name")
+string(REPLACE "." "," PATHMAN_VERSION_TUPLE "${PATHMAN_VERSION_NUMBER}.0")
+set(PATHMAN_BINARY_NAME "PathMan.Shim")
+set(PATHMAN_FILE_TYPE "VFT_APP")
+configure_file(../../packaging/native/version.rc.in version.rc @ONLY)
+add_executable(Pathman.Shim main.cpp "${CMAKE_CURRENT_BINARY_DIR}/version.rc")
 target_link_libraries(Pathman.Shim PRIVATE advapi32 shell32 ole32)
 set_target_properties(Pathman.Shim PROPERTIES
     OUTPUT_NAME "PathMan.Shim"

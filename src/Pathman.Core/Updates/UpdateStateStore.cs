@@ -8,6 +8,7 @@ public sealed class UpdateState
 {
     public AvailableRelease? Latest {get;set;}
     public DateTime? LastCheckedUtc {get;set;}
+    public bool ReceivePrerelease {get;set;}
     public HashSet<string> NotifiedVersions {get;set;}=[];
 }
 
@@ -30,8 +31,8 @@ public sealed class UpdateStateStore
     private UpdateState Load()
     {
         if(!File.Exists(file)) return new();
-        try {var state=JsonSerializer.Deserialize<UpdateState>(File.ReadAllText(file),options) ?? new();state.NotifiedVersions??=[];return state;}
-        catch(JsonException) {return new();}
+        try {var state=JsonSerializer.Deserialize<UpdateState>(File.ReadAllText(file),options) ?? new();state.NotifiedVersions??=[];if(state.Latest?.Manifest is {} manifest)ReleaseManifest.Parse(JsonSerializer.Serialize(manifest,options));return state;}
+        catch(Exception error) when(error is JsonException or InvalidDataException) {return new();}
     }
     private void Save(UpdateState state)
     {
@@ -41,7 +42,7 @@ public sealed class UpdateStateStore
         finally {if(File.Exists(temporary)) File.Delete(temporary);}
     }
     public UpdateState Read()=>Locked(Load);
-    public void Record(AvailableRelease? latest,DateTime checkedUtc)=>Locked(()=> {var state=Load();state.Latest=latest;state.LastCheckedUtc=checkedUtc;Save(state);return true;});
+    public void Record(AvailableRelease? latest,DateTime checkedUtc,bool receivePrerelease=false)=>Locked(()=> {var state=Load();state.Latest=latest;state.LastCheckedUtc=checkedUtc;state.ReceivePrerelease=receivePrerelease;Save(state);return true;});
     public bool ReserveNotification(string tag)=>Locked(()=>
     {
         var state=Load();var version=ReleaseIdentity.Normalize(tag);

@@ -7,6 +7,19 @@
     <Deterministic>true</Deterministic>
     <Company>PathMan</Company>
     <Product>PathMan</Product>
-    <Version>1.0.0-beta.1</Version>
+    <PathManVersionName Condition="'$(PathManVersionName)' == ''">1.0.0-beta.1</PathManVersionName>
+    <PathManVersionX>0</PathManVersionX>
+    <PathManVersionY>0</PathManVersionY>
+    <PathManVersionNumber Condition="'$(PathManVersionNumber)' == ''">$(PathManVersionX).$(PathManVersionY).0</PathManVersionNumber>
+    <PathManReleaseType Condition="'$(PathManReleaseType)' == ''">beta</PathManReleaseType>
+    <Version>$(PathManVersionNumber)</Version>
+    <AssemblyVersion>$(PathManVersionNumber).0</AssemblyVersion>
+    <FileVersion>$(PathManVersionNumber).0</FileVersion>
+    <InformationalVersion>$(PathManVersionName)</InformationalVersion>
   </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <AssemblyMetadata Include="PathMan.VersionName" Value="$(PathManVersionName)" />
+    <AssemblyMetadata Include="PathMan.VersionNumber" Value="$(PathManVersionNumber)" />
+    <AssemblyMetadata Include="PathMan.ReleaseType" Value="$(PathManReleaseType)" />
+  </ItemGroup>
 </Project>

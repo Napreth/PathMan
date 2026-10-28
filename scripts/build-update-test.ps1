@@ -21,7 +21,7 @@ New-Item -ItemType Directory $application -Force|Out-Null
 Get-ChildItem -LiteralPath $published|Copy-Item -Destination $application -Recurse -Force
 $selfContained=($PackageType -eq 'SelfContained').ToString().ToLowerInvariant()
 & dotnet publish (Join-Path $projectRoot 'src/Pathman.Gui/Pathman.Gui.csproj') -c Release -r "win-$Arch" --self-contained $selfContained `
-    --artifacts-path (Join-Path $testRoot 'build') -p:UpdateTestBuild=true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None "-p:Version=$version" -o $application
+    --artifacts-path (Join-Path $testRoot 'build') -p:UpdateTestBuild=true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None "-p:PathManVersionName=$version" -o $application
 if($LASTEXITCODE -ne 0){throw 'Update test publish failed.'}
 Copy-Item -LiteralPath $fixture -Destination (Join-Path $application 'UpdateTestInstaller.exe') -Force
 $releaseDll=Join-Path $projectRoot "src/Pathman.Gui/bin/Release/net10.0-windows10.0.19041.0/win-$Arch/PathMan.dll"

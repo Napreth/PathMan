@@ -1,26 +1,40 @@
 name: Release
 on:
   push:
-    tags: ['*']
+    tags: ['**', '!test/**']
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.ref }}
+  group: pathman-public-builds
   cancel-in-progress: false
 jobs:
   metadata:
     runs-on: windows-2025
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.tag.outputs.version }}
+      version_number: ${{ steps.tag.outputs.version_number }}
+      release_type: ${{ steps.tag.outputs.release_type }}
+      source_ref: ${{ steps.tag.outputs.source_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Read annotated tag
+      - name: Reserve public build identity
         id: tag
         shell: pwsh
-        run: ./scripts/release-metadata.ps1 -Tag $env:GITHUB_REF_NAME
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATHMAN_VARIABLES_TOKEN: ${{ secrets.PATHMAN_VARIABLES_TOKEN }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            ./scripts/public-build.ps1 -Kind Test
+          } else {
+            ./scripts/public-build.ps1 -Kind Release -Tag $env:GITHUB_REF_NAME
+          }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-metadata
@@ -32,6 +46,9 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.metadata.outputs.version }}
+      version_number: ${{ needs.metadata.outputs.version_number }}
+      release_type: ${{ needs.metadata.outputs.release_type }}
+      source_ref: ${{ needs.metadata.outputs.source_ref }}
   publish:
     needs: [metadata, build]
     runs-on: windows-2025
@@ -41,6 +58,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ needs.metadata.outputs.source_ref }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-metadata
@@ -54,4 +73,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/publish-release.ps1
+          PATHMAN_VARIABLES_TOKEN: ${{ secrets.PATHMAN_VARIABLES_TOKEN }}
+        run: |
+          ./scripts/public-build.ps1 -Operation Check
+          ./scripts/publish-release.ps1

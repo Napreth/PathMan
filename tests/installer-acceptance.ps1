@@ -69,11 +69,15 @@ try {
             $hash=(Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash
             Run $installer "/S $scope /D=$directory"
             Assert ((Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash -eq $hash) "$label same-version reinstall retains the verified payload"
-            Run $oldInstaller "/S $scope /D=$directory" 1638
+            $registrationKey=Registration $machine
+            try{$installedNumber=$registrationKey.GetValue('VersionNumber','0.0.0')}finally{$registrationKey.Dispose()}
+            $hive=if($machine){[Microsoft.Win32.RegistryHive]::LocalMachine}else{[Microsoft.Win32.RegistryHive]::CurrentUser}
+            $base=[Microsoft.Win32.RegistryKey]::OpenBaseKey($hive,[Microsoft.Win32.RegistryView]::Registry32)
+            try{$key=$base.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Uninstall\PathMan',$true);try{$key.SetValue('VersionNumber','65535.65535.65535');Run $oldInstaller "/S $scope /D=$directory" 1638}finally{$key.SetValue('VersionNumber',$installedNumber);$key.Dispose()}}finally{$base.Dispose()}
             Assert ((Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash -eq $hash) "$label downgrade is rejected before changing files"
             Run $uninstaller "/S $scope _?=$directory\internal"
             Assert (!(Registered $machine)) "$label uninstall removes registration"
-            foreach($relative in 'PathMan.exe','bin/pathman.exe','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','THIRD-PARTY-NOTICES.txt','licenses/dotnet-THIRD-PARTY-NOTICES.txt') {Assert (!(Test-Path (Join-Path $directory $relative))) "$label uninstall removes $relative"}
+            foreach($relative in 'PathMan.exe','bin/pathman.exe','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','release.json','THIRD-PARTY-NOTICES.txt','licenses/dotnet-THIRD-PARTY-NOTICES.txt') {Assert (!(Test-Path (Join-Path $directory $relative))) "$label uninstall removes $relative"}
             Assert ((PathValue $machine) -ceq $originalPath) "$label uninstall restores the original PATH"
             Assert ((Get-FileHash $data).Hash -eq $configHash) "$label uninstall retains user configuration"
         }finally {

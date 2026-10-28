@@ -1213,5 +1213,6 @@
 <data name="在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。" xml:space="preserve"><value>在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。</value></data>
 <data name="命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。" xml:space="preserve"><value>命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。</value></data>
 <data name="前往版本管理" xml:space="preserve"><value>前往版本管理</value></data>
-  <data name="此功能需要将程序目录下的 bin 目录加入 PATH；启用自动整理时，将通过软件路径变量引用。" xml:space="preserve"><value>此功能需要将程序目录下的 bin 目录加入 PATH；启用自动整理时，将通过软件路径变量引用。</value></data>
+  <data name="此功能将在PATH中添加命令行目录" xml:space="preserve"><value>此功能将在PATH中添加命令行目录</value></data>
+  <data name="接收测试版更新" xml:space="preserve"><value>接收测试版更新</value></data>
 </root>
