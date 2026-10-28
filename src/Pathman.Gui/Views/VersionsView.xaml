@@ -5,9 +5,13 @@
         <Style x:Key="RowIcon" TargetType="Button" BasedOn="{StaticResource SettingsIconButton}"><Setter Property="Width" Value="23"/><Setter Property="Height" Value="22"/><Setter Property="FontSize" Value="12"/><Setter Property="Tag" Value="defer"/></Style>
         <Style x:Key="Action" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}"><Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="Padding" Value="6,5"/><Setter Property="MinHeight" Value="32"/><Setter Property="FontSize" Value="13"/></Style>
     </UserControl.Resources>
-    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TextBlock Text="{loc:Translate '版本管理'}" Style="{StaticResource PageTitle}" Margin="0,0,0,24"/>
-        <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="240"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*" MinWidth="240"/><ColumnDefinition Width="12"/><ColumnDefinition Width="112"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Border Grid.Row="1" Style="{StaticResource Surface}" Padding="16" Margin="0,0,0,20"><CheckBox x:Name="EnableCommandLine" AutomationProperties.Name="{loc:Translate '启用命令行版本切换'}" Style="{StaticResource SettingsToggleSwitch}" Checked="ChangeCommandLine" Unchecked="ChangeCommandLine"><StackPanel>
+            <TextBlock Text="{loc:Translate '启用命令行版本切换'}"/>
+            <TextBlock Text="{loc:Translate '此功能需要将程序目录下的 bin 目录加入 PATH；启用自动整理时，将通过软件路径变量引用。'}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,16,0"/>
+        </StackPanel></CheckBox></Border>
+        <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="240"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*" MinWidth="240"/><ColumnDefinition Width="12"/><ColumnDefinition Width="112"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid Margin="0,0,0,6"><TextBlock Text="{loc:Translate '项目'}" Style="{StaticResource SectionTitle}"/><Button x:Name="NewProjectButton" HorizontalAlignment="Right" Content="&#xE710;" Style="{StaticResource SettingsIconButton}" ToolTip="{loc:Translate '新建项目'}" AutomationProperties.Name="{loc:Translate '新建项目'}" Click="NewProject"/></Grid>
             <TextBlock Grid.Column="2" x:Name="ProjectTitle" Text="{loc:Translate '版本'}" Style="{StaticResource SectionTitle}" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
             <Grid Grid.Row="1" Margin="18,0,39,8" Opacity="0.65"><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions><TextBlock Text="{loc:Translate '名称'}" FontSize="12"/><TextBlock Grid.Column="1" Text="{loc:Translate '变量（范围）'}" FontSize="12"/></Grid>
@@ -35,6 +39,6 @@
             </StackPanel><Button x:Name="SwitchVersionButton" Grid.Row="2" Content="{loc:Translate '切换'}" Style="{StaticResource Action}" Margin="0" Click="SwitchVersion" ToolTip="{loc:Translate '将选中版本写入目标变量'}"/></Grid>
             <TextBlock x:Name="CurrentValue" Grid.Row="3" Grid.Column="2" Margin="0,12,0,0" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
         </Grid>
-        <TextBlock x:Name="VersionStatus" Grid.Row="2" Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <TextBlock x:Name="VersionStatus" Grid.Row="3" Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
     </Grid>
 </UserControl>

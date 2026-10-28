@@ -1,4 +1,4 @@
-﻿Unicode true
+Unicode true
 ManifestDPIAware true
 ManifestSupportedOS all
 !include MUI2.nsh
@@ -46,6 +46,7 @@ Var Elevated
 Var Machine
 Var Helper
 Var UserLocalData
+Var OriginalUserSid
 Var OriginalDesktop
 Var OldDirectory
 Var CommandDirectory
@@ -191,6 +192,9 @@ Function ${Prefix}InitializeSetup
       ReadINIStr $LANGUAGE "$WorkerConfig" "Setup" "Language"
       ReadINIStr $CommandDirectory "$WorkerConfig" "Setup" "Directory"
       ReadINIStr $StartMenuFolder "$WorkerConfig" "Setup" "StartMenuFolder"
+      ReadINIStr $RestartBackground "$WorkerConfig" "Setup" "RestartBackground"
+      ReadINIStr $UserLocalData "$WorkerConfig" "Setup" "UserLocalData"
+      ReadINIStr $OriginalUserSid "$WorkerConfig" "Setup" "OriginalUserSid"
     ${Else}
       SetErrorLevel 1618
       Quit
@@ -212,6 +216,8 @@ Function ${Prefix}WriteWorkerConfiguration
   WriteINIStr "$WorkerConfig" "Setup" "Language" "$LANGUAGE"
   WriteINIStr "$WorkerConfig" "Setup" "Directory" "$INSTDIR"
   WriteINIStr "$WorkerConfig" "Setup" "StartMenuFolder" "$StartMenuFolder"
+  WriteINIStr "$WorkerConfig" "Setup" "RestartBackground" "$RestartBackground"
+  WriteINIStr "$WorkerConfig" "Setup" "UserLocalData" "$UserLocalData"
 FunctionEnd
 !macroend
 !insertmacro SetupInitialization ""
@@ -554,8 +560,15 @@ Function ${Prefix}EnsureApplicationsClosed
 FunctionEnd
 Function ${Prefix}RestoreBackground
   ${If} $RestartBackground == 1
+    ${If} $Elevated != 0
+      ; Hand off one read-only collector launch using setup's existing token.
+      ; The main monitor still runs with the original desktop user's HKCU.
+      System::Call '$Helper::PrepareOriginBroker(w "$INSTDIR", w "$UserLocalData", w "$OriginalUserSid") i.r0'
+    ${EndIf}
+    ${If} $Worker == 0
     ; Explorer uses the desktop user's token even when setup was elevated.
     ExecShell "open" "$WINDIR\explorer.exe" '$\"$INSTDIR\internal\PathMan.Service.exe$\"'
+    ${EndIf}
     StrCpy $RestartBackground 0
   ${EndIf}
 FunctionEnd
@@ -654,6 +667,9 @@ Section "PathMan" Main
     Abort
   ${EndIf}
   InstallUserFinalization:
+  ${If} $Worker == 1
+    Call RestoreBackground
+  ${EndIf}
   ${If} $Worker == 0
     System::Call '$Helper::RefreshShims(w "$INSTDIR", w "$UserLocalData") i.r0'
     ${If} $0 != 0
@@ -674,6 +690,7 @@ FunctionEnd
 
 Function un.onInit
   SetRegView 32
+  StrCpy $UserLocalData "$LOCALAPPDATA"
   StrCpy $OriginalDesktop "$DESKTOP"
   Call un.InitializeSetup
   ; NSIS executes a temporary copy of the uninstaller. Its initial INSTDIR

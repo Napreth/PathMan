@@ -26,5 +26,7 @@ public sealed class Text : INotifyPropertyChanged
         return changed;
     }
     public static string Get(string key)=>resources.GetString(key,selectedCulture) ?? key;
+    internal static bool IsTranslation(string key,string? value)=>value is not null &&
+        (value==key || value==Get(key) || value==resources.GetString(key,CultureInfo.InvariantCulture));
     public static string Format(string key,params object?[] arguments)=>string.Format(CultureInfo.CurrentCulture,Get(key),arguments);
 }

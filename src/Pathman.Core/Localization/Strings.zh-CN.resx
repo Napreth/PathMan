@@ -1207,4 +1207,11 @@
   <data name="更新记录正在使用中，请稍后重试。" xml:space="preserve"><value>更新记录正在使用中，请稍后重试。</value></data>
   <data name="PathMan v{0} 已发布！" xml:space="preserve"><value>PathMan v{0} 已发布！</value></data>
   <data name="点击查看新版本内容" xml:space="preserve"><value>点击查看新版本内容</value></data>
+<data name="启用命令行版本切换" xml:space="preserve"><value>启用命令行版本切换</value></data>
+<data name="软件路径引用" xml:space="preserve"><value>软件路径引用</value></data>
+<data name="已启用自动整理，但 PATH 未引用 SOFTWARE_PATH 或 SOFTWARE数字_PATH。" xml:space="preserve"><value>已启用自动整理，但 PATH 未引用 SOFTWARE_PATH 或 SOFTWARE数字_PATH。</value></data>
+<data name="在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。" xml:space="preserve"><value>在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。</value></data>
+<data name="命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。" xml:space="preserve"><value>命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。</value></data>
+<data name="前往版本管理" xml:space="preserve"><value>前往版本管理</value></data>
+  <data name="此功能需要将程序目录下的 bin 目录加入 PATH；启用自动整理时，将通过软件路径变量引用。" xml:space="preserve"><value>此功能需要将程序目录下的 bin 目录加入 PATH；启用自动整理时，将通过软件路径变量引用。</value></data>
 </root>

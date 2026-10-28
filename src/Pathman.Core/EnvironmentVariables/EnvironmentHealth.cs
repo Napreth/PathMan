@@ -63,9 +63,9 @@ public static partial class EnvironmentHealth
         .Select(type=>(IEnvironmentHealthCheck)Activator.CreateInstance(type)!).OrderBy(check=>check.Order).ThenBy(check=>check.Id,StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<IEnvironmentHealthCheck> DefaultChecks=>Discovered.Value;
     public static EnvironmentHealthReport Analyze(IReadOnlyList<EnvironmentVariableInfo> variables,IReadOnlyDictionary<string,string>? runtime=null,
-        string? shimsDirectory=null,IEnumerable<IEnvironmentHealthCheck>? checks=null)
+        string? shimsDirectory=null,IEnumerable<IEnvironmentHealthCheck>? checks=null,EnvironmentWorkspace? workspace=null)
     {
-        var context=new EnvironmentHealthContext(variables,runtime,shimsDirectory);
+        var context=new EnvironmentHealthContext(variables,runtime,shimsDirectory,workspace);
         var issues=(checks ?? DefaultChecks).SelectMany(check=>check.Check(context).Select(issue=>issue with {
             CheckId=check.Id,Category=string.IsNullOrEmpty(issue.Category) ? check.Title : issue.Category}));
         return new(issues.DistinctBy(issue=>issue.Id).OrderByDescending(issue=>issue.IsError).ThenBy(issue=>issue.Scope)

@@ -66,7 +66,7 @@ foreach ($cpu in $Arch) {
         Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.txt') -Destination $output
         Copy-Item -LiteralPath (Join-Path $projectRoot 'licenses') -Destination $output -Recurse
         $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
-        if ($Test -and ($cpu -eq $hostArch -or $cpu -eq 'x86' -and $hostArch -eq 'x64')) {
+        if ($Test -and ($cpu -eq $hostArch -or ($cpu -eq 'x86' -and $hostArch -eq 'x64'))) {
             & (Join-Path $PSScriptRoot 'test.ps1') -Architecture $cpu -PublishDirectory $output -CoreAssembly (Join-Path $projectRoot "src/Pathman.Core/bin/$Configuration/net10.0-windows/Pathman.Core.dll")
         } elseif ($Test) { Write-Host "Runtime tests for $cpu require a compatible test machine." }
         Write-Host "Published $cpu / $kind to $output"

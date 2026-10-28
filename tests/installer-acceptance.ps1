@@ -46,7 +46,9 @@ try {
             $config|Add-Member -NotePropertyName preferences -NotePropertyValue @{language='en-US';theme='system';autoCheckUpdates=$false} -Force
             $config|ConvertTo-Json -Depth 20|Set-Content -LiteralPath $data -Encoding utf8
             $configHash=(Get-FileHash $data).Hash
+            $pathBeforeUpgrade=PathValue $machine
             Run $installer "/S $scope /D=$directory"
+            Assert ((PathValue $machine) -ceq $pathBeforeUpgrade) "$label installer never registers or migrates the CLI PATH entry"
             $registration=Registered $machine
             Assert ($registration.Version -eq $Version -and $registration.Directory.TrimEnd('\') -eq $directory.TrimEnd('\')) "$label upgrade updates registration and preserves the install directory"
             Assert ((Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash -ne $oldHash) "$label upgrade replaces the older executable"
@@ -54,13 +56,16 @@ try {
             Assert ((MachineType (Join-Path $directory 'PathMan.exe')) -eq $expectedMachine) "$label GUI has the requested PE architecture"
             Assert ((MachineType (Join-Path $directory 'bin/pathman.exe')) -eq $expectedMachine) "$label CLI has the requested PE architecture"
             Run (Join-Path $directory 'bin/pathman.exe') '--help'
-            Run (Join-Path $directory 'bin/pathman.exe') 'list'
+            Run (Join-Path $directory 'bin/pathman.exe') 'list' 1
             $gui=Start-Process (Join-Path $directory 'PathMan.exe') -PassThru
             try {
                 Assert ($gui.WaitForInputIdle(20000) -and !$gui.HasExited) "$label installed GUI starts successfully"
                 Start-Sleep -Milliseconds 700
                 Assert (!$gui.HasExited) "$label GUI stays running after initial page load"
             }finally{if(!$gui.HasExited){$gui.Kill();$gui.WaitForExit()};$gui.Dispose()}
+            # The main window owns opt-in CLI PATH maintenance and its journal.
+            # Subsequent installer operations must preserve that resulting state.
+            $configHash=(Get-FileHash $data).Hash
             $hash=(Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash
             Run $installer "/S $scope /D=$directory"
             Assert ((Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash -eq $hash) "$label same-version reinstall retains the verified payload"

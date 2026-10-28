@@ -44,6 +44,7 @@ public partial class VersionsView : UserControl
     }
     private readonly PathmanLayout layout;
     private readonly EnvironmentWorkspaceStore store;
+    private readonly VariableScope installationScope;
     private readonly ObservableCollection<ProjectRow> projects=[];
     private readonly ObservableCollection<VersionRow> versions=[];
     private bool busy,updating,browsing,refreshPending;
@@ -56,9 +57,9 @@ public partial class VersionsView : UserControl
     public event EventHandler? SnapshotChanged;
     private ProjectRow? Selected=>ProjectsList.SelectedItem as ProjectRow;
     private VersionRow? SelectedVersion=>VersionsList.SelectedItem as VersionRow;
-    public VersionsView(PathmanLayout layout,EnvironmentWorkspaceStore store)
+    public VersionsView(PathmanLayout layout,EnvironmentWorkspaceStore store,VariableScope installationScope=VariableScope.User)
     {
-        this.layout=layout;this.store=store;InitializeComponent();ProjectsList.ItemsSource=projects;VersionsList.ItemsSource=versions;
+        this.layout=layout;this.store=store;this.installationScope=installationScope;updating=true;InitializeComponent();updating=false;ProjectsList.ItemsSource=projects;VersionsList.ItemsSource=versions;
         PreviewKeyDown+=VersionKeyDown;
         Loaded+=async(_,_)=>
         {
@@ -119,8 +120,11 @@ public partial class VersionsView : UserControl
     private void UpdateActions()
     {
         if(NewProjectButton is null) return;
+        var state=store.Read();var previous=updating;updating=true;
+        EnableCommandLine.IsChecked=state.CommandLineVersionSwitchingEnabled;EnableCommandLine.IsEnabled=!IsBusy;
+        updating=previous;
         NewProjectButton.IsEnabled=!IsBusy;AddVersionButton.IsEnabled=ProjectsList.SelectedItems.Count==1 && Selected is {IsDraft:false} && !IsBusy;
-        var allow=Selected is {VariableName.Length:>0} selected && VersionTargetPolicy.Restriction(selected.VariableName,store.Read().AllowBuiltInVersionTargets) is null;
+        var allow=Selected is {VariableName.Length:>0} selected && VersionTargetPolicy.Restriction(selected.VariableName,state.AllowBuiltInVersionTargets) is null;
         foreach(var row in projects) {row.CanEdit=!IsBusy;row.Refresh();}
         foreach(var row in versions) {row.CanEdit=!IsBusy;row.Refresh();}
         var selectedVersion=SelectedVersion;
@@ -134,6 +138,34 @@ public partial class VersionsView : UserControl
         if(activeEditor is {DataContext:VersionRow previous,IsEditing:true} && !await CommitActive())
         {updating=true;VersionsList.SelectedItem=previous;updating=false;}
         UpdateActions();
+    }
+    private async void ChangeCommandLine(object sender,RoutedEventArgs e)
+    {
+        if(updating || IsBusy) return;
+        var enabled=EnableCommandLine.IsChecked==true;
+        if(!await CommitActive()) {UpdateActions();return;}
+        busy=true;UpdateActions();
+        try
+        {
+            await ApplyCommandLinePathAsync(enabled);
+            store.Update(state=>state.CommandLineVersionSwitchingEnabled=enabled);
+            VersionStatus.Text="";SnapshotChanged?.Invoke(this,EventArgs.Empty);
+        }
+        catch(Exception error) when(Expected(error) || error is OperationCanceledException) {VersionStatus.Text=error.Message;}
+        finally {busy=false;UpdateActions();}
+    }
+    private async Task ApplyCommandLinePathAsync(bool enabled)
+    {
+        var plan=await Task.Run(()=>new CommandLinePathSetting(layout,installationScope).Plan(enabled,store.Read(),EnvironmentMonitor.ReadAll()));
+        await EnvironmentEditHost.ApplyBatchAsync(plan.Mutations,plan.Preconditions,store,layout.DataDirectory);
+    }
+    public async Task<string?> SynchronizeCommandLinePathAsync()
+    {
+        if(IsBusy) return null;
+        busy=true;UpdateActions();
+        try {await ApplyCommandLinePathAsync(store.Read().CommandLineVersionSwitchingEnabled);return null;}
+        catch(Exception error) when(Expected(error) || error is OperationCanceledException) {VersionStatus.Text=error.Message;return error.Message;}
+        finally {busy=false;UpdateActions();}
     }
     private Task<bool> CommitActive()=>activeEditor?.IsEditing==true ? activeEditor.CommitAsync() : Task.FromResult(true);
     public async Task<bool> ConfirmLeaveAsync()=>!IsBusy && await CommitActive() && !IsBusy;

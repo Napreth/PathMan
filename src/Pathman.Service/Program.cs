@@ -5,10 +5,11 @@ using Pathman.Service;
 
 // A normal user-session background process, with no SCM registration or elevation.
 if(args.FirstOrDefault()=="--registry-origin-worker") return RegistryOriginTracker.RunWorker(args);
+if(args.FirstOrDefault()=="--installer-origin-broker") return InstallerOriginBroker.Run(args);
 // Installer maintenance is independent of the user's background monitoring switches.
 if(args is ["--installer-refresh-shims",var dataDirectory])
 {
-    try {new ShimManager(PathmanLayout.Discover(dataDirectory),ensureUserPath:false).Refresh();return 0;}
+    try {var installation=PathmanLayout.Discover(dataDirectory);var workspace=new EnvironmentWorkspaceStore(installation.DataDirectory);L.SetLanguage(workspace.Read().Preferences.Language);new ShimManager(installation,ensureUserPath:false).Refresh();InstallerEnvironmentSync.Synchronize(installation);return 0;}
     catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) {return 1;}
 }
 if (args.Length != 0 && (args.Length != 2 || args[0] != "--data-root")) return 2;

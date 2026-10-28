@@ -11,6 +11,7 @@
 #include <vector>
 #include <cwctype>
 #include "version.h"
+#include "verified-worker.h"
 
 #ifdef _M_IX86
 #pragma comment(linker, "/EXPORT:CompareVersions=_CompareVersions@8")
@@ -29,6 +30,7 @@
 #pragma comment(linker, "/EXPORT:RunElevatedSetup=_RunElevatedSetup@12")
 #pragma comment(linker, "/EXPORT:BeginSetup=_BeginSetup@0")
 #pragma comment(linker, "/EXPORT:CleanupUserInstall=_CleanupUserInstall@8")
+#pragma comment(linker, "/EXPORT:PrepareOriginBroker=_PrepareOriginBroker@12")
 #endif
 
 extern "C" __declspec(dllexport) DWORD __stdcall CompareVersions(const wchar_t* left,const wchar_t* right) {
@@ -73,95 +75,41 @@ bool owns(HKEY root, const wchar_t* flag) {
     DWORD value = 0, size = sizeof(value);
     return !RegGetValueW(root, settings, flag, RRF_RT_REG_DWORD, nullptr, &value, &size) && value == 1;
 }
-std::wstring expand_saved(const std::wstring& value, bool machine, std::vector<std::wstring> seen = {}) {
-    if (seen.size() >= 32) return value;
-    std::wstring result;
-    size_t offset = 0;
-    while (offset < value.size()) {
-        const auto begin = value.find(L'%', offset);
-        const auto end = begin == std::wstring::npos ? begin : value.find(L'%', begin + 1);
-        if (end == std::wstring::npos) { result += value.substr(offset); break; }
-        result += value.substr(offset, begin - offset);
-        const auto name = value.substr(begin + 1, end - begin - 1);
-        const auto token = value.substr(begin, end - begin + 1);
-        bool recursive = false;
-        for (const auto& item : seen) recursive |= _wcsicmp(item.c_str(), name.c_str()) == 0;
-        auto replacement = machine ? std::wstring() : read(HKEY_CURRENT_USER, L"Environment", name.c_str());
-        if (replacement.empty()) replacement = read(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", name.c_str());
-        if (replacement.empty()) {
-            const std::wstring builtins[] = { L"SystemRoot", L"windir", L"ProgramFiles", L"ProgramFiles(x86)", L"ProgramW6432", L"USERPROFILE", L"LOCALAPPDATA", L"APPDATA", L"ProgramData" };
-            for (const auto& builtin : builtins) if (_wcsicmp(name.c_str(), builtin.c_str()) == 0) {
-                if (machine && (_wcsicmp(name.c_str(), L"USERPROFILE") == 0 || _wcsicmp(name.c_str(), L"LOCALAPPDATA") == 0 || _wcsicmp(name.c_str(), L"APPDATA") == 0)) break;
-                const auto size = ExpandEnvironmentStringsW(token.c_str(), nullptr, 0);
-                if (size && size < 32768) { std::vector<wchar_t> buffer(size); if (ExpandEnvironmentStringsW(token.c_str(), buffer.data(), size)) replacement = buffer.data(); }
-                break;
-            }
-        }
-        if (recursive || replacement.empty() || replacement == token) result += token;
-        else { auto nested = seen; nested.push_back(name); result += expand_saved(replacement, machine, nested); }
-        if (result.size() > 262144) return value;
-        offset = end + 1;
-    }
-    return result;
-}
-bool contains_path(const std::wstring& value, const std::wstring& directory) {
-    size_t start = 0;
-    while (start <= value.size()) {
-        const auto end = value.find(L';', start);
-        if (normalized(value.substr(start, end == std::wstring::npos ? end : end - start)) == normalized(directory)) return true;
-        if (end == std::wstring::npos) break;
-        start = end + 1;
-    }
-    return false;
-}
 // Avoid NSIS string truncation of long PATH values. Remove only entries this
 // installation added, retaining entries that were already present beforehand.
-DWORD change_path(const std::wstring& directory, bool machine, bool add, const wchar_t* flag) {
+DWORD change_path(const std::wstring& directory, bool machine, const wchar_t* flag) {
     const HKEY root = machine ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
+    if (!owns(root, flag)) return ERROR_SUCCESS;
     const auto key = machine ? L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" : L"Environment";
     HKEY environment = nullptr;
-    auto error = RegCreateKeyExW(root, key, 0, nullptr, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, nullptr, &environment, nullptr);
+    auto error = RegOpenKeyExW(root, key, 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &environment);
+    if (error == ERROR_FILE_NOT_FOUND) return ERROR_SUCCESS;
     if (error) return error;
     const auto previous = read(root, key, L"Path");
-    std::vector<std::wstring> entries;
-    bool found = false, covered = false;
+    std::wstring updated;
     size_t start = 0;
+    bool first = true;
     while (!previous.empty() && start <= previous.size()) {
         const auto end = previous.find(L';', start);
         const auto entry = previous.substr(start, end == std::wstring::npos ? end : end - start);
-        const bool match = normalized(entry) == normalized(directory);
-        found |= match;
-        covered |= !match && entry.find(L'%') != std::wstring::npos && contains_path(expand_saved(entry, machine), directory);
-        entries.push_back(entry);
+        if (normalized(entry) != normalized(directory)) {
+            if (!first) updated += L';';
+            first = false; updated += entry;
+        }
         if (end == std::wstring::npos) break;
         start = end + 1;
     }
-    std::wstring updated;
-    bool first = true;
-    for (const auto& entry : entries) {
-        if (owns(root, flag) && normalized(entry) == normalized(directory) && (!add || covered)) continue;
-        if (!first) updated += L';';
-        first = false; updated += entry;
-    }
-    if (add && !found && !covered) { if (!updated.empty() && updated.back() != L';') updated += L';'; updated += directory; }
-    if (updated != previous) {
+    const bool changed = updated != previous;
+    if (changed) {
         DWORD type = REG_EXPAND_SZ;
         RegQueryValueExW(environment, L"Path", nullptr, &type, nullptr, nullptr);
         if (type != REG_SZ && type != REG_EXPAND_SZ) type = REG_EXPAND_SZ;
         error = RegSetValueExW(environment, L"Path", 0, type, reinterpret_cast<const BYTE*>(updated.c_str()), static_cast<DWORD>((updated.size() + 1) * sizeof(wchar_t)));
-        if (!error && add && !found && !covered) {
-            HKEY tracking = nullptr;
-            error = RegCreateKeyExW(root, settings, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &tracking, nullptr);
-            if (!error) {
-                const DWORD owned = 1;
-                error = RegSetValueExW(tracking, flag, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&owned), sizeof(owned));
-                RegCloseKey(tracking);
-            }
-        }
     }
     RegCloseKey(environment);
     DWORD_PTR ignored = 0;
-    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, reinterpret_cast<LPARAM>(L"Environment"), SMTO_ABORTIFHUNG, 2000, &ignored);
+    if (changed && !error)
+        SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, reinterpret_cast<LPARAM>(L"Environment"), SMTO_ABORTIFHUNG, 2000, &ignored);
     return error;
 }
 DWORD allow_links(const std::filesystem::path& shim) {
@@ -404,16 +352,15 @@ extern "C" __declspec(dllexport) DWORD __stdcall ConfigureInstall(const wchar_t*
     try {
         const std::filesystem::path root(directory);
         auto error = machine ? allow_links(root / L"internal" / L"PathMan.Shim.exe") : ERROR_SUCCESS;
-        if (!error) error = change_path((root / L"bin").wstring(), machine != FALSE, true, L"BinPathOwned");
         return error;
     } catch (...) { return ERROR_INSTALL_FAILURE; }
 }
 extern "C" __declspec(dllexport) DWORD __stdcall CleanupInstall(const wchar_t* directory, BOOL machine, const wchar_t* desktop) {
     try {
         const std::filesystem::path root(directory);
-        auto error = change_path((root / L"bin").wstring(), machine != FALSE, false, L"BinPathOwned");
+        auto error = change_path((root / L"bin").wstring(), machine != FALSE, L"BinPathOwned");
         if (!machine) {
-            const auto next = change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, false, L"ShimsPathOwned");
+            const auto next = change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, L"ShimsPathOwned");
             if (!error) error = next;
         }
         remove_shortcut(std::filesystem::path(desktop) / L"PathMan.lnk", root / L"PathMan.exe");
@@ -435,13 +382,12 @@ extern "C" __declspec(dllexport) DWORD __stdcall CleanupUserInstall(const wchar_
             if (!RegOpenKeyExW(HKEY_CURRENT_USER, run, 0, KEY_SET_VALUE, &opened)) { RegDeleteValueW(opened, L"PathMan"); RegCloseKey(opened); }
         }
         remove_shortcut(std::filesystem::path(desktop) / L"PathMan.lnk", root / L"PathMan.exe");
-        return change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, false, L"ShimsPathOwned");
+        return change_path(folder(FOLDERID_LocalAppData) + L"\\PathMan\\shims", false, L"ShimsPathOwned");
     } catch (...) { return ERROR_INSTALL_FAILURE; }
 }
 extern "C" __declspec(dllexport) DWORD __stdcall RefreshShims(const wchar_t* directory, const wchar_t* localData) {
     try {
         const auto data = std::filesystem::path(localData) / L"PathMan";
-        if (!std::filesystem::exists(data / L"shims")) return ERROR_SUCCESS;
         const auto helper = std::filesystem::path(directory) / L"internal" / L"PathMan.Service.exe";
         auto command = L"\"" + helper.wstring() + L"\" --installer-refresh-shims \"" + data.wstring() + L"\"";
         STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
@@ -477,7 +423,79 @@ extern "C" __declspec(dllexport) HANDLE __stdcall JoinSetupWorker(const wchar_t*
     CloseHandle(event);
     return allowed ? OpenMutexW(SYNCHRONIZE, FALSE, L"Global\\PathMan.Setup") : nullptr;
 }
+namespace {
+std::wstring current_sid() {
+    HANDLE token = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return {};
+    DWORD size = 0; GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+    std::vector<BYTE> buffer(size);
+    const bool read = GetTokenInformation(token, TokenUser, buffer.data(), size, &size) != FALSE;
+    CloseHandle(token);
+    PWSTR sid = nullptr;
+    if (!read || !ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(buffer.data())->User.Sid, &sid)) return {};
+    std::wstring result(sid); LocalFree(sid); return result;
+}
+void wait_with_messages(HANDLE process) {
+    bool quit = false; WPARAM exit = 0;
+    while (MsgWaitForMultipleObjects(1, &process, FALSE, INFINITE, QS_ALLINPUT) == WAIT_OBJECT_0 + 1) {
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+            if (message.message == WM_QUIT) { quit = true; exit = message.wParam; continue; }
+            TranslateMessage(&message); DispatchMessageW(&message);
+        }
+    }
+    if (quit) PostQuitMessage(static_cast<int>(exit));
+}
+DWORD run_verified_elevated(HWND owner, const std::filesystem::path& worker, const std::wstring& parameters) {
+    std::vector<wchar_t> current(32768);
+    const auto length = GetModuleFileNameW(nullptr, current.data(), static_cast<DWORD>(current.size()));
+    if (!length || length >= current.size()) return ERROR_BAD_PATHNAME;
+    pathman_setup::verified_worker verified(worker.c_str(), current.data());
+    if (verified.error() != ERROR_SUCCESS) return verified.error();
+    SHELLEXECUTEINFOW execute{sizeof(execute)};
+    execute.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    execute.hwnd = owner;
+    execute.lpVerb = L"runas"; execute.lpFile = worker.c_str(); execute.lpParameters = parameters.c_str(); execute.nShow = SW_HIDE;
+    const auto initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const bool started = ShellExecuteExW(&execute) != FALSE;
+    const auto launch_error = started ? ERROR_SUCCESS : GetLastError();
+    if (SUCCEEDED(initialized)) CoUninitialize();
+    if (!started) return launch_error == ERROR_CANCELLED ? ERROR_INSTALL_USEREXIT : launch_error;
+    DWORD result = ERROR_INSTALL_FAILURE;
+    if (execute.hProcess) {
+        wait_with_messages(execute.hProcess);
+        GetExitCodeProcess(execute.hProcess, &result);
+        CloseHandle(execute.hProcess);
+    }
+    return result;
+}
+}
+extern "C" __declspec(dllexport) DWORD __stdcall PrepareOriginBroker(const wchar_t* directory, const wchar_t* localData, const wchar_t* originalSid) {
+    try {
+        const auto sid = originalSid && *originalSid ? std::wstring(originalSid) : current_sid();
+        if (sid.empty()) return ERROR_INVALID_SID;
+        GUID id{}; wchar_t ticket[40]{};
+        if (FAILED(CoCreateGuid(&id)) || !StringFromGUID2(id, ticket, 40)) return ERROR_INSTALL_FAILURE;
+        const auto name = std::wstring(L"Local\\PathMan.Setup.Origins.") + ticket;
+        const auto ready = CreateEventW(nullptr, FALSE, FALSE, name.c_str());
+        if (!ready) return GetLastError();
+        const auto executable = std::filesystem::path(directory) / L"internal" / L"PathMan.Service.exe";
+        const auto data = std::filesystem::path(localData) / L"PathMan";
+        auto command = L"\"" + executable.wstring() + L"\" --installer-origin-broker \"" + sid + L"\" \"" + data.wstring() + L"\" \"" + name + L"\"";
+        STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
+        DWORD result = ERROR_SUCCESS;
+        if (!CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, directory, &start, &process)) result = GetLastError();
+        else {
+            HANDLE events[]{ready, process.hProcess};
+            if (WaitForMultipleObjects(2, events, FALSE, 15000) == WAIT_TIMEOUT) result = ERROR_TIMEOUT;
+            CloseHandle(process.hThread); CloseHandle(process.hProcess);
+        }
+        CloseHandle(ready); return result;
+    } catch (...) { return ERROR_INSTALL_FAILURE; }
+}
 extern "C" __declspec(dllexport) DWORD __stdcall RunElevatedSetup(HWND owner, const wchar_t* executable, const wchar_t* configuration) {
+    const auto userSid = current_sid();
+    if (userSid.empty() || !WritePrivateProfileStringW(L"Setup", L"OriginalUserSid", userSid.c_str(), configuration)) return ERROR_INSTALL_FAILURE;
     GUID id{}; wchar_t ticket[40]{};
     if (FAILED(CoCreateGuid(&id)) || !StringFromGUID2(id, ticket, 40)) return ERROR_INSTALL_FAILURE;
     const auto name = std::wstring(L"Local\\PathMan.Setup.Worker.") + ticket;
@@ -488,7 +506,10 @@ extern "C" __declspec(dllexport) DWORD __stdcall RunElevatedSetup(HWND owner, co
     const auto createError = GetLastError();
     LocalFree(descriptor);
     if (!event) return createError;
-    auto parameters = std::wstring(L"/S /AllUsers /SetupWorker=") + ticket + L" /SetupConfig=\"" + configuration + L"\"";
+    // /S alone still permits NSIS's pre-script CRC dialog. The visible parent
+    // has already checked CRC; verify identical bytes and retain a read lock
+    // before skipping that redundant check in the authorized child.
+    auto parameters = std::wstring(L"/S /NCRC /AllUsers /SetupWorker=") + ticket + L" /SetupConfig=\"" + configuration + L"\"";
     auto worker = std::filesystem::path(executable);
     const bool uninstall = _wcsicmp(worker.filename().c_str(), L"Uninstall.exe") == 0;
     if (uninstall) {
@@ -499,20 +520,7 @@ extern "C" __declspec(dllexport) DWORD __stdcall RunElevatedSetup(HWND owner, co
         if (!CopyFileW(original.c_str(), worker.c_str(), FALSE)) { const auto error = GetLastError(); CloseHandle(event); return error; }
         parameters += L" _?=" + original.parent_path().wstring();
     }
-    SHELLEXECUTEINFOW execute{sizeof(execute)};
-    execute.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-    execute.hwnd = owner;
-    execute.lpVerb = L"runas"; execute.lpFile = worker.c_str(); execute.lpParameters = parameters.c_str(); execute.nShow = SW_HIDE;
-    DWORD result = ERROR_INSTALL_FAILURE;
-    const auto initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (ShellExecuteExW(&execute)) {
-        if (execute.hProcess) {
-            WaitForSingleObject(execute.hProcess, INFINITE);
-            GetExitCodeProcess(execute.hProcess, &result);
-            CloseHandle(execute.hProcess);
-        }
-    } else { result = GetLastError(); if (result == ERROR_CANCELLED) result = ERROR_INSTALL_USEREXIT; }
-    if (SUCCEEDED(initialized)) CoUninitialize();
+    const auto result = run_verified_elevated(owner, worker, parameters);
     CloseHandle(event);
     if (uninstall) DeleteFileW(worker.c_str());
     return result;

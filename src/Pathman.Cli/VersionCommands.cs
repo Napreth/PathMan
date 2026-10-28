@@ -8,11 +8,18 @@ namespace Pathman.Cli;
 internal static class VersionCommands
 {
     private static EnvironmentWorkspaceStore Store(PathmanLayout layout)=>new(layout.DataDirectory);
+    private static EnvironmentWorkspace EnabledState(PathmanLayout layout)
+    {
+        var state=Store(layout).Read();L.SetLanguage(state.Preferences.Language);
+        if(!state.CommandLineVersionSwitchingEnabled)
+            throw new IOException(L.Get("命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。"));
+        return state;
+    }
     private static string Display(string value)=>value.Replace("\r","\\r").Replace("\n","\\n");
     public static void List(PathmanLayout layout,string[] args)
     {
         if(args.Length>1) throw new ArgumentException(L.Get("用法：pathman list [项目]"));
-        var state=Store(layout).Read();
+        var state=EnabledState(layout);
         if(args.Length==1) {var selected=VersionCatalog.Find(state,args[0]);state.VersionProjects=[selected];}
         var projects=VersionCatalog.Describe(state,EnvironmentMonitor.ReadAll());
         if(projects.Count==0) {Console.WriteLine(L.Get("尚未登记版本项目。使用 pathman add 登记。"));return;}
@@ -41,18 +48,20 @@ internal static class VersionCommands
             if(option=="--variable") variable=args[index];
             else scope=args[index].ToLowerInvariant() switch {"user"=>VariableScope.User,"machine"=>VariableScope.Machine,_=>throw new ArgumentException(L.Get("--type 仅支持 User 或 Machine。"))};
         }
+        EnabledState(layout);
         Store(layout).Update(state=>VersionCatalog.Add(state,args[0],args[1],args[2],variable,scope,replace));
         Console.WriteLine(L.Format("已登记 {0} / {1}；当前环境变量未改动。",args[0],args[1]));
     }
     public static void Delete(PathmanLayout layout,string project,string? version)
     {
+        EnabledState(layout);
         Store(layout).Update(state=>VersionCatalog.Delete(state,project,version));
         Console.WriteLine(L.Format("已删除版本配置 {0}{1}；环境变量及当前值已保留。",project,(version is null ? "" : "/"+version)));
     }
     public static void Switch(PathmanLayout layout,string project,string version)
     {
         var store=Store(layout);
-        var mutation=VersionCatalog.PrepareSwitch(store.Read(),project,version,EnvironmentMonitor.ReadAll());
+        var mutation=VersionCatalog.PrepareSwitch(EnabledState(layout),project,version,EnvironmentMonitor.ReadAll());
         WindowsEnvironmentVariableEditor.Apply(mutation,store);
         Console.WriteLine(L.Format("已切换 {0} → {1}：{2}={3}",project,version,mutation.Name,Display(mutation.Value!)));
     }

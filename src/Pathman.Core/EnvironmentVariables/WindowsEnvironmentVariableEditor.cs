@@ -179,9 +179,10 @@ public static class WindowsEnvironmentVariableEditor
         if (state.MonitoringEnabled)
         {
             state.Changes.Insert(0, new(DateTime.Now, mutation.Scope, mutation.Name, mutation.Action,
-                mutation.ExpectedValue, mutation.Value ?? mutation.NewName, "PathMan"));
+                mutation.ExpectedValue, mutation.Value ?? mutation.NewName, "PathMan") {SourceKind="pathman"});
             if (state.Changes.Count > 200) state.Changes.RemoveRange(200, state.Changes.Count - 200);
         }
+        EnvironmentMonitorNotices.Reconcile(state);
     }
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);

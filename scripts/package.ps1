@@ -30,10 +30,12 @@ if ($LASTEXITCODE -ne 0 -or $compilerVersion -notmatch '^v3\.(\d+)' -or [int]$Ma
     throw "NSIS 3.12 or newer is required; found $compilerVersion"
 }
 $nativeBuild = Join-Path $projectRoot 'artifacts/native-setup'
-& cmake -S (Join-Path $projectRoot 'packaging/native') -B $nativeBuild -A Win32
+& cmake -S (Join-Path $projectRoot 'packaging/native') -B $nativeBuild -A Win32 -DBUILD_TESTING=ON
 if ($LASTEXITCODE -ne 0) { throw 'Setup helper CMake configuration failed.' }
 & cmake --build $nativeBuild --config $Configuration
 if ($LASTEXITCODE -ne 0) { throw 'Setup helper build failed.' }
+& ctest --test-dir $nativeBuild -C $Configuration --output-on-failure --no-tests=error
+if ($LASTEXITCODE -ne 0) { throw 'Setup helper PATH tests failed.' }
 $helper = Join-Path $nativeBuild "$Configuration/PathMan.SetupActions.dll"
 $destination = Join-Path $projectRoot 'artifacts/setup'
 New-Item -ItemType Directory -Force -Path $destination | Out-Null

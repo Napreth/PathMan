@@ -13,6 +13,7 @@ public partial class MonitorView : UserControl
     private readonly DispatcherTimer statusTimer=new() {Interval=TimeSpan.FromSeconds(1)};
     private bool updating,busy;
     public event EventHandler? PendingApplyRequested;
+    public event EventHandler? OptionsChanged;
     public MonitorView(PathmanLayout layout,EnvironmentWorkspaceStore store)
     {
         this.layout=layout;this.store=store;InitializeComponent();Update(store.Read());
@@ -49,7 +50,13 @@ public partial class MonitorView : UserControl
         MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
         ApplyPending.Visibility=pending ? Visibility.Visible : Visibility.Collapsed;
         ApplyPending.IsEnabled=!EnvironmentMonitor.RequiresOrigin(state,VariableScope.Machine) || state.OriginTrackingReady;
-        var changes=state.Changes.Where(change=>change.Source==L.Get("外部程序")).Select(change=>new {TimeText=change.Time.ToString("MM-dd HH:mm:ss"),ScopeText=change.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统"),change.Name,ActionText=change.Action switch {"create"=>L.Get("新增"),"delete"=>L.Get("删除"),_=>L.Get("修改")},ProcessText=change.Origins.Count==0 ? L.Get("未识别") : string.Join("、",change.Origins.Select(origin=>$"{origin.ProcessName} ({origin.ProcessId})").Distinct()),change.Before,change.After}).ToArray();
+        var changes=state.Changes.Where(change=>change.IsExternal).Select(change=>new {
+            Heading=$"{change.Time:yyyy-MM-dd HH:mm:ss}  ·  {(change.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统"))} · {change.Name}  ·  {L.Get(change.Action switch {"create"=>"新增","delete"=>"删除",_=>"修改"})}",
+            ProcessText=L.Get("修改进程")+"："+(change.Origins.Count==0 ? L.Get("未识别") : string.Join("、",change.Origins.Select(origin=>$"{origin.ProcessName} ({origin.ProcessId})").Distinct())),
+            change.Before,change.After,
+            Diff=EnvironmentValueDiff.Create(change.Before,change.After ?? "").Where(line=>line.Kind!=ValueDiffKind.Context)
+                .Select(line=>new {IsAdded=line.Kind==ValueDiffKind.Added,Text=(line.Kind==ValueDiffKind.Added ? "+ " : "− ")+line.Text}).ToArray()
+        }).ToArray();
         Changes.ItemsSource=changes;NoChanges.Visibility=changes.Length==0 ? Visibility.Visible : Visibility.Collapsed;
         Changes.Visibility=changes.Length==0 ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -81,7 +88,7 @@ public partial class MonitorView : UserControl
                 if(enabled) {if(startup.IsEnabled) process.Start();}
                 else {startup.SetEnabled(false);process.Stop();}
             });
-            busy=false;Update(store.Read());
+            busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
         finally {busy=false;SettingsPanel.IsEnabled=true;}
@@ -103,7 +110,7 @@ public partial class MonitorView : UserControl
                 state.IgnorePowerToysUserChanges=IgnorePowerToysUser.IsChecked==true;state.IgnorePowerToysMachineChanges=IgnorePowerToysMachine.IsChecked==true;
                 state.PendingPathOrganizations.RemoveAll(plan=>!state.IsPathOrganizationEnabled(plan.Scope));
             });
-            Update(store.Read());
+            Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);
         }
         catch(Exception error) when(Expected(error)) {Update(store.Read());ShowError(error);}
     }

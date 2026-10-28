@@ -75,7 +75,8 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             if(writers.Any(writer=>writer.Excluded(state)) || pathChanged && RequiresOrigin(state,scope) && (origins?.IsReady!=true || writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)))
             {
                 updated|=state.PendingPathOrganizations.RemoveAll(item=>item.Scope==scope)>0;
-                if(writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)) Message(state,L.Get("未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。"));
+                if(pathChanged && (writers.Count==0 || writers.Any(writer=>!writer.IsIdentified)))
+                    EnvironmentMonitorNotices.ReportUnknown(state,scope,old?.Value,path?.RawValue);
                 continue;
             }
             if(pending is null && (!changed || old?.Value==path?.RawValue)) continue;
@@ -102,7 +103,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
     {
         state.PendingPathOrganizations.RemoveAll(item=>item.Id==plan.Id);
         if(plan.ChangesPathOrder) Message(state,L.Get("自动整理改变了 PATH 的路径搜索顺序，可能导致系统或程序调用到不同的命令或版本。原始值已备份，可在外部更改记录中核对。") );
-        else if(state.PendingPathOrganizations.Count==0) {state.MonitorMessage=null;state.MonitorMessageTime=null;}
+        else if(state.PendingPathOrganizations.Count==0 && state.UnattributedPathChanges.Count==0) {state.MonitorMessage=null;state.MonitorMessageTime=null;}
     });
     public void ReportError(string message)=>store.Inspect(state=>
     {if(state.MonitorMessage==message) return false;Message(state,message);return true;});
@@ -119,19 +120,20 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
             var key = EnvironmentWorkspace.Key(item.Scope, item.Name);
             if (!before.TryGetValue(key, out var old) || old.Value != item.RawValue || old.Kind != (int)item.Kind)
             {
-                changes.Add(new(DateTime.Now, item.Scope, item.Name, old is null ? "create" : "set", old?.Value, item.RawValue, L.Get("外部程序")) {Origins=origins?.Take(item.Scope,item.Name) ?? []});
+                changes.Add(new(DateTime.Now, item.Scope, item.Name, old is null ? "create" : "set", old?.Value, item.RawValue, L.Get("外部程序")) {SourceKind="external",Origins=origins?.Take(item.Scope,item.Name) ?? []});
                 if(old is null) state.ExternalVariables.Add(key);
             }
         }
         foreach (var old in state.Snapshot.Where(item => !after.ContainsKey(EnvironmentWorkspace.Key(item.Scope, item.Name))))
         {
-            changes.Add(new(DateTime.Now, old.Scope, old.Name, "delete", old.Value, null, L.Get("外部程序")) {Origins=origins?.Take(old.Scope,old.Name) ?? []});
+            changes.Add(new(DateTime.Now, old.Scope, old.Name, "delete", old.Value, null, L.Get("外部程序")) {SourceKind="external",Origins=origins?.Take(old.Scope,old.Name) ?? []});
             state.ExternalVariables.Remove(EnvironmentWorkspace.Key(old.Scope, old.Name));
         }
         if (changes.Count == 0) return false;
         state.Snapshot = current.Select(Snapshot).ToList();
         state.Changes.InsertRange(0, changes);
         if (state.Changes.Count > 200) state.Changes.RemoveRange(200, state.Changes.Count - 200);
+        EnvironmentMonitorNotices.Reconcile(state);
         return true;
     }
 }

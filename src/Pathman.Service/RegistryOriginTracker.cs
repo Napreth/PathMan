@@ -68,9 +68,15 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
         try
         {
             using var parent=Process.GetCurrentProcess();
-            var start=new ProcessStartInfo(Environment.ProcessPath!) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};
-            foreach(var value in new[] {"--registry-origin-worker",parent.Id.ToString(CultureInfo.InvariantCulture),parent.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture),name,secret,identity.User!.Value}) start.ArgumentList.Add(value);
-            child=Process.Start(start) ?? throw new IOException(L.Get("无法启动修改来源跟踪。"));
+            var arguments=new[] {"--registry-origin-worker",parent.Id.ToString(CultureInfo.InvariantCulture),parent.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture),name,secret,identity.User!.Value};
+            child=!IsAdministrator() ? InstallerOriginBroker.TryStart(arguments) : null;
+            if(child is null)
+            {
+                var start=new ProcessStartInfo(Environment.ProcessPath!) {UseShellExecute=!IsAdministrator(),WindowStyle=ProcessWindowStyle.Hidden};
+                if(start.UseShellExecute) start.Verb="runas";
+                foreach(var value in arguments) start.ArgumentList.Add(value);
+                child=Process.Start(start) ?? throw new IOException(L.Get("无法启动修改来源跟踪。"));
+            }
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(30));
             while(true)
             {
@@ -195,9 +201,14 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
         catch(Exception error) when(error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or System.Security.SecurityException) {return 1;}
     }
     private static bool IsAdministrator() {using var identity=WindowsIdentity.GetCurrent();return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);}
-    private static string Image(Process process)
-    {var path=new StringBuilder(32768);var size=path.Capacity;if(!QueryFullProcessImageName(process.Handle,0,path,ref size)) throw new System.ComponentModel.Win32Exception();return path.ToString();}
+    internal static string Image(Process process)
+    {
+        using var handle=OpenProcess(0x1000,false,process.Id);
+        var path=new StringBuilder(32768);var size=path.Capacity;
+        if(handle.IsInvalid || !QueryFullProcessImageName(handle,0,path,ref size)) throw new System.ComponentModel.Win32Exception();return path.ToString();
+    }
     [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe,out uint id);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe,out uint id);
-    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern bool QueryFullProcessImageName(IntPtr process,int flags,StringBuilder path,ref int size);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern bool QueryFullProcessImageName(SafeProcessHandle process,int flags,StringBuilder path,ref int size);
+    [DllImport("kernel32.dll",SetLastError=true)] private static extern SafeProcessHandle OpenProcess(int access,[MarshalAs(UnmanagedType.Bool)]bool inherit,int processId);
 }

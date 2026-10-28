@@ -18,8 +18,9 @@ public sealed class EnvironmentHealthContext
     public IReadOnlyDictionary<string,string>? Runtime {get;}
     public EnvironmentPathResolver Resolver {get;}
     public string ShimsDirectory {get;}
-    public EnvironmentHealthContext(IReadOnlyList<EnvironmentVariableInfo> variables,IReadOnlyDictionary<string,string>? runtime=null,string? shimsDirectory=null)
-    {Variables=variables;Runtime=runtime;Resolver=new(variables,runtime);ShimsDirectory=shimsDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PathMan","shims");}
+    public EnvironmentWorkspace? Workspace {get;}
+    public EnvironmentHealthContext(IReadOnlyList<EnvironmentVariableInfo> variables,IReadOnlyDictionary<string,string>? runtime=null,string? shimsDirectory=null,EnvironmentWorkspace? workspace=null)
+    {Variables=variables;Runtime=runtime;Resolver=new(variables,runtime);Workspace=workspace;ShimsDirectory=shimsDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PathMan","shims");}
     public IReadOnlyList<VariableSnapshot> SourcesFor(EnvironmentVariableInfo variable)=>Resolver.ReferencedVariables(variable.RawValue,variable.Scope).Prepend(variable)
         .DistinctBy(item=>EnvironmentWorkspace.Key(item.Scope,item.Name),StringComparer.OrdinalIgnoreCase).OrderBy(item=>item.Scope).ThenBy(item=>item.Name,StringComparer.OrdinalIgnoreCase)
         .Select(item=>new VariableSnapshot(item.Scope,item.Name,item.RawValue,(int)item.Kind)).ToArray();

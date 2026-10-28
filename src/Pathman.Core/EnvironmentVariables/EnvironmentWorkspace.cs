@@ -21,12 +21,19 @@ public sealed class VariableGroupDefinition
 
 public sealed record VariableSnapshot(VariableScope Scope, string Name, string Value, int Kind);
 public sealed record VariableChange(DateTime Time, VariableScope Scope, string Name, string Action, string? Before, string? After, string Source)
-{public IReadOnlyList<EnvironmentChangeOrigin> Origins {get;init;}=[];}
+{
+    public IReadOnlyList<EnvironmentChangeOrigin> Origins {get;init;}=[];
+    public string? SourceKind {get;init;}
+    [JsonIgnore] public bool IsExternal=>SourceKind=="external" || SourceKind is null && Pathman.Core.Localization.Text.IsTranslation("外部程序",Source);
+    [JsonIgnore] public bool IsOwn=>SourceKind=="pathman" || Source is "PathMan" or "PathMan Setup";
+}
+public sealed record UnattributedPathChange(VariableScope Scope,string? Before,string? After,DateTime Time);
 
 public sealed class EnvironmentWorkspace
 {
     public ApplicationPreferences Preferences {get;set;}=new();
     public List<VersionProject> VersionProjects {get;set;}=[];
+    public bool CommandLineVersionSwitchingEnabled {get;set;}
     public bool AllowBuiltInVersionTargets {get;set;}
     public List<VariableGroupDefinition> Groups { get; set; } = [];
     public Dictionary<string, string> Assignments { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -69,6 +76,7 @@ public sealed class EnvironmentWorkspace
     public List<ExternalPathOrganizationPlan> PendingPathOrganizations {get;set;}=[];
     public string? MonitorMessage {get;set;}
     public DateTime? MonitorMessageTime {get;set;}
+    public List<UnattributedPathChange> UnattributedPathChanges {get;set;}=[];
     public DateTime? RegistryWriteInProgressUntil {get;set;}
     public List<VariableSnapshot> Snapshot { get; set; } = [];
     public HashSet<string> ExternalVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -199,14 +207,17 @@ public sealed class EnvironmentWorkspaceStore
         catch (AbandonedMutexException) { }
         try { return action(); } finally { mutex.ReleaseMutex(); }
     }
-    public EnvironmentWorkspace Read() => Locked(Load);
+    public EnvironmentWorkspace Read() => Locked(()=>
+    {
+        var state=Load();if(EnvironmentMonitorNotices.Reconcile(state)) Save(state);return state;
+    });
     public void Update(Action<EnvironmentWorkspace> change) => Locked(() =>
     {
-        var state = Load(); change(state); Save(state); return true;
+        var state = Load(); change(state); EnvironmentMonitorNotices.Reconcile(state); Save(state); return true;
     });
     internal void Inspect(Func<EnvironmentWorkspace, bool> change) => Locked(() =>
     {
-        var state = Load(); if (change(state)) Save(state); return true;
+        var state = Load(); var reconciled=EnvironmentMonitorNotices.Reconcile(state); if (change(state) || reconciled) Save(state); return true;
     });
     private void Save(EnvironmentWorkspace state)
     {

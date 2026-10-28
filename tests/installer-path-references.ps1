@@ -24,7 +24,7 @@ try{
  Assert (([SetupPathProbe]::ConfigureInstall('C:\PathManTestApp',$false)) -eq 0 -and (PathValue) -eq 'C:\Windows;%SOFTWARE_PATH%') 'Nested saved references are expanded before deciding whether the CLI is missing'
  $tracking.SetValue('BinPathOwned',1,[Microsoft.Win32.RegistryValueKind]::DWord)
  $user.SetValue('Path',$bin+';;%SOFTWARE_PATH%;C:\tail;',[Microsoft.Win32.RegistryValueKind]::ExpandString)
- Assert (([SetupPathProbe]::ConfigureInstall('C:\PathManTestApp',$false)) -eq 0 -and (PathValue) -eq ';%SOFTWARE_PATH%;C:\tail;') 'Upgrade repairs an owned direct duplicate while retaining empty and trailing entries'
+ Assert (([SetupPathProbe]::ConfigureInstall('C:\PathManTestApp',$false)) -eq 0 -and (PathValue) -eq $bin+';;%SOFTWARE_PATH%;C:\tail;') 'Upgrade leaves an existing owned CLI entry untouched even when a reference also covers it'
  $tracking.SetValue('BinPathOwned',0,[Microsoft.Win32.RegistryValueKind]::DWord)
  $value=$bin+';%SOFTWARE_PATH%'
  $user.SetValue('Path',$value,[Microsoft.Win32.RegistryValueKind]::ExpandString)

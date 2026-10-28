@@ -38,7 +38,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();Language=System.Windows.Markup.XmlLanguage.GetLanguage(L.Current.CultureName);RefreshWindowTitle(null,EventArgs.Empty);store=new(layout.DataDirectory);
         updates=new(layout.DataDirectory,release=>UpdateToast.Show(release,layout));
-        variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(updates,InstallUpdateAsync);settings=new(store);versions=new(layout,store);AppVersion.Text=AppInfo.Version;
+        variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(updates,InstallUpdateAsync);settings=new(store);
+        versions=new(layout,store,InstalledScope()=="/AllUsers" ? Pathman.Core.Models.VariableScope.Machine : Pathman.Core.Models.VariableScope.User);AppVersion.Text=AppInfo.Version;
         settings.PreferencesChanged+=async(_,_)=>await ApplyPreferencesAsync();
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         NotificationsList.ItemsSource=notifications.Items;
@@ -50,8 +51,10 @@ public partial class MainWindow : Window
         aliases.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         versions.SnapshotChanged+=async(_,_)=>await ScanHealthAsync();
         monitor.PendingApplyRequested+=async(_,_)=>await ApplyPendingMonitoringAsync();
+        monitor.OptionsChanged+=async(_,_)=> {await SynchronizeCommandLinePathAsync();await ScanHealthAsync();};
         Loaded+=async(_,_)=>
         {
+            await SynchronizeCommandLinePathAsync();
             foregroundMonitor=new EnvironmentSnapshotWatcher(current=>
             {
                 if(Dispatcher.HasShutdownStarted) return;
@@ -167,7 +170,11 @@ public partial class MainWindow : Window
             do
             {
                 scanAgain=false;
-                var result=await Task.Run(()=>(Report:EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll(),shimsDirectory:layout.ShimsDirectory),Ignored:store.Read().IgnoredHealthIssues));
+                var result=await Task.Run(()=>
+                {
+                    var state=store.Read();
+                    return (Report:EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll(),shimsDirectory:layout.ShimsDirectory,workspace:state),Ignored:state.IgnoredHealthIssues);
+                });
                 health.Update(result.Report,result.Ignored);
                 var report=new EnvironmentHealthReport(result.Report.Issues.Where(issue=>!result.Ignored.Contains(issue.Id)).ToArray());
                 var signature=string.Join('\n',report.Issues.Select(issue=>issue.Id));

@@ -1207,4 +1207,11 @@
   <data name="更新记录正在使用中，请稍后重试。" xml:space="preserve"><value>Update records are in use. Try again later.</value></data>
   <data name="PathMan v{0} 已发布！" xml:space="preserve"><value>PathMan v{0} is available!</value></data>
   <data name="点击查看新版本内容" xml:space="preserve"><value>Click to view what's new</value></data>
+<data name="启用命令行版本切换" xml:space="preserve"><value>Enable command-line version switching</value></data>
+<data name="软件路径引用" xml:space="preserve"><value>Software path references</value></data>
+<data name="已启用自动整理，但 PATH 未引用 SOFTWARE_PATH 或 SOFTWARE数字_PATH。" xml:space="preserve"><value>Automatic PATH organization is enabled, but PATH does not reference SOFTWARE_PATH or a numbered SOFTWARE path variable.</value></data>
+<data name="在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。" xml:space="preserve"><value>Add a standalone reference to the software path variable in PATH for the same scope, such as %SOFTWARE_PATH%.</value></data>
+<data name="命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。" xml:space="preserve"><value>Command-line version switching is disabled. Enable it on the Version management page in PathMan.</value></data>
+<data name="前往版本管理" xml:space="preserve"><value>Go to version management</value></data>
+  <data name="此功能需要将程序目录下的 bin 目录加入 PATH；启用自动整理时，将通过软件路径变量引用。" xml:space="preserve"><value>This feature adds the bin folder in the application directory to PATH, through a software path variable when automatic organization is enabled.</value></data>
 </root>
