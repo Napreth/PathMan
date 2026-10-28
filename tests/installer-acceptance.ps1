@@ -59,7 +59,22 @@ try {
             Run (Join-Path $directory 'bin/pathman.exe') 'list' 1
             $gui=Start-Process (Join-Path $directory 'PathMan.exe') -PassThru
             try {
-                Assert ($gui.WaitForInputIdle(20000) -and !$gui.HasExited) "$label installed GUI starts successfully"
+                $startup=[Diagnostics.Stopwatch]::StartNew()
+                $ready=$false
+                while($startup.ElapsedMilliseconds -lt 60000){
+                    $gui.Refresh()
+                    if($gui.HasExited){break}
+                    try{
+                        if($gui.WaitForInputIdle(250)){
+                            $gui.Refresh()
+                            if(!$gui.HasExited -and $gui.MainWindowHandle -ne [IntPtr]::Zero -and $gui.MainWindowTitle.StartsWith('PathMan')){$ready=$true;break}
+                        }
+                    }catch [InvalidOperationException]{if($gui.HasExited){break};throw}
+                    Start-Sleep -Milliseconds 100
+                }
+                $gui.Refresh()
+                $startupState=if($gui.HasExited){"exit code $($gui.ExitCode)"}else{"PID $($gui.Id), window '$($gui.MainWindowTitle)', handle $($gui.MainWindowHandle)"}
+                Assert $ready "$label installed GUI starts successfully ($($startup.ElapsedMilliseconds) ms; $startupState)"
                 Start-Sleep -Milliseconds 700
                 Assert (!$gui.HasExited) "$label GUI stays running after initial page load"
             }finally{if(!$gui.HasExited){$gui.Kill();$gui.WaitForExit()};$gui.Dispose()}
