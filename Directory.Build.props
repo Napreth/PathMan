@@ -8,7 +8,7 @@
     <Company>PathMan</Company>
     <Product>PathMan</Product>
     <PathManVersionName Condition="'$(PathManVersionName)' == ''">1.0.0-beta.1</PathManVersionName>
-    <PathManVersionX>0</PathManVersionX>
+    <PathManVersionX>1</PathManVersionX>
     <PathManVersionY>0</PathManVersionY>
     <PathManVersionNumber Condition="'$(PathManVersionNumber)' == ''">$(PathManVersionX).$(PathManVersionY).0</PathManVersionNumber>
     <PathManReleaseType Condition="'$(PathManReleaseType)' == ''">beta</PathManReleaseType>
