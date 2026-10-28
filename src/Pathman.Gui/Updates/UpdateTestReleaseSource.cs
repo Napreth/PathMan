@@ -15,6 +15,8 @@ internal static class UpdateTestReleaseSource
         Directory.CreateDirectory(dataDirectory);
         var counter=Path.Combine(dataDirectory,"update-test-sequence.txt");
         var number=File.Exists(counter) && long.TryParse(File.ReadAllText(counter),out var value) ? value+1 : 1;
+        if(!BuildVersion.TryParse(AppInfo.VersionNumber,out var current) || number<=0 || number>65535-current.X)throw new InvalidDataException("Update test build counter exhausted.");
+        var versionNumber=new BuildVersion(current.X+(int)number,0,0).ToString();
         File.WriteAllText(counter,number.ToString(System.Globalization.CultureInfo.InvariantCulture));
         var tag=$"v99.0.{number}";
         var fixture=Fixture(dataDirectory);var bundled=Path.Combine(AppContext.BaseDirectory,"UpdateTestInstaller.exe");
@@ -28,7 +30,9 @@ internal static class UpdateTestReleaseSource
         }
         var body=$"更新功能测试 {tag}\n\n此版本由独立的更新测试程序生成。每次检测都会生成下一版本。\n\n"+
             string.Join("\n\n",Enumerable.Range(1,20).Select(index=>$"测试更新说明 {index}\n检查版本详情、滚动正文和安装更新。"));
-        return new(tag,$"PathMan {tag} - 更新功能测试",body,new Uri(GitHubReleaseClient.RepositoryPage+"/releases"),assets);
+        return new(tag,$"PathMan {tag} - 更新功能测试",body,new Uri(GitHubReleaseClient.RepositoryPage+"/releases"),assets) {
+            Manifest=new(tag[1..],versionNumber,"official") {Installers=assets.Select(asset=>new ReleasePackage(asset.Name,AppInfo.Package.Architecture,AppInfo.Package.SelfContained,asset.Size,asset.Digest![7..])).ToArray()}
+        };
     }
 }
 

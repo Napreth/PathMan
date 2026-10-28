@@ -17,7 +17,7 @@ public sealed class ApplicationUpdateService : IDisposable
     private bool automaticRequest;
     private bool receivePrerelease;
     private int generation;
-    public AvailableRelease? Available=>latest is {} release && ReleaseIdentity.IsUpdate(release,AppInfo.Version,AppInfo.VersionNumber,receivePrerelease) ? release : null;
+    public AvailableRelease? Available=>latest is {} release && ReleaseIdentity.IsUpdate(release,AppInfo.VersionNumber,receivePrerelease) ? release : null;
     public AvailableRelease? Latest=>latest is {} release && (!release.Prerelease && release.Manifest?.Prerelease!=true || receivePrerelease) ? release : null;
     public bool IsChecking=>request is not null;
     private enum CheckState {None,Checking,Complete,Failed}
@@ -49,10 +49,10 @@ public sealed class ApplicationUpdateService : IDisposable
             latest=result;
             store.Record(latest,DateTime.UtcNow,receivePrerelease);
             LastChecked=DateTime.UtcNow;state=CheckState.Complete;
-            if(automatic && Available is {} release && store.ReserveNotification(release.Tag))
+            if(automatic && Available is {} release && store.ReserveNotification(release.Manifest!.VersionNumber))
             {
                 var shown=false;
-                try {shown=notify(release);}finally {if(!shown) store.ReleaseNotification(release.Tag);}
+                try {shown=notify(release);}finally {if(!shown) store.ReleaseNotification(release.Manifest!.VersionNumber);}
             }
         }
         catch(Exception error) when(error is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or JsonException or OperationCanceledException)
@@ -64,11 +64,12 @@ public sealed class ApplicationUpdateService : IDisposable
 #if PATHMAN_UPDATE_TEST
         return Task.Run<AvailableRelease?>(()=>UpdateTestReleaseSource.GetLatest(dataDirectory),cancellationToken);
 #else
-        return new GitHubReleaseClient(http).GetLatestAsync(AppInfo.Version,receivePrerelease,cancellationToken);
+        return new GitHubReleaseClient(http).GetLatestAsync(receivePrerelease,cancellationToken);
 #endif
     }
     public async Task<string?> DownloadAsync(AvailableRelease release,CancellationToken cancellationToken)
     {
+        if(!ReleaseIdentity.IsUpdate(release,AppInfo.VersionNumber,receivePrerelease))throw new InvalidDataException(L.Get("安装包信息无效。"));
         var asset=AppInfo.Package.Select(release);
         return asset is null ? null : await new ReleaseInstaller(download,dataDirectory).DownloadAsync(asset,cancellationToken);
     }

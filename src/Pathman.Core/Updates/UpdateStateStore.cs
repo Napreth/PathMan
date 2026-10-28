@@ -43,11 +43,12 @@ public sealed class UpdateStateStore
     }
     public UpdateState Read()=>Locked(Load);
     public void Record(AvailableRelease? latest,DateTime checkedUtc,bool receivePrerelease=false)=>Locked(()=> {var state=Load();state.Latest=latest;state.LastCheckedUtc=checkedUtc;state.ReceivePrerelease=receivePrerelease;Save(state);return true;});
-    public bool ReserveNotification(string tag)=>Locked(()=>
+    private static string VersionKey(string versionNumber)=>BuildVersion.TryParse(versionNumber,out var version) ? version.ToString() : throw new ArgumentException("An X.Y.Z build number is required.",nameof(versionNumber));
+    public bool ReserveNotification(string versionNumber)=>Locked(()=>
     {
-        var state=Load();var version=ReleaseIdentity.Normalize(tag);
+        var state=Load();var version=VersionKey(versionNumber);
         if(!state.NotifiedVersions.Add(version)) return false;
         Save(state);return true;
     });
-    public void ReleaseNotification(string tag)=>Locked(()=> {var state=Load();if(state.NotifiedVersions.Remove(ReleaseIdentity.Normalize(tag))) Save(state);return true;});
+    public void ReleaseNotification(string versionNumber)=>Locked(()=> {var state=Load();if(state.NotifiedVersions.Remove(VersionKey(versionNumber))) Save(state);return true;});
 }

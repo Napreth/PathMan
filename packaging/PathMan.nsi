@@ -411,9 +411,6 @@ Function DirectoryLeave
 FunctionEnd
 
 Function CheckInstalledVersion
-  ${If} $UpdateMode == 1
-    Return
-  ${EndIf}
   ReadRegStr $OldDirectory SHCTX "${APPKEY}" "InstallDirectory"
   ${If} $OldDirectory == ""
     Return
@@ -426,6 +423,11 @@ Function CheckInstalledVersion
   ${If} $0 == 1
     MessageBox MB_OK|MB_ICONSTOP "$(DowngradeBlocked)" /SD IDOK
     SetErrorLevel 1638
+    Abort
+  ${EndIf}
+  ${If} $0 == 3
+    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+    SetErrorLevel 13
     Abort
   ${EndIf}
 FunctionEnd

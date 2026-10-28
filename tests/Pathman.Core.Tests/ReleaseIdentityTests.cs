@@ -28,9 +28,11 @@ internal static class ReleaseIdentityTests
         foreach(var json in new[]{"""{"versionName":"1.0.0","versionNumber":"3.0.0"}""","""{"versionName":"1.0.0","versionNumber":"3.0.0","type":"test"}""","""{"versionName":"1.0.0","versionNumber":"3.1.0","type":"official"}""","""{"versionName":"1.0.0","versionNumber":"broken"}"""})
         {var rejected=false;try{ReleaseManifest.Parse(json);}catch(InvalidDataException){rejected=true;}assert(rejected,"Manifests require an explicit type consistent with the build identity");}
         AvailableRelease Release(ReleaseManifest manifest)=>new("test/"+manifest.VersionNumber,"title","body",new("https://github.com/Napreth/PathMan/releases"),[]) {Manifest=manifest,Prerelease=manifest.Prerelease};
-        assert(!ReleaseIdentity.IsUpdate(Release(beta),"0.9.0","0.0.0",false)&&ReleaseIdentity.IsUpdate(Release(beta),"0.9.0","0.0.0",true),"Beta updates require opting in");
-        assert(!ReleaseIdentity.IsUpdate(Release(test),"1.0.0","3.1.0",false)&&ReleaseIdentity.IsUpdate(Release(test),"1.0.0","3.1.0",true),"Same-name Y builds are detected by build number");
-        assert(!ReleaseIdentity.IsUpdate(Release(test),"0.1.0","3.2.0",true)&&!ReleaseIdentity.IsUpdate(Release(test),"0.1.0","4.0.0",true)&&!ReleaseIdentity.IsUpdate(Release(dev),"0.1.0","0.0.0",true),"Equal, older and local-development identities are not offered");
+        assert(!ReleaseIdentity.IsUpdate(Release(beta),"0.0.0",false)&&ReleaseIdentity.IsUpdate(Release(beta),"0.0.0",true),"Beta updates require opting in");
+        assert(!ReleaseIdentity.IsUpdate(Release(test),"3.1.0",false)&&ReleaseIdentity.IsUpdate(Release(test),"3.1.0",true),"Same-name Y builds are detected by build number");
+        assert(!ReleaseIdentity.IsUpdate(Release(test),"3.2.0",true)&&!ReleaseIdentity.IsUpdate(Release(test),"4.0.0",true)&&!ReleaseIdentity.IsUpdate(Release(dev),"0.0.0",true),"Equal, older and local-development identities are not offered");
+        assert(!ReleaseIdentity.IsUpdate(Release(official) with {Manifest=null,Tag="v999.0.0"},"1.0.0",true) && !ReleaseIdentity.IsUpdate(Release(official),"invalid",true),"Missing manifests and invalid local versions never fall back to comparing tags");
+        assert(!ReleaseIdentity.IsUpdate(Release(official) with {Tag="v999.0.0"},"4.0.0",true) && ReleaseIdentity.IsUpdate(Release(official) with {Tag="v0.0.1"},"2.0.0",true),"Tags and names do not affect numerical upgrade or rollback decisions");
         assert(official.Number.CompareTo(new(2,65535,65535))>0,"A new X sorts after all previous Y/Z builds");
         var sha=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("fixture"))).ToLowerInvariant();
         var responses=new Dictionary<string,string>();
@@ -41,13 +43,14 @@ internal static class ReleaseIdentityTests
             return JsonSerializer.Serialize(new {draft=false,prerelease,tag_name=tag,name=tag,body="notes",published_at="2026-10-28T00:00:00Z",assets=new[]{new {name="release.json",browser_download_url=url,size=100}}});
         }
         var stable=Json("v1.0.0","3.0.0","official",false);
+        var misleading=Json("v99.0.0","2.0.0","official",false);
+        var malformed=Json("v9999.0.0","invalid","official",false);
         var development=Json("test/3.2.0","3.2.0","development",true);
         var older=Json("test/3.1.0","3.1.0","development",true);
-        responses["/repos/Napreth/PathMan/releases/latest"]=stable;
-        responses["/repos/Napreth/PathMan/releases?per_page=100"]="["+older+","+stable+","+development+"]";
+        responses["/repos/Napreth/PathMan/releases?per_page=100"]="["+"""{"draft":false,"prerelease":false,"tag_name":"v999.0.0","published_at":"2099-01-01T00:00:00Z","assets":[]}"""+","+malformed+","+misleading+","+older+","+stable+","+development+"]";
         var handler=new Handler(responses);using var http=new HttpClient(handler);var client=new GitHubReleaseClient(http);
-        assert(client.GetLatestAsync("1.0.0").GetAwaiter().GetResult()?.Manifest?.VersionNumber=="3.0.0","Default checks use the official release endpoint and release.json");
-        var latest=client.GetLatestAsync("1.0.0",true).GetAwaiter().GetResult();
+        assert(client.GetLatestAsync().GetAwaiter().GetResult()?.Manifest?.VersionNumber=="3.0.0","Stable checks choose the highest manifest number, ignoring names, order and releases without manifests");
+        var latest=client.GetLatestAsync(true).GetAwaiter().GetResult();
         assert(latest?.Manifest is {VersionNumber:"3.2.0",Type:"development",Installers.Count:1},"Opt-in checks read installer metadata and choose the highest numeric build across all branches");
         var package=new UpdatePackage("x64",true);
         var installer=new ReleaseAsset("custom-setup.exe",new("https://github.com/Napreth/PathMan/releases/download/test%2F3.2.0/a.exe"),7,null);

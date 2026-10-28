@@ -34,8 +34,8 @@
 #endif
 
 extern "C" __declspec(dllexport) DWORD __stdcall CompareVersions(const wchar_t* left,const wchar_t* right) {
-    try {auto value=pathman_version::compare(left?left:L"0.0.0",right?right:L"0.0.0");return value>0?1:value<0?2:0;}
-    catch(...) {return 0;}
+    try {auto value=pathman_version::compare(left?left:L"",right?right:L"");return value>0?1:value<0?2:0;}
+    catch(...) {return 3;}
 }
 
 namespace {

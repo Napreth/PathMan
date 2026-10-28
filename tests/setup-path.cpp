@@ -6,6 +6,7 @@
 
 extern "C" __declspec(dllimport) DWORD __stdcall ConfigureInstall(const wchar_t*, BOOL);
 extern "C" __declspec(dllimport) DWORD __stdcall CleanupInstall(const wchar_t*, BOOL, const wchar_t*);
+extern "C" __declspec(dllimport) DWORD __stdcall CompareVersions(const wchar_t*, const wchar_t*);
 
 namespace {
 void check(bool value, const char* message) {
@@ -55,6 +56,10 @@ void uninstall() { check(CleanupInstall(directory, FALSE, L"C:\\PathMan.Setup.Fi
 
 int main() {
     try {
+        check(CompareVersions(L"1.10.0",L"1.9.65535")==1 && CompareVersions(L"2.0.0",L"1.65535.65535")==1,"Versions must compare X/Y/Z numerically");
+        check(CompareVersions(L"1.2.3",L"1.2.4")==2 && CompareVersions(L"1.2.3",L"1.2.3")==0,"Older builds and equal reinstalls must be distinguished");
+        for(const auto invalid:{L"",L"1.2",L"01.2.3",L"1.2.65536",L"1.2.3-beta",L"1.2.3.4",L"v1.2.3",L"999999999999.0.0"})
+            check(CompareVersions(invalid,L"1.2.3")==3 && CompareVersions(L"1.2.3",invalid)==3,"Malformed versions must not bypass rollback protection");
         registry_fixture fixture;
         const std::vector<std::wstring> values = {
             L"", L";", L";;", L"C:\\tools", L"C:\\tools;", L"C:\\tools;;",

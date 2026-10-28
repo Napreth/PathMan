@@ -17,9 +17,7 @@ public sealed record UpdatePackage(string Architecture,bool SelfContained)
             if(asset.Size!=package.Size)throw new InvalidDataException(L.Get("安装包信息无效。"));
             return asset with {Digest="sha256:"+package.Sha256};
         }
-        var version=ReleaseIdentity.Normalize(release.Tag);
-        if(version.Length==0 || version.IndexOfAny(Path.GetInvalidFileNameChars())>=0) return null;
-        return release.Assets.FirstOrDefault(asset=>string.Equals(asset.Name,FileName(version),StringComparison.OrdinalIgnoreCase));
+        return null;
     }
 }
 

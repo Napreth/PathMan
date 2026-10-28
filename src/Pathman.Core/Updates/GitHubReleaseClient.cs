@@ -10,18 +10,16 @@ public sealed record AvailableRelease(string Tag,string Title,string Body,Uri Pa
 {
     public ReleaseManifest? Manifest {get;init;}
     public bool Prerelease {get;init;}
-    public DateTimeOffset? PublishedAt {get;init;}
 }
 
 public static class ReleaseIdentity
 {
     public static string Normalize(string tag)=>tag.StartsWith('v') || tag.StartsWith('V') ? tag[1..] : tag;
-    public static bool IsDifferent(string tag,string current)=>!string.Equals(Normalize(tag),Normalize(current),StringComparison.Ordinal);
-    public static bool IsUpdate(AvailableRelease release,string currentName,string currentNumber,bool receivePrerelease)
+    public static bool IsUpdate(AvailableRelease release,string currentNumber,bool receivePrerelease)
     {
-        if((release.Prerelease || release.Manifest?.Prerelease==true) && !receivePrerelease || release.Manifest?.Number.Z>0) return false;
-        return release.Manifest is {} manifest && BuildVersion.TryParse(currentNumber,out var current)
-            ? manifest.Number.CompareTo(current)>0 : IsDifferent(release.Tag,currentName);
+        if(release.Manifest is not {} manifest || !BuildVersion.TryParse(currentNumber,out var current))return false;
+        if((release.Prerelease || manifest.Prerelease) && !receivePrerelease || manifest.Number.Z>0)return false;
+        return manifest.Number.CompareTo(current)>0;
     }
 }
 
@@ -29,11 +27,9 @@ public sealed class GitHubReleaseClient(HttpClient client)
 {
     public const string Repository="Napreth/PathMan";
     public static readonly Uri RepositoryPage=new("https://github.com/"+Repository);
-    public Task<AvailableRelease?> GetLatestAsync(string currentVersion,CancellationToken cancellationToken=default)=>GetLatestAsync(currentVersion,false,cancellationToken);
-    public async Task<AvailableRelease?> GetLatestAsync(string currentVersion,bool receivePrerelease,CancellationToken cancellationToken=default)
+    public async Task<AvailableRelease?> GetLatestAsync(bool receivePrerelease=false,CancellationToken cancellationToken=default)
     {
         var endpoint="https://api.github.com/repos/"+Repository+"/releases";
-        if(!receivePrerelease){var stable=await ReadAsync(endpoint+"/latest",8*1024*1024,cancellationToken);if(stable is null)return null;using var document=JsonDocument.Parse(stable);return await ParseAsync(document.RootElement,false,cancellationToken);}
         AvailableRelease? latest=null;
         using var parallelism=new SemaphoreSlim(6);
         for(var page=1;page<=20;page++)
@@ -45,12 +41,12 @@ public sealed class GitHubReleaseClient(HttpClient client)
             var releases=await Task.WhenAll(root.EnumerateArray().Select(async element=>
             {
                 await parallelism.WaitAsync(cancellationToken);
-                try{return await ParseAsync(element,true,cancellationToken);}finally{parallelism.Release();}
+                try{return await ParseAsync(element,receivePrerelease,cancellationToken);}finally{parallelism.Release();}
             }));
             foreach(var release in releases)
             {
                 if(release is null)continue;
-                if(latest is null || (release.Manifest is {} a && latest.Manifest is {} b ? a.Number.CompareTo(b.Number)>0 : release.PublishedAt>latest.PublishedAt))latest=release;
+                if(latest is null || release.Manifest!.Number.CompareTo(latest.Manifest!.Number)>0)latest=release;
             }
             if(root.GetArrayLength()<100)return latest;
         }
@@ -72,16 +68,15 @@ public sealed class GitHubReleaseClient(HttpClient client)
                 var size=asset.TryGetProperty("size",out var length) && length.TryGetInt64(out var value) ? value : 0;
                 assets.Add(new(name,uri,size,String(asset,"digest")));
             }
-        ReleaseManifest? manifest=null;
-        if(assets.FirstOrDefault(asset=>asset.Name=="release.json") is {} metadata)
-        {
-            var json=await ReadAsync(metadata.Download.AbsoluteUri,65536,cancellationToken) ?? throw new InvalidDataException("Missing release metadata.");
-            manifest=ReleaseManifest.Parse(json);
-            if(manifest.Number.Z>0 || !receivePrerelease && manifest.Prerelease)return null;
-        }
+        if(assets.FirstOrDefault(asset=>asset.Name=="release.json") is not {} metadata)return null;
+        var json=await ReadAsync(metadata.Download.AbsoluteUri,65536,cancellationToken);
+        if(json is null)return null;
+        ReleaseManifest manifest;
+        try{manifest=ReleaseManifest.Parse(json);}catch(Exception error) when(error is JsonException or InvalidDataException){return null;}
+        if(manifest.Number.Z>0 || !receivePrerelease && manifest.Prerelease)return null;
         return new(tag,String(release,"name") is {Length:>0} title ? title : tag,String(release,"body") ?? "",
             new Uri(RepositoryPage.AbsoluteUri+"/releases/tag/"+Uri.EscapeDataString(tag)),assets)
-        {Manifest=manifest,Prerelease=prerelease.ValueKind==JsonValueKind.True,PublishedAt=DateTimeOffset.TryParse(String(release,"published_at"),out var time)?time:null};
+        {Manifest=manifest,Prerelease=prerelease.ValueKind==JsonValueKind.True};
     }
     private async Task<string?> ReadAsync(string uri,int maximum,CancellationToken cancellationToken)
     {

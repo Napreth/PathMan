@@ -20,16 +20,20 @@ internal static class UpdateDeliveryTests
             var digest="sha256:"+Convert.ToHexString(SHA256.HashData(bytes));
             var assets=(from arch in new[]{"x86","x64","arm64"} from self in new[]{false,true} let name=new UpdatePackage(arch,self).FileName("v2.0.0")
                 select new ReleaseAsset(name,new Uri("https://github.com/Napreth/PathMan/releases/download/v2.0.0/"+name),bytes.Length,digest)).ToArray();
-            var release=new AvailableRelease("v2.0.0","Release title","First line\n\nLast line",new("https://github.com/Napreth/PathMan/releases/tag/v2.0.0"),assets);
+            var release=new AvailableRelease("v2.0.0","Release title","First line\n\nLast line",new("https://github.com/Napreth/PathMan/releases/tag/v2.0.0"),assets) {
+                Manifest=new("2.0.0","2.0.0","official") {Installers=(from arch in new[]{"x86","x64","arm64"} from self in new[]{false,true} select new ReleasePackage(new UpdatePackage(arch,self).FileName("v2.0.0"),arch,self,bytes.Length,digest[7..])).ToArray()}
+            };
             foreach(var arch in new[]{"x86","x64","arm64"}) foreach(var self in new[]{false,true})
             {var package=new UpdatePackage(arch,self);assert(package.Select(release)?.Name==package.FileName(release.Tag),$"Select exact architecture and runtime package: {arch}/{self}");}
             assert(new UpdatePackage("x64",true).Select(release with {Assets=[assets[0]]}) is null,"Missing architecture/runtime package uses the release-page fallback");
+            assert(new UpdatePackage("x64",true).Select(release with {Manifest=null}) is null,"Missing manifests never fall back to guessing installer filenames");
             var store=new UpdateStateStore(directory);store.Record(release,DateTime.UtcNow);
             var saved=new UpdateStateStore(directory).Read();
             assert(saved.LastCheckedUtc is not null && saved.Latest is {Tag:"v2.0.0",Title:"Release title",Body:"First line\n\nLast line"} && saved.Latest.Assets.Count==6,"Release title, body, assets and result survive restarting the application");
-            assert(store.ReserveNotification("v2.0.0") && !new UpdateStateStore(directory).ReserveNotification("2.0.0"),"A version is notified only once across application restarts");
-            assert(store.ReserveNotification("v2.1.0"),"A different version can notify again");
-            store.ReleaseNotification("v2.1.0");assert(store.ReserveNotification("v2.1.0"),"A failed Toast delivery can be retried");
+            assert(store.ReserveNotification("2.0.0") && !new UpdateStateStore(directory).ReserveNotification("2.0.0"),"A numeric version is notified only once across application restarts");
+            assert(store.ReserveNotification("2.1.0"),"A different numeric version can notify again");
+            store.ReleaseNotification("2.1.0");assert(store.ReserveNotification("2.1.0"),"A failed Toast delivery can be retried");
+            var rejectedTag=false;try{store.ReserveNotification("v2.2.0");}catch(ArgumentException){rejectedTag=true;}assert(rejectedTag,"Notification identity requires a numeric build number rather than a tag");
             store.Record(null,DateTime.UtcNow);assert(new UpdateStateStore(directory).Read().Latest is null,"A fresh check replaces an old cached update result");
             var handler=new DownloadHandler(bytes);using var http=new HttpClient(handler);var downloader=new ReleaseInstaller(http,directory);
             var file=downloader.DownloadAsync(assets[0]).GetAwaiter().GetResult();
