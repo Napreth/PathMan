@@ -89,6 +89,7 @@ foreach ($cpu in $Arch) {
         Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $output
         Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.txt') -Destination $output
         Copy-Item -LiteralPath (Join-Path $projectRoot 'licenses') -Destination $output -Recurse
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'scripts/shell/Switch-PathMan.ps1'),(Join-Path $projectRoot 'scripts/shell/switch-pathman.cmd'),(Join-Path $projectRoot 'scripts/shell/switch-pathman') -Destination (Join-Path $output 'bin')
         Write-ReleaseManifest $versionInfo (Join-Path $output 'release.json')
         $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
         if ($Test -and ($cpu -eq $hostArch -or ($cpu -eq 'x86' -and $hostArch -eq 'x64'))) {

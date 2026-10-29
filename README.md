@@ -152,6 +152,27 @@ pathman delete java 8
 
 CLI 使用调用者权限。修改系统变量需在管理员终端运行，或自行使用 `sudo.exe`；权限不足时命令报错退出。
 
+### 终端切换脚本
+
+CLI 目录同时提供三个脚本。`name`、`version` 支持命名参数或位置参数，`scope` 必须显式指定：`reg` 只修改注册表，`shell` 只修改当前终端，`all` 同时修改两者。当前终端切换会更新目标变量及 PATH 中对应旧版本的路径，保留其余条目。
+
+```powershell
+Switch-PathMan -Name java -Version 25 -Scope reg
+Switch-PathMan java 25 -Scope shell
+```
+
+```cmd
+switch-pathman /n node /v 24 /s shell
+switch-pathman node 24 /s all
+```
+
+```bash
+. switch-pathman --name python --version 3.12 --scope all
+. switch-pathman python 3.12 -s shell
+```
+
+Git Bash 必须用 `.` 在当前 shell 中执行。批处理脚本内使用 CMD 版本时需用 `call switch-pathman ...`。CMD 的延迟展开需关闭，且单个变量赋值不能超过 8000 个字符或包含换行；不满足时切换报错，不截断内容。
+
 ## 权限与数据
 
 桌面界面首次修改系统变量时请求 UAC，后续操作复用管理员助手。关闭窗口或闲置 15 分钟后助手退出。取消授权会保留编辑内容。
@@ -252,7 +273,6 @@ git push origin v1.0.0-beta.1
 ## 开发计划
 
 - PATH 变量卡片视图。
-- PowerShell 模块与 CMD 脚本，用于切换当前终端的临时环境变量版本。
 
 ## 许可证
 

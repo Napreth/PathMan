@@ -19,6 +19,9 @@ try
         case ["delete", var project,var version]:
             VersionCommands.Delete(layout,project,version);
             return 0;
+        case ["switch", var project,var version,"--resolve"]:
+            VersionCommands.Resolve(layout,project,version);
+            return 0;
         case ["switch", var project,var version]:
             VersionCommands.Switch(layout,project,version);
             return 0;

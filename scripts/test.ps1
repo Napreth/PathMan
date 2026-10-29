@@ -67,7 +67,7 @@ function Assert-Rejected([scriptblock]$Action) {
 try {
     New-Item -ItemType Directory -Path $installation -Force | Out-Null
     Copy-Item -Path (Join-Path $PublishDirectory '*') -Destination $installation -Recurse
-    Assert (@(Get-ChildItem -LiteralPath (Join-Path $installation 'bin')).Count -eq 1) 'bin must contain only the CLI EXE.'
+    Assert (@(Compare-Object @('pathman.exe','Switch-PathMan.ps1','switch-pathman.cmd','switch-pathman') @(Get-ChildItem -LiteralPath (Join-Path $installation 'bin')|ForEach-Object Name)).Count -eq 0) 'bin contains the CLI and three shell scripts.'
     Assert (@(Get-ChildItem -LiteralPath $installation -Recurse -Filter '*.exe').Count -eq 4) 'Exactly four production EXEs are required.'
     $help=Invoke-Cli @('--help')
     $commands=@([regex]::Matches($help.Out,'(?m)^\s+pathman (\w+)') | ForEach-Object {$_.Groups[1].Value})

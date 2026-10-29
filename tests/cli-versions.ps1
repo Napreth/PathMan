@@ -32,6 +32,8 @@ try{
  Assert ($true) 'Legacy commands, data-root overrides and the old CLI elevation worker are rejected'
  $null=RunCli @('add','cli-user','25','D:/SDK/User25','--variable','PATHMAN_CLI_USER','--type','User');$null=RunCli @('add','cli-user','lts','D:/SDK/User25')
  Assert ((Raw 'PATHMAN_CLI_USER') -eq 'user-before') 'Registering versions only saves metadata'
+ $resolved=(RunCli @('switch','cli-user','25','--resolve'))|ConvertFrom-Json
+ Assert ($resolved.Name -eq 'PATHMAN_CLI_USER' -and $resolved.Value -eq 'D:/SDK/User25' -and (Raw 'PATHMAN_CLI_USER') -eq 'user-before') 'Shell resolution validates the version without writing the registry'
  $null=RunCli @('switch','cli-user','25');$listing=RunCli @('list','cli-user')
  Assert ((Raw 'PATHMAN_CLI_USER') -eq 'D:/SDK/User25' -and $listing.Contains('(25, lts)') -and $listing.Contains('Type: User')) 'User switching and shared current-version labels still work'
  $null=RunCli @('delete','cli-user','25');$null=RunCli @('delete','cli-user')

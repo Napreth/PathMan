@@ -65,4 +65,9 @@ internal static class VersionCommands
         WindowsEnvironmentVariableEditor.Apply(mutation,store);
         Console.WriteLine(L.Format("已切换 {0} → {1}：{2}={3}",project,version,mutation.Name,Display(mutation.Value!)));
     }
+    public static void Resolve(PathmanLayout layout,string project,string version)
+    {
+        var mutation=VersionCatalog.PrepareSwitch(EnabledState(layout),project,version,EnvironmentMonitor.ReadAll());
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {Name=mutation.Name,Value=mutation.Value}));
+    }
 }

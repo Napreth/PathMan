@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    printf '%s\n' 'Source this script: . switch-pathman name version --scope reg|shell|all' >&2
+    exit 1
+fi
+_pathman_switch() {
+    local name='' version='' scope='' option code script
+    while (($#)); do
+        case $1 in
+            --name|-n|--version|-v|--scope|-s)
+                option=$1; shift
+                (($#)) || { printf '%s\n' 'Missing option value.' >&2; return 1; }
+                case $option in
+                    --name|-n) [[ -z $name ]] || return 1; name=$1;;
+                    --version|-v) [[ -z $version ]] || return 1; version=$1;;
+                    --scope|-s) [[ -z $scope ]] || return 1; scope=$1;;
+                esac;;
+            -*) printf 'Unknown option: %s\n' "$1" >&2; return 1;;
+            *) if [[ -z $name ]]; then name=$1; elif [[ -z $version ]]; then version=$1; else return 1; fi;;
+        esac
+        shift
+    done
+    [[ -n $name && -n $version && $scope =~ ^(reg|shell|all)$ ]] || { printf '%s\n' 'Name, version and an explicit --scope are required.' >&2; return 1; }
+    script=$(cygpath -w -- "$(dirname -- "${BASH_SOURCE[0]}")/Switch-PathMan.ps1") || return
+    code=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script" -Name "$name" -Version "$version" -Scope "$scope" -OutputFormat Bash) || return
+    eval "$code"
+}
+if _pathman_switch "$@"; then
+    unset -f _pathman_switch
+    return 0
+else
+    unset -f _pathman_switch
+    return 1
+fi
