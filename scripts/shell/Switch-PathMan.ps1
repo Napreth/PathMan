@@ -7,14 +7,36 @@ param(
     [string]$OutputFile
 )
 $ErrorActionPreference='Stop'
-$savedEncoding=[Console]::OutputEncoding
+function Invoke-PathMan([string[]]$Arguments,[string]$FailureMessage){
+    $start=[Diagnostics.ProcessStartInfo]::new($cli)
+    $start.UseShellExecute=$false
+    $start.CreateNoWindow=$true
+    $start.RedirectStandardOutput=$true
+    $start.RedirectStandardError=$true
+    $start.StandardOutputEncoding=[Text.UTF8Encoding]::new($false)
+    $start.StandardErrorEncoding=[Text.UTF8Encoding]::new($false)
+    $start.Arguments=(@(foreach($argument in $Arguments){
+        '"'+[regex]::Replace($argument,'(\\*)("|$)',{param($match)
+            $slashes=$match.Groups[1].Value
+            $slashes+$slashes+$(if($match.Groups[2].Value){'\"'})
+        })+'"'
+    }) -join ' ')
+    $process=[Diagnostics.Process]::Start($start)
+    try{
+        $stdout=$process.StandardOutput.ReadToEndAsync()
+        $stderr=$process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $output=$stdout.GetAwaiter().GetResult()
+        $errorText=$stderr.GetAwaiter().GetResult()
+        if($process.ExitCode){throw ($FailureMessage+' '+$errorText).Trim()}
+        return $output
+    }finally{$process.Dispose()}
+}
 try {
-    [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
     $cli=Join-Path $PSScriptRoot 'pathman.exe'
     if(!(Test-Path -LiteralPath $cli)){$cli=(Get-Command pathman.exe -ErrorAction Stop).Source}
-    $json=& $cli switch $Name $Version --resolve
-    if($LASTEXITCODE){throw 'PathMan could not resolve the requested version.'}
-    $target=($json -join "`n")|ConvertFrom-Json
+    $json=Invoke-PathMan @('switch',$Name,$Version,'--resolve') 'PathMan could not resolve the requested version.'
+    $target=$json|ConvertFrom-Json
     $updates=[ordered]@{}
     if($Scope -ne 'reg'){
         $old=[Environment]::GetEnvironmentVariable($target.Name,'Process')
@@ -46,17 +68,27 @@ try {
     }
     if($OutputFormat -eq 'Cmd' -and !$OutputFile){throw 'An output file is required for CMD.'}
     if($Scope -ne 'shell'){
-        $message=& $cli switch $Name $Version
-        if($LASTEXITCODE){throw 'PathMan could not write the environment variable.'}
+        $null=Invoke-PathMan @('switch',$Name,$Version) 'PathMan could not write the environment variable.'
     }
     if($OutputFormat -eq 'Cmd'){
         $lines=@(foreach($key in $updates.Keys){$key+'='+$updates[$key]})
-        [IO.File]::WriteAllLines($OutputFile,$lines,[Text.UTF8Encoding]::new($false))
-    }elseif($OutputFormat -eq 'Bash'){
-        foreach($key in $updates.Keys){
-            $quoted="'"+([string]$updates[$key]).Replace("'","'\''")+"'"
-            if($key -eq 'PATH'){[Console]::WriteLine('export PATH="$(cygpath -u -p -- '+$quoted+')"')}else{[Console]::WriteLine('export '+$key+'='+$quoted)}
+        $originalCodePage=[Console]::OutputEncoding.CodePage
+        $fileCodePage=$originalCodePage
+        $encoding=if($fileCodePage -eq 65001){[Text.UTF8Encoding]::new($false,$true)}else{[Text.Encoding]::GetEncoding($fileCodePage,[Text.EncoderFallback]::ExceptionFallback,[Text.DecoderFallback]::ExceptionFallback)}
+        $useUtf8=$false
+        try{foreach($line in $lines){if($encoding.GetString($encoding.GetBytes($line)) -cne $line){$useUtf8=$true;break}}}catch [Text.EncoderFallbackException]{$useUtf8=$true}
+        if($useUtf8){
+            $fileCodePage=65001
+            $encoding=[Text.UTF8Encoding]::new($false)
         }
+        [IO.File]::WriteAllLines($OutputFile,$lines,$encoding)
+        [IO.File]::WriteAllText($OutputFile+'.cp',"$originalCodePage $fileCodePage",[Text.Encoding]::ASCII)
+    }elseif($OutputFormat -eq 'Bash'){
+        $writer=[IO.StreamWriter]::new([Console]::OpenStandardOutput(),[Text.UTF8Encoding]::new($false),1024,$true)
+        try{foreach($key in $updates.Keys){
+            $quoted="'"+([string]$updates[$key]).Replace("'","'\''")+"'"
+            if($key -eq 'PATH'){$writer.WriteLine('export PATH="$(cygpath -u -p -- '+$quoted+')"')}else{$writer.WriteLine('export '+$key+'='+$quoted)}
+        }}finally{$writer.Dispose()}
     }else{
         foreach($key in $updates.Keys){[Environment]::SetEnvironmentVariable($key,$updates[$key],'Process')}
     }
@@ -64,4 +96,4 @@ try {
     if($OutputFormat -eq 'PowerShell'){throw}
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
-}finally{[Console]::OutputEncoding=$savedEncoding}
+}

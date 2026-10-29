@@ -5,6 +5,8 @@ set "_PATHMAN_TMP="
 set "_PATHMAN_NAME="
 set "_PATHMAN_VERSION="
 set "_PATHMAN_SCOPE="
+set "_PATHMAN_CP="
+set "_PATHMAN_TARGET_CP="
 :parse
 if "%~1"=="" goto run
 if /i "%~1"=="/n" goto name
@@ -36,19 +38,22 @@ if not defined _PATHMAN_NAME goto usage
 if not defined _PATHMAN_VERSION goto usage
 if not defined _PATHMAN_SCOPE set "_PATHMAN_SCOPE=shell"
 set "_PATHMAN_TMP=%TEMP%\PathMan-%RANDOM%-%RANDOM%.env"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%_PATHMAN_DIR%Switch-PathMan.ps1" -Name "%_PATHMAN_NAME%" -Version "%_PATHMAN_VERSION%" -Scope "%_PATHMAN_SCOPE%" -OutputFormat Cmd -OutputFile "%_PATHMAN_TMP%"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%_PATHMAN_DIR%Switch-PathMan.ps1" -Name "%_PATHMAN_NAME%" -Version "%_PATHMAN_VERSION%" -Scope "%_PATHMAN_SCOPE%" -OutputFormat Cmd -OutputFile "%_PATHMAN_TMP%" >nul
 if not "%errorlevel%"=="0" goto failed
-for /f "tokens=2 delims=:" %%C in ('chcp') do set "_PATHMAN_CP=%%C"
-chcp 65001 >nul
+for /f "usebackq tokens=1,2" %%C in ("%_PATHMAN_TMP%.cp") do (
+    set "_PATHMAN_CP=%%C"
+    set "_PATHMAN_TARGET_CP=%%D"
+)
+if not "%_PATHMAN_CP%"=="%_PATHMAN_TARGET_CP%" chcp %_PATHMAN_TARGET_CP% >nul
 for /f "usebackq delims=" %%E in ("%_PATHMAN_TMP%") do set "%%E"
-chcp %_PATHMAN_CP% >nul
-del /q "%_PATHMAN_TMP%" >nul 2>&1
+if not "%_PATHMAN_CP%"=="%_PATHMAN_TARGET_CP%" chcp %_PATHMAN_CP% >nul
+del /q "%_PATHMAN_TMP%" "%_PATHMAN_TMP%.cp" >nul 2>&1
 call :cleanup
 exit /b 0
 :usage
 echo Usage: switch-pathman [/n] name [/v] version [/s reg^|shell^|all] 1>&2
 :failed
-if defined _PATHMAN_TMP del /q "%_PATHMAN_TMP%" >nul 2>&1
+if defined _PATHMAN_TMP del /q "%_PATHMAN_TMP%" "%_PATHMAN_TMP%.cp" >nul 2>&1
 call :cleanup
 exit /b 1
 :cleanup
@@ -57,5 +62,6 @@ set "_PATHMAN_VERSION="
 set "_PATHMAN_SCOPE="
 set "_PATHMAN_TMP="
 set "_PATHMAN_CP="
+set "_PATHMAN_TARGET_CP="
 set "_PATHMAN_DIR="
 exit /b

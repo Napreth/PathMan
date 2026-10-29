@@ -23,7 +23,7 @@ _pathman_switch() {
     scope=${scope:-shell}
     [[ -n $name && -n $version && $scope =~ ^(reg|shell|all)$ ]] || { printf '%s\n' 'Name, version and a valid scope (reg, shell or all) are required.' >&2; return 1; }
     script=$(cygpath -w -- "$(dirname -- "${BASH_SOURCE[0]}")/Switch-PathMan.ps1") || return
-    code=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script" -Name "$name" -Version "$version" -Scope "$scope" -OutputFormat Bash) || return
+    code=$(powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$script" -Name "$name" -Version "$version" -Scope "$scope" -OutputFormat Bash) || return
     eval "$code"
 }
 if _pathman_switch "$@"; then
