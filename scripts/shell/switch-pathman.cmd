@@ -34,7 +34,7 @@ goto parse
 :run
 if not defined _PATHMAN_NAME goto usage
 if not defined _PATHMAN_VERSION goto usage
-if not defined _PATHMAN_SCOPE goto usage
+if not defined _PATHMAN_SCOPE set "_PATHMAN_SCOPE=shell"
 set "_PATHMAN_TMP=%TEMP%\PathMan-%RANDOM%-%RANDOM%.env"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%_PATHMAN_DIR%Switch-PathMan.ps1" -Name "%_PATHMAN_NAME%" -Version "%_PATHMAN_VERSION%" -Scope "%_PATHMAN_SCOPE%" -OutputFormat Cmd -OutputFile "%_PATHMAN_TMP%"
 if not "%errorlevel%"=="0" goto failed
@@ -46,7 +46,7 @@ del /q "%_PATHMAN_TMP%" >nul 2>&1
 call :cleanup
 exit /b 0
 :usage
-echo Usage: switch-pathman [/n] name [/v] version /s reg^|shell^|all 1>&2
+echo Usage: switch-pathman [/n] name [/v] version [/s reg^|shell^|all] 1>&2
 :failed
 if defined _PATHMAN_TMP del /q "%_PATHMAN_TMP%" >nul 2>&1
 call :cleanup

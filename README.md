@@ -154,21 +154,21 @@ CLI 使用调用者权限。修改系统变量需在管理员终端运行，或�
 
 ### 终端切换脚本
 
-CLI 目录同时提供三个脚本。`name`、`version` 支持命名参数或位置参数，`scope` 必须显式指定：`reg` 只修改注册表，`shell` 只修改当前终端，`all` 同时修改两者。当前终端切换会更新目标变量及 PATH 中对应旧版本的路径，保留其余条目。
+CLI 目录同时提供三个脚本。`name`、`version` 支持命名参数或位置参数，`scope` 默认为 `shell`：`reg` 只修改注册表，`shell` 只修改当前终端，`all` 同时修改两者。当前终端切换会更新目标变量及 PATH 中对应旧版本的路径，保留其余条目。
 
 ```powershell
 Switch-PathMan -Name java -Version 25 -Scope reg
-Switch-PathMan java 25 -Scope shell
+Switch-PathMan java 25
 ```
 
 ```cmd
-switch-pathman /n node /v 24 /s shell
+switch-pathman /n node /v 24
 switch-pathman node 24 /s all
 ```
 
 ```bash
 . switch-pathman --name python --version 3.12 --scope all
-. switch-pathman python 3.12 -s shell
+. switch-pathman python 3.12
 ```
 
 Git Bash 必须用 `.` 在当前 shell 中执行。批处理脚本内使用 CMD 版本时需用 `call switch-pathman ...`。CMD 的延迟展开需关闭，且单个变量赋值不能超过 8000 个字符或包含换行；不满足时切换报错，不截断内容。

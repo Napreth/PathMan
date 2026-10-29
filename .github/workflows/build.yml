@@ -91,6 +91,10 @@ jobs:
           ./tests/release-metadata.ps1
           ./tests/public-build-counter.ps1
           ./tests/local-build.ps1
+      - name: Test shell switching
+        if: matrix.arch == 'x64'
+        shell: pwsh -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: ./tests/shell-switch.ps1
       - name: Build baseline installers
         if: ${{ !env.ACT }}
         run: ./build.ps1 -Arch $env:PATHMAN_ARCH -VersionName '0.0.0' -VersionNumber '0.0.0' -ReleaseType official

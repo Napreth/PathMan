@@ -2,14 +2,13 @@
 param(
     [Parameter(Mandatory,Position=0)][Alias('n')][string]$Name,
     [Parameter(Mandatory,Position=1)][Alias('v')][string]$Version,
-    [Alias('s')][ValidateSet('reg','shell','all')][string]$Scope,
+    [Alias('s')][ValidateSet('reg','shell','all')][string]$Scope='shell',
     [ValidateSet('PowerShell','Cmd','Bash')][string]$OutputFormat='PowerShell',
     [string]$OutputFile
 )
 $ErrorActionPreference='Stop'
 $savedEncoding=[Console]::OutputEncoding
 try {
-    if(!$PSBoundParameters.ContainsKey('Scope')){throw 'An explicit -Scope is required.'}
     [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
     $cli=Join-Path $PSScriptRoot 'pathman.exe'
     if(!(Test-Path -LiteralPath $cli)){$cli=(Get-Command pathman.exe -ErrorAction Stop).Source}
