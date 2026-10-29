@@ -1,0 +1,2 @@
+scripts/shell/switch-pathman text eol=lf
+scripts/shell/switch-pathman.cmd text eol=crlf

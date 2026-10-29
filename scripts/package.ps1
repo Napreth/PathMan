@@ -52,7 +52,9 @@ foreach ($cpu in @($Arch | Select-Object -Unique)) {
         foreach ($file in @('PathMan.exe','bin/pathman.exe','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','LICENSE')) {
             if (!(Test-Path -LiteralPath (Join-Path $publish $file))) { throw "Missing payload: $publish/$file. Run build.ps1 first." }
         }
-        if (@(Get-ChildItem -LiteralPath (Join-Path $publish 'bin') -File).Count -ne 1) { throw 'bin must contain only pathman.exe.' }
+        $cliFiles=@('pathman.exe','Switch-PathMan.ps1','switch-pathman.cmd','switch-pathman')
+        $actual=@(Get-ChildItem -LiteralPath (Join-Path $publish 'bin') -File|ForEach-Object Name)
+        if(@(Compare-Object $cliFiles $actual).Count){throw 'bin must contain the CLI and its three shell scripts.'}
         $identity=Get-Content (Join-Path $publish 'release.json') -Raw|ConvertFrom-Json
         if($identity.versionName -ne $Version -or $identity.versionNumber -ne $versionInfo.VersionNumber -or $identity.type -ne $versionInfo.Type){throw 'Published payload identity does not match the requested installer identity.'}
         & $compiler /V2 /INPUTCHARSET UTF8 "/DARCH=$cpu" "/DPACKAGE_TYPE=$kind" "/DVERSION=$Version" "/DVERSION_NUMERIC=$($versionInfo.Numeric)" "/DPUBLISH_DIR=$publish" "/DHELPER_DLL=$helper" "/DOUTPUT_FILE=$output" (Join-Path $projectRoot 'packaging/PathMan.nsi')

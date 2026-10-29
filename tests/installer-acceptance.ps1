@@ -56,6 +56,7 @@ try {
             Assert ((MachineType (Join-Path $directory 'PathMan.exe')) -eq $expectedMachine) "$label GUI has the requested PE architecture"
             Assert ((MachineType (Join-Path $directory 'bin/pathman.exe')) -eq $expectedMachine) "$label CLI has the requested PE architecture"
             Run (Join-Path $directory 'bin/pathman.exe') '--help'
+            foreach($script in 'Switch-PathMan.ps1','switch-pathman.cmd','switch-pathman'){Assert (Test-Path (Join-Path $directory "bin/$script")) "$label installs $script"}
             Run (Join-Path $directory 'bin/pathman.exe') 'list' 1
             $gui=Start-Process (Join-Path $directory 'PathMan.exe') -PassThru
             try {
@@ -92,7 +93,7 @@ try {
             Assert ((Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash -eq $hash) "$label downgrade is rejected before changing files"
             Run $uninstaller "/S $scope _?=$directory\internal"
             Assert (!(Registered $machine)) "$label uninstall removes registration"
-            foreach($relative in 'PathMan.exe','bin/pathman.exe','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','release.json','THIRD-PARTY-NOTICES.txt','licenses/dotnet-THIRD-PARTY-NOTICES.txt') {Assert (!(Test-Path (Join-Path $directory $relative))) "$label uninstall removes $relative"}
+            foreach($relative in 'PathMan.exe','bin/pathman.exe','bin/Switch-PathMan.ps1','bin/switch-pathman.cmd','bin/switch-pathman','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','release.json','THIRD-PARTY-NOTICES.txt','licenses/dotnet-THIRD-PARTY-NOTICES.txt') {Assert (!(Test-Path (Join-Path $directory $relative))) "$label uninstall removes $relative"}
             Assert ((PathValue $machine) -ceq $originalPath) "$label uninstall restores the original PATH"
             Assert ((Get-FileHash $data).Hash -eq $configHash) "$label uninstall retains user configuration"
         }finally {
