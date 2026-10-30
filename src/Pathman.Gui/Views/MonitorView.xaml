@@ -9,7 +9,10 @@
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
                         <CheckBox x:Name="StartupEnabled" Content="{loc:Translate '登录时自动运行后台程序'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeStartup" Unchecked="ChangeStartup"/>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                        <CheckBox x:Name="TrackOrigins" Content="{loc:Translate '精确识别修改来源（需要管理员权限）'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                        <CheckBox x:Name="TrackOrigins" AutomationProperties.Name="{loc:Translate '精确识别修改来源'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                            <TextBlock Text="{loc:Translate '精确识别修改来源'}"/>
+                            <TextBlock Text="{loc:Translate '需要管理员权限'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel></CheckBox>
                     </StackPanel></Border>
                     <StackPanel x:Name="MonitoringRules">
                     <TextBlock Text="{loc:Translate '用户变量'}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
@@ -24,8 +27,14 @@
                             <CheckBox x:Name="RemoveUserDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                             <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_USER_PATH'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_USER_PATH'}"/></CheckBox>
                             <StackPanel x:Name="UserEditorExclusions" Margin="0,14,0,0">
-                                <CheckBox x:Name="IgnoreSystemEditorUser" Content="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
-                                <CheckBox x:Name="IgnorePowerToysUser" Content="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                                <CheckBox x:Name="IgnoreSystemEditorUser" AutomationProperties.Name="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"><StackPanel>
+                                    <TextBlock Text="{loc:Translate '不整理系统编辑器修改的变量'}"/>
+                                    <TextBlock Text="{loc:Translate '此功能需要开启精确识别修改来源'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel></CheckBox>
+                                <CheckBox x:Name="IgnorePowerToysUser" AutomationProperties.Name="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                                    <TextBlock Text="{loc:Translate '不整理PowerToys修改的变量'}"/>
+                                    <TextBlock Text="{loc:Translate '此功能需要开启精确识别修改来源'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel></CheckBox>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>
@@ -36,13 +45,22 @@
                             <TextBlock Text="{loc:Translate '此分类仅在本应用内有效'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel></CheckBox>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
-                        <CheckBox x:Name="AutoArrangeMachine" Content="{loc:Translate '自动整理PATH环境变量'}" AutomationProperties.Name="{loc:Translate '自动整理系统 PATH 环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                        <CheckBox x:Name="AutoArrangeMachine" AutomationProperties.Name="{loc:Translate '自动整理系统 PATH 环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                            <TextBlock Text="{loc:Translate '自动整理PATH环境变量'}"/>
+                            <TextBlock Text="{loc:Translate '需要管理员权限'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel></CheckBox>
                         <StackPanel x:Name="MachineArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveMachineDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                             <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}"/></CheckBox>
                             <StackPanel x:Name="MachineEditorExclusions" Margin="0,14,0,0">
-                                <CheckBox x:Name="IgnoreSystemEditorMachine" Content="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"/>
-                                <CheckBox x:Name="IgnorePowerToysMachine" Content="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
+                                <CheckBox x:Name="IgnoreSystemEditorMachine" AutomationProperties.Name="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"><StackPanel>
+                                    <TextBlock Text="{loc:Translate '不整理系统编辑器修改的变量'}"/>
+                                    <TextBlock Text="{loc:Translate '此功能需要开启精确识别修改来源'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel></CheckBox>
+                                <CheckBox x:Name="IgnorePowerToysMachine" AutomationProperties.Name="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                                    <TextBlock Text="{loc:Translate '不整理PowerToys修改的变量'}"/>
+                                    <TextBlock Text="{loc:Translate '此功能需要开启精确识别修改来源'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel></CheckBox>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>

@@ -670,6 +670,12 @@ Section "PathMan" Main
     SetErrorLevel 1603
     Abort
   ${EndIf}
+  System::Call '$Helper::MaintainOriginTask(w "$INSTDIR", w "$UserLocalData", w "$OriginalUserSid") i.r0'
+  ${If} $0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+    SetErrorLevel 1603
+    Abort
+  ${EndIf}
   InstallUserFinalization:
   ${If} $Worker == 1
     Call RestoreBackground
@@ -751,6 +757,12 @@ Section "Uninstall"
     System::Call '$Helper::CleanupUserInstall(w "$INSTDIR", w "$OriginalDesktop") i.r0'
     SetErrorLevel 0
     Return
+  ${EndIf}
+  System::Call '$Helper::RemoveOriginTasks(w "$INSTDIR") i.r0'
+  ${If} $0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+    SetErrorLevel 1603
+    Abort
   ${EndIf}
   System::Call '$Helper::CleanupInstall(w "$INSTDIR", i $Machine, w "$DESKTOP") i.r0'
   ${If} $0 != 0

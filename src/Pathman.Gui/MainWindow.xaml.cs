@@ -39,7 +39,7 @@ public partial class MainWindow : Window
         InitializeComponent();Language=System.Windows.Markup.XmlLanguage.GetLanguage(L.Current.CultureName);RefreshWindowTitle(null,EventArgs.Empty);store=new(layout.DataDirectory);
         updates=new(layout.DataDirectory,release=>UpdateToast.Show(release,layout),store.Read().Preferences.ReceivePrereleaseUpdates);
         variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(updates,InstallUpdateAsync);settings=new(store);
-        versions=new(layout,store,InstalledScope()=="/AllUsers" ? Pathman.Core.Models.VariableScope.Machine : Pathman.Core.Models.VariableScope.User);AppVersion.Text=AppInfo.DisplayVersion;
+        versions=new(layout,store,InstalledScope()=="/AllUsers" ? Pathman.Core.Models.VariableScope.Machine : Pathman.Core.Models.VariableScope.User);AppVersion.Text=AppInfo.Version;
         settings.PreferencesChanged+=async(_,_)=>await ApplyPreferencesAsync();
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         NotificationsList.ItemsSource=notifications.Items;

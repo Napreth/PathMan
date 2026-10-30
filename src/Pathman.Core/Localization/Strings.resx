@@ -982,8 +982,26 @@
   <data name="管理员连接超时，请刷新确认写入结果后重试。" xml:space="preserve">
     <value>The administrator connection timed out. Reload to confirm the result before retrying.</value>
   </data>
-  <data name="精确识别修改来源（需要管理员权限）" xml:space="preserve">
-    <value>Identify the writing process precisely (requires administrator privileges)</value>
+  <data name="精确识别修改来源" xml:space="preserve">
+    <value>Identify the writing process precisely</value>
+  </data>
+  <data name="需要管理员权限" xml:space="preserve">
+    <value>Requires administrator privileges</value>
+  </data>
+  <data name="此功能需要开启精确识别修改来源" xml:space="preserve">
+    <value>Requires precise identification of the writing process</value>
+  </data>
+  <data name="无法访问来源识别计划任务。" xml:space="preserve">
+    <value>Cannot access the origin tracking scheduled task.</value>
+  </data>
+  <data name="无法注册来源识别计划任务。" xml:space="preserve">
+    <value>Cannot register the origin tracking scheduled task.</value>
+  </data>
+  <data name="无法启动来源识别计划任务。" xml:space="preserve">
+    <value>Cannot start the origin tracking scheduled task.</value>
+  </data>
+  <data name="请重新开启“精确识别修改来源”，完成一次管理员授权。" xml:space="preserve">
+    <value>Turn precise origin tracking off and on to approve its one-time administrator setup.</value>
   </data>
   <data name="系统" xml:space="preserve">
     <value>System</value>

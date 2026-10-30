@@ -982,8 +982,26 @@
   <data name="管理员连接超时，请刷新确认写入结果后重试。" xml:space="preserve">
     <value>管理员连接超时，请刷新确认写入结果后重试。</value>
   </data>
-  <data name="精确识别修改来源（需要管理员权限）" xml:space="preserve">
-    <value>精确识别修改来源（需要管理员权限）</value>
+  <data name="精确识别修改来源" xml:space="preserve">
+    <value>精确识别修改来源</value>
+  </data>
+  <data name="需要管理员权限" xml:space="preserve">
+    <value>需要管理员权限</value>
+  </data>
+  <data name="此功能需要开启精确识别修改来源" xml:space="preserve">
+    <value>此功能需要开启精确识别修改来源</value>
+  </data>
+  <data name="无法访问来源识别计划任务。" xml:space="preserve">
+    <value>无法访问来源识别计划任务。</value>
+  </data>
+  <data name="无法注册来源识别计划任务。" xml:space="preserve">
+    <value>无法注册来源识别计划任务。</value>
+  </data>
+  <data name="无法启动来源识别计划任务。" xml:space="preserve">
+    <value>无法启动来源识别计划任务。</value>
+  </data>
+  <data name="请重新开启“精确识别修改来源”，完成一次管理员授权。" xml:space="preserve">
+    <value>请重新开启“精确识别修改来源”，完成一次管理员授权。</value>
   </data>
   <data name="系统" xml:space="preserve">
     <value>系统</value>

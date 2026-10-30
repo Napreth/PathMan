@@ -100,6 +100,9 @@ jobs:
         run: ./build.ps1 -Arch $env:PATHMAN_ARCH -VersionName '0.0.0' -VersionNumber '0.0.0' -ReleaseType official
       - name: Build, run and package
         run: ./build.ps1 -Arch $env:PATHMAN_ARCH -VersionName $env:PATHMAN_VERSION -VersionNumber $env:PATHMAN_VERSION_NUMBER -ReleaseType $env:PATHMAN_RELEASE_TYPE -Test
+      - name: Test origin tracking authorization
+        if: matrix.arch == 'x64' && !env.ACT
+        run: ./tests/origin-task.ps1
       - name: Accept final installers
         if: ${{ !env.ACT }}
         run: ./tests/installer-acceptance.ps1 -Architecture $env:PATHMAN_ARCH -Version $env:PATHMAN_VERSION

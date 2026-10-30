@@ -5,6 +5,29 @@ using Pathman.Service;
 
 // A normal user-session background process, with no SCM registration or elevation.
 if(args.FirstOrDefault()=="--registry-origin-worker") return RegistryOriginTracker.RunWorker(args);
+if(args.FirstOrDefault()=="--scheduled-origin-worker") return RegistryOriginTracker.RunScheduledWorker(args);
+if(args is ["--register-origin-task",var sid])
+{
+    try {new OriginTrackingTask(PathmanLayout.Discover()).Register(sid);return 0;}
+    catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException or ArgumentException) {Console.Error.WriteLine(error);return error is System.ComponentModel.Win32Exception windows ? windows.NativeErrorCode : 1;}
+}
+if(args is ["--remove-origin-tasks"])
+{
+    try {new OriginTrackingTask(PathmanLayout.Discover()).RemoveInstallation();return 0;}
+    catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException) {return error is System.ComponentModel.Win32Exception windows ? windows.NativeErrorCode : 1;}
+}
+if(args is ["--maintain-origin-task",var originalSid,var originalData])
+{
+    try
+    {
+        var config=Path.Combine(Path.GetFullPath(originalData),"environment.json");
+        var task=new OriginTrackingTask(PathmanLayout.Discover());
+        var enabled=File.Exists(config) && System.Text.Json.JsonSerializer.Deserialize<EnvironmentWorkspace>(File.ReadAllText(config),EnvironmentWorkspaceStore.JsonOptions)?.TrackChangeOrigins==true;
+        if(enabled || task.HasUserTask(originalSid)) task.Register(originalSid);
+        return 0;
+    }
+    catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException or System.Text.Json.JsonException or ArgumentException) {Console.Error.WriteLine(error);return error is System.ComponentModel.Win32Exception windows ? windows.NativeErrorCode : 1;}
+}
 if(args.FirstOrDefault()=="--installer-origin-broker") return InstallerOriginBroker.Run(args);
 // Installer maintenance is independent of the user's background monitoring switches.
 if(args is ["--installer-refresh-shims",var dataDirectory])

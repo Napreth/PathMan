@@ -15,6 +15,7 @@ using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
+using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
 
@@ -27,14 +28,14 @@ internal sealed record OriginMessage(string Kind,string? Message=null,Environmen
 internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposable
 {
     private readonly NamedPipeServerStream pipe;
-    private readonly Process worker;
+    private readonly Process? worker;
     private readonly ConcurrentQueue<EnvironmentChangeOrigin> captured=new();
     private readonly CancellationTokenSource stop=new();
     private readonly Task reader;
     private volatile bool ready;
-    public bool IsReady=>ready && !worker.HasExited;
+    public bool IsReady=>ready && (worker is null || !worker.HasExited);
     public string? Error {get;private set;}
-    private RegistryOriginTracker(NamedPipeServerStream pipe,Process worker)
+    private RegistryOriginTracker(NamedPipeServerStream pipe,Process? worker)
     {
         this.pipe=pipe;this.worker=worker;
         reader=Task.Run(async()=>
@@ -70,10 +71,12 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
             using var parent=Process.GetCurrentProcess();
             var arguments=new[] {"--registry-origin-worker",parent.Id.ToString(CultureInfo.InvariantCulture),parent.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture),name,secret,identity.User!.Value};
             child=!IsAdministrator() ? InstallerOriginBroker.TryStart(arguments) : null;
-            if(child is null)
+            var scheduled=child is null && !IsAdministrator();
+            var task=new OriginTrackingTask(PathmanLayout.Discover());
+            if(scheduled) task.Start(arguments[1..5]);
+            else if(child is null)
             {
-                var start=new ProcessStartInfo(Environment.ProcessPath!) {UseShellExecute=!IsAdministrator(),WindowStyle=ProcessWindowStyle.Hidden};
-                if(start.UseShellExecute) start.Verb="runas";
+                var start=new ProcessStartInfo(Environment.ProcessPath!) {UseShellExecute=false,CreateNoWindow=true};
                 foreach(var value in arguments) start.ArgumentList.Add(value);
                 child=Process.Start(start) ?? throw new IOException(L.Get("无法启动修改来源跟踪。"));
             }
@@ -81,7 +84,18 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
             while(true)
             {
                 pipe.WaitForConnectionAsync(timeout.Token).GetAwaiter().GetResult();
-                if(GetNamedPipeClientProcessId(pipe.SafePipeHandle,out var id) && id==child.Id) break;
+                if(GetNamedPipeClientProcessId(pipe.SafePipeHandle,out var id))
+                {
+                    if(child is not null && id==child.Id) break;
+                    if(scheduled)
+                    {
+                        string? sid=null;pipe.RunAsClient(()=> {using var user=WindowsIdentity.GetCurrent(true);sid=user?.User?.Value;});
+                        // A limited caller cannot query a SYSTEM process image.
+                        // The protected task fixes the image; authenticate its
+                        // SYSTEM pipe token and the per-launch secret instead.
+                        if(sid=="S-1-5-18") break;
+                    }
+                }
                 pipe.Disconnect();
             }
             // Read one byte at a time for the handshake so buffering cannot steal
@@ -106,16 +120,26 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
         public bool IsReady=>ready;
         public IReadOnlyList<EnvironmentChangeOrigin> Take(VariableScope scope,string name)=>values.Where(item=>item.Scope==scope && item.Name.Equals(name,StringComparison.OrdinalIgnoreCase)).ToArray();
     }
-    public void Dispose() {stop.Cancel();pipe.Dispose();worker.Dispose();_ = reader.ContinueWith(_=>stop.Dispose(),TaskScheduler.Default);}
+    public void Dispose() {stop.Cancel();pipe.Dispose();worker?.Dispose();_ = reader.ContinueWith(_=>stop.Dispose(),TaskScheduler.Default);}
 
-    public static int RunWorker(string[] args)
+    public static int RunScheduledWorker(string[] args)
+    {
+        if(args is not ["--scheduled-origin-worker",var source,var sid,var pid,var ticks,var name,var secret]) return 2;
+        return RunWorker(["--registry-origin-worker",pid,ticks,name,secret,sid],source);
+    }
+    public static int RunWorker(string[] args,string? expectedParent=null)
     {
         try
         {
             if(args.Length!=6 || !int.TryParse(args[1],out var parentId) || !long.TryParse(args[2],out var ticks) || !args[3].StartsWith("PathMan.RegistryOrigins.",StringComparison.Ordinal) || args[3].Length>100 || args[4].Length!=44 || !IsAdministrator()) return 2;
             using var parent=Process.GetProcessById(parentId);
-            if(parent.StartTime.ToUniversalTime().Ticks!=ticks || !Image(parent).Equals(Environment.ProcessPath,StringComparison.OrdinalIgnoreCase)) return 2;
+            if(parent.StartTime.ToUniversalTime().Ticks!=ticks || !Image(parent).Equals(expectedParent ?? Environment.ProcessPath,StringComparison.OrdinalIgnoreCase)) return 2;
             var sid=new SecurityIdentifier(args[5]).Value;
+            using(var handle=OpenProcess(0x1000,false,parent.Id))
+            {
+                if(!OpenProcessToken(handle,8,out var token)) return 2;
+                using(token) using(var user=new WindowsIdentity(token.DangerousGetHandle())) if(user.User?.Value!=sid) return 2;
+            }
             using var pipe=new NamedPipeClientStream(".",args[3],PipeDirection.InOut,PipeOptions.Asynchronous,TokenImpersonationLevel.Identification);
             pipe.Connect(30000);
             if(!GetNamedPipeServerProcessId(pipe.SafePipeHandle,out var server) || server!=parentId) return 2;
@@ -209,6 +233,7 @@ internal sealed class RegistryOriginTracker : IEnvironmentChangeOrigins,IDisposa
     }
     [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe,out uint id);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe,out uint id);
+    [DllImport("advapi32.dll",SetLastError=true)] private static extern bool OpenProcessToken(SafeProcessHandle process,uint access,out SafeAccessTokenHandle token);
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern bool QueryFullProcessImageName(SafeProcessHandle process,int flags,StringBuilder path,ref int size);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern SafeProcessHandle OpenProcess(int access,[MarshalAs(UnmanagedType.Bool)]bool inherit,int processId);
 }

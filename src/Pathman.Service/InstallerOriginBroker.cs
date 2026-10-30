@@ -8,6 +8,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Win32.SafeHandles;
+using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 
 namespace Pathman.Service;
@@ -54,6 +55,7 @@ internal static class InstallerOriginBroker
             if(!File.Exists(config)) return 0;
             var settings=JsonSerializer.Deserialize<EnvironmentWorkspace>(File.ReadAllText(config),EnvironmentWorkspaceStore.JsonOptions);
             if(settings is not {MonitoringEnabled:true,TrackChangeOrigins:true}) return 0;
+            var task=new OriginTrackingTask(PathmanLayout.Discover());if(!task.HasUserTask(sid.Value)) task.Register(sid.Value);
             var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);
             security.AddAccessRule(new(sid,PipeAccessRights.ReadWrite|PipeAccessRights.Synchronize,AccessControlType.Allow));
             security.AddAccessRule(new(identity.User!,PipeAccessRights.FullControl,AccessControlType.Allow));
@@ -87,7 +89,7 @@ internal static class InstallerOriginBroker
             output.WriteLine((collector?.Id ?? 0).ToString(CultureInfo.InvariantCulture));
             return collector is null ? 1 : 0;
         }
-        catch(Exception error) when(error is IOException or UnauthorizedAccessException or OperationCanceledException or ArgumentException or InvalidOperationException or JsonException or System.ComponentModel.Win32Exception or FormatException) {return 1;}
+        catch(Exception error) when(error is IOException or UnauthorizedAccessException or OperationCanceledException or ArgumentException or InvalidOperationException or JsonException or System.ComponentModel.Win32Exception or FormatException or System.Runtime.InteropServices.COMException) {return 1;}
     }
     [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe,out uint id);
     [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe,out uint id);

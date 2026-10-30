@@ -69,7 +69,7 @@ public partial class MonitorView : UserControl
         var enabled=StartupEnabled.IsChecked==true;busy=true;SettingsPanel.IsEnabled=false;
         try
         {
-            await Task.Run(()=> {new StartupManager(layout).SetEnabled(enabled);var process=new BackgroundProcess(layout);if(enabled) process.Start();else process.Stop();});
+            await Task.Run(()=> {if(enabled && store.Read().TrackChangeOrigins) new OriginTrackingTask(layout).EnsureRegistered();new StartupManager(layout).SetEnabled(enabled);var process=new BackgroundProcess(layout);if(enabled) process.Start();else process.Stop();});
             busy=false;Update(store.Read());
         }
         catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
@@ -85,7 +85,7 @@ public partial class MonitorView : UserControl
             {
                 new EnvironmentMonitor(store).SetEnabled(enabled);
                 var process=new BackgroundProcess(layout);var startup=new StartupManager(layout);
-                if(enabled) {if(startup.IsEnabled) process.Start();}
+                if(enabled) {if(startup.IsEnabled) {if(store.Read().TrackChangeOrigins) new OriginTrackingTask(layout).EnsureRegistered();process.Start();}}
                 else {startup.SetEnabled(false);process.Stop();}
             });
             busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);
@@ -93,11 +93,14 @@ public partial class MonitorView : UserControl
         catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
         finally {busy=false;SettingsPanel.IsEnabled=true;}
     }
-    private void ChangeOptions(object sender,RoutedEventArgs e)
+    private async void ChangeOptions(object sender,RoutedEventArgs e)
     {
         if(updating || busy) return;
+        busy=true;SettingsPanel.IsEnabled=false;
         try
         {
+            if(ReferenceEquals(sender,TrackOrigins) && TrackOrigins.IsChecked==true)
+                await Task.Run(()=>new OriginTrackingTask(layout).EnsureRegistered());
             store.Update(state=>
             {
                 state.GroupExternalUserVariables=GroupExternalUser.IsChecked==true;state.GroupExternalMachineVariables=GroupExternalMachine.IsChecked==true;
@@ -110,9 +113,10 @@ public partial class MonitorView : UserControl
                 state.IgnorePowerToysUserChanges=IgnorePowerToysUser.IsChecked==true;state.IgnorePowerToysMachineChanges=IgnorePowerToysMachine.IsChecked==true;
                 state.PendingPathOrganizations.RemoveAll(plan=>!state.IsPathOrganizationEnabled(plan.Scope));
             });
-            Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);
+            busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);
         }
-        catch(Exception error) when(Expected(error)) {Update(store.Read());ShowError(error);}
+        catch(Exception error) when(Expected(error)) {busy=false;Update(store.Read());ShowError(error);}
+        finally {busy=false;SettingsPanel.IsEnabled=true;}
     }
     private void ApplyPendingChanges(object sender,RoutedEventArgs e)=>PendingApplyRequested?.Invoke(this,EventArgs.Empty);
     public void SetApplying(bool value) {busy=value;SettingsPanel.IsEnabled=!value;}
