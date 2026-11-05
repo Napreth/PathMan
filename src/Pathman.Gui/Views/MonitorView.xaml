@@ -78,7 +78,7 @@
                             <CheckBox x:Name="GlobalAutoArrange" Content="{loc:Translate '自动整理系统PATH环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
                             <StackPanel x:Name="GlobalArrangeOptions" Margin="44,0,20,20">
                                 <CheckBox x:Name="GlobalRemoveDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
-                                <CheckBox x:Name="GlobalMoveEntries" Content="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
+                                <CheckBox x:Name="GlobalMoveEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}"/></CheckBox>
                                 <CheckBox x:Name="GlobalIgnoreSystemEditor" Content="{loc:Translate '不整理系统编辑器修改的变量'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
                                 <CheckBox x:Name="GlobalIgnorePowerToys" Content="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
                             </StackPanel>
