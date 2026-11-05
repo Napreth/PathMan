@@ -1,4 +1,6 @@
 #include "../packaging/native/verified-worker.h"
+#include "../packaging/native/protected-source.h"
+#include <sddl.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -11,6 +13,15 @@ void write(const std::filesystem::path& path, const std::string& value) {
 }
 }
 int main() {
+    for (const auto& entry : {std::pair{L"O:BAG:BAD:(A;;FA;;;BA)(A;;GRGX;;;AU)", true},
+        std::pair{L"O:BAG:BAD:(A;;FA;;;BA)(A;;GW;;;BU)", false},
+        std::pair{L"O:BAG:BAD:(A;;FA;;;BA)(A;;DC;;;BU)", false},
+        std::pair{L"O:S-1-5-21-1-2-3-1001G:BAD:(A;;FA;;;BA)", false}}) {
+        PSECURITY_DESCRIPTOR security = nullptr;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(entry.first, SDDL_REVISION_1, &security, nullptr)) return 1;
+        const bool actual = pathman_setup::protected_descriptor(security, true); LocalFree(security);
+        if (actual != entry.second) return 1;
+    }
     const auto root = std::filesystem::temp_directory_path() / (L"PathMan-worker-" + std::to_wstring(GetCurrentProcessId()));
     try {
         std::filesystem::create_directory(root);

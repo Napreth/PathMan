@@ -4,6 +4,7 @@ using System.Security.Principal;
 using System.Security.AccessControl;
 using System.Text;
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using Pathman.Core.EnvironmentVariables;
 
 namespace Pathman.Core;
@@ -56,6 +57,7 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
     public void Configure(GlobalMonitorSettings settings)
     {
         if(!IsAllUsers) throw new IOException(L.Get("全局监控仅支持为所有用户安装。"));
+        using var source=PrivilegedServiceSource.Open(layout);
         var start=new ProcessStartInfo(layout.BackgroundExecutable) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};
         start.ArgumentList.Add("--configure-global-monitor");
         foreach(var value in new[]{settings.Enabled,settings.ProvideNonAdministratorOrigins,settings.AutoArrangeMachinePath,settings.RemoveMachinePathDuplicates,settings.MoveExternalMachinePathEntries,settings.IgnoreSystemEditorMachineChanges,settings.IgnorePowerToysMachineChanges}) start.ArgumentList.Add(value.ToString());
@@ -73,6 +75,8 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
     private void ConfigureLocked(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates,bool? moveEntries,bool? ignoreSystemEditor,bool? ignorePowerToys)
     {
         if(!IsAllUsers) throw new IOException(L.Get("全局监控仅支持为所有用户安装。"));
+        using var source=enabled ? PrivilegedServiceSource.Open(layout) : null;
+        source?.ValidateDestination(ProtectedDirectory);
         OriginTrackingTask.SecureDirectory(Path.GetDirectoryName(DataDirectory)!);
         OriginTrackingTask.SecureDirectory(DataDirectory);
         OriginTrackingTask.SecureDirectory(MachineDirectory);
@@ -85,25 +89,13 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         if(enabled)
         {
             var executable=Path.Combine(ProtectedDirectory,"PathMan.Service.exe");
-            if(!File.Exists(executable) || !FileHash(executable).SequenceEqual(FileHash(layout.BackgroundExecutable)))
-            {
-                Stop();OriginTrackingTask.SecureDirectory(ProtectedDirectory);
-                foreach(var file in Directory.EnumerateFiles(layout.InternalDirectory))
-                {
-                    if(!Path.GetFileName(file).Equals("PathMan.Service.exe",StringComparison.OrdinalIgnoreCase) && Path.GetExtension(file) is not (".dll" or ".json")) continue;
-                    if((File.GetAttributes(file)&FileAttributes.ReparsePoint)!=0) throw new IOException("Invalid service payload.");
-                    for(var retry=0;;retry++)
-                    {
-                        try {File.Copy(file,Path.Combine(ProtectedDirectory,Path.GetFileName(file)),true);break;}
-                        catch(IOException failure) when(retry<50 && (failure.HResult&0xffff) is 32 or 33) {Thread.Sleep(100);}
-                    }
-                }
-            }
+            Stop();source!.Deploy(ProtectedDirectory);
             var command=$"\"{executable}\" --system-monitor";
             var exists=Sc("query",ServiceName)==0;
             Checked(exists ? "config" : "create",ServiceName,"binPath=",command,"start=","auto","obj=","LocalSystem","DisplayName=","PathMan Monitor");
             // Restart automatically after a crash; an ordinary user cannot edit the service.
             Checked("failure",ServiceName,"reset=","86400","actions=","restart/5000/restart/15000/restart/60000");
+            Checked("failureflag",ServiceName,"1");
         }
         WriteSettings(updated);
         try
@@ -144,7 +136,38 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         }
         throw new IOException("Global monitor did not stop.");
     }
-    private static byte[] FileHash(string path) {using var stream=File.OpenRead(path);return System.Security.Cryptography.SHA256.HashData(stream);}
+    public static string? GetUnavailableMessage()
+    {
+        if(!ReadSettings().Enabled) return null;
+        var manager=OpenSCManager(null,null,1);
+        if(manager==IntPtr.Zero) return L.Get("无法查询全局监控服务状态。");
+        try
+        {
+            var service=OpenService(manager,ServiceName,4);
+            if(service==IntPtr.Zero) return L.Get("全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。");
+            try
+            {
+                if(!QueryServiceStatusEx(service,0,out var status,Marshal.SizeOf<ServiceStatus>(),out _)) return L.Get("无法查询全局监控服务状态。");
+                if(status.State==2) return L.Get("全局监控服务正在启动或恢复，请稍候。");
+                if(status.State!=4) return L.Get("全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。");
+                using var stream=File.Open(StatusPath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
+                using var document=JsonDocument.Parse(stream);var root=document.RootElement;
+                if(!root.GetProperty("Running").GetBoolean() || root.GetProperty("Time").GetDateTime()<DateTime.UtcNow.AddSeconds(-15) ||
+                    root.TryGetProperty("ProcessId",out var pid) && pid.GetUInt32()!=status.ProcessId)
+                    return L.Get("全局监控服务未正常响应，请由管理员检查或重新启用全局设置。");
+                return root.TryGetProperty("Error",out var error) && error.ValueKind==JsonValueKind.String ? error.GetString() : null;
+            }
+            catch(Exception error) when(error is IOException or UnauthorizedAccessException or JsonException or KeyNotFoundException or InvalidOperationException)
+            {return L.Get("全局监控服务未正常响应，请由管理员检查或重新启用全局设置。");}
+            finally {CloseServiceHandle(service);}
+        }
+        finally {CloseServiceHandle(manager);}
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct ServiceStatus {public uint Type,State,Accepted,Exit,Specific,Checkpoint,Wait,ProcessId,Flags;}
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr OpenSCManager(string? machine,string? database,uint access);
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr OpenService(IntPtr manager,string name,uint access);
+    [DllImport("advapi32.dll")] private static extern bool QueryServiceStatusEx(IntPtr service,int level,out ServiceStatus status,int size,out int needed);
+    [DllImport("advapi32.dll")] private static extern bool CloseServiceHandle(IntPtr handle);
     private static void WriteSettings(GlobalMonitorSettings settings)
     {
         var temporary=SettingsPath+"."+Guid.NewGuid().ToString("N")+".tmp";

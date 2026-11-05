@@ -33,13 +33,18 @@ internal static class SystemMonitorHost
     {
         statusHandle=RegisterServiceCtrlHandlerEx(GlobalMonitoring.ServiceName,handler,IntPtr.Zero);Report(2);
         try {Monitor();Report(1);}
-        catch(Exception error) {WriteStatus(false,error.Message);Report(1,1);}
+        catch(Exception error)
+        {
+            running=false;
+            try {WriteStatus(false,error.Message);}catch { /* SCM must see the failure even if its status file is unavailable. */ }
+            finally {Report(1,1);}
+        }
     }
     private static void WriteStatus(bool ready,string? error=null)
     {
         var file=GlobalMonitoring.StatusPath;
         var temporary=file+"."+Guid.NewGuid().ToString("N")+".tmp";
-        File.WriteAllText(temporary,JsonSerializer.Serialize(new {Running=running && !stop.IsCancellationRequested,OriginsReady=ready,Error=error,Time=DateTime.UtcNow}));
+        File.WriteAllText(temporary,JsonSerializer.Serialize(new {Running=running && !stop.IsCancellationRequested,ProcessId=Environment.ProcessId,OriginsReady=ready,Error=error,Time=DateTime.UtcNow}));
         File.Move(temporary,file,true);
     }
     private static void Monitor()
@@ -64,8 +69,10 @@ internal static class SystemMonitorHost
                 var settings=GlobalMonitoring.ReadSettings();if(!settings.Enabled) break;
                 var machineSnapshot=new WindowsEnvironmentVariableReader().Read(VariableScope.Machine);
                 var loggedOn=LoggedOnUsers.Enumerate();
+                try
+                {
                 var snapshots=new Dictionary<string,IReadOnlyList<EnvironmentVariableInfo>>();
-                foreach(var user in loggedOn)
+                foreach(var user in loggedOn.DistinctBy(user=>user.Sid))
                 {
                     try {snapshots[user.Sid]=WindowsIdentity.RunImpersonated(user.Token,EnvironmentMonitor.ReadAll);}
                     catch(Exception failure) when(Expected(failure)) {error=failure.Message;}
@@ -83,9 +90,9 @@ internal static class SystemMonitorHost
                 var handoffPending=false;
                 try {machineApplied=machineMonitor.Poll(new Origins(ready,pendingOrigins,null),machineSnapshot);}
                 catch(Exception failure) when(Expected(failure)) {machineMonitor.ReportError(failure.Message);}
-                foreach(var user in loggedOn)
-                using(user)
+                SessionRouting.Poll(loggedOn,user=>user.Sid,desktops=>
                 {
+                    var user=desktops[0];
                     var userApplied=false;
                     try
                     {
@@ -94,11 +101,13 @@ internal static class SystemMonitorHost
                             var store=new EnvironmentWorkspaceStore(user.DataDirectory);var state=store.Read();
                             L.SetLanguage(state.Preferences.Language);
                             if(!state.MonitoringEnabled || !snapshots.ContainsKey(user.Sid)) {users.Remove(user.Sid);return;}
-                            using var owner=BackgroundProcess.OwnerMutex(user.Sid,settings.InstallationDirectory);
-                            bool acquired;try {acquired=owner.WaitOne(0);}catch(AbandonedMutexException) {acquired=true;}
-                            if(!acquired) {handoffPending=true;return;}
-                            try
+                            foreach(var desktop in desktops)
                             {
+                                using var owner=BackgroundProcess.OwnerMutex(user.Sid,settings.InstallationDirectory,(int)desktop.SessionId);
+                                bool acquired;try {acquired=owner.WaitOne(0);}catch(AbandonedMutexException) {acquired=true;}
+                                if(!acquired) {handoffPending=true;return;}
+                                owner.ReleaseMutex();
+                            }
                                 if(!users.TryGetValue(user.Sid,out var monitor)) {monitor=new(store,VariableScope.User,user.Runtime);monitor.SetEnabled(true,snapshots[user.Sid]);users.Add(user.Sid,monitor);}
                                 var enabled=state.TrackChangeOrigins && (user.Administrator || settings.ProvideNonAdministratorOrigins);
                                 var tracking=enabled && ready;
@@ -109,16 +118,15 @@ internal static class SystemMonitorHost
                                     if(saved.OriginTrackingReady==tracking && saved.OriginTrackingMessage==notice) return false;
                                     saved.OriginTrackingReady=tracking;saved.OriginTrackingMessage=notice;return true;
                                 });
-                            }
-                            finally {owner.ReleaseMutex();}
                         });
                     }
                     catch(Exception failure) when(Expected(failure)) {error=failure.Message;}
-                    if(machineApplied || userApplied)
-                    {try {user.NotifyEnvironmentChanged();}catch(Exception failure) when(Expected(failure)) {error=failure.Message;}}
-                }
+                    return userApplied;
+                },user=> {try {user.NotifyEnvironmentChanged();}catch(Exception failure) when(Expected(failure)) {error=failure.Message;}},machineApplied);
                 if(!running && !handoffPending) Report(4);
                 WriteStatus(ready,error);stop.Token.WaitHandle.WaitOne(1000);
+                }
+                finally {foreach(var user in loggedOn) user.Dispose();}
             }
         }
         finally
@@ -133,7 +141,7 @@ internal static class SystemMonitorHost
                 }
                 catch(Exception failure) when(Expected(failure)) { }
             }
-            WriteStatus(false);
+            running=false;WriteStatus(false);
         }
     }
     private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Security.SecurityException or JsonException or InvalidOperationException;

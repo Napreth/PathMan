@@ -48,6 +48,7 @@ public partial class MonitorView : UserControl
             GlobalIgnoreSystemEditor.IsChecked=settings.IgnoreSystemEditorMachineChanges;GlobalIgnorePowerToys.IsChecked=settings.IgnorePowerToysMachineChanges;
             GlobalArrangeOptions.IsEnabled=unified && settings.AutoArrangeMachinePath;
             UserEditorExclusions.IsEnabled=MachineEditorExclusions.IsEnabled=state.TrackChangeOrigins;
+            RefreshNotice(state);
         }
         finally {updating=false;}
     }
@@ -66,8 +67,7 @@ public partial class MonitorView : UserControl
         updating=false;RefreshProcessState();
         var unified=new GlobalMonitoring(layout).IsEnabled;
         var pending=!unified && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
-        var message=state.OriginTrackingMessage ?? (pending ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
-        MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+        RefreshNotice(state);
         ApplyPending.Visibility=pending ? Visibility.Visible : Visibility.Collapsed;
         ApplyPending.IsEnabled=!EnvironmentMonitor.RequiresOrigin(state,VariableScope.Machine) || state.OriginTrackingReady;
         var history=state.Changes.AsEnumerable();
@@ -83,6 +83,12 @@ public partial class MonitorView : UserControl
         Changes.Visibility=changes.Length==0 ? Visibility.Collapsed : Visibility.Visible;
     }
     private void OpenHistory(object sender,RoutedEventArgs e) {SettingsPage.Visibility=Visibility.Collapsed;HistoryPage.Visibility=Visibility.Visible;}
+    private void RefreshNotice(EnvironmentWorkspace state)
+    {
+        var pending=!new GlobalMonitoring(layout).IsEnabled && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
+        var message=GlobalMonitoring.GetUnavailableMessage() ?? state.OriginTrackingMessage ?? (pending ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
+        MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+    }
     private void CloseHistory(object sender,RoutedEventArgs e) {HistoryPage.Visibility=Visibility.Collapsed;SettingsPage.Visibility=Visibility.Visible;}
     private void ShowError(Exception error) {MonitorStatus.Text=error.Message;MonitorNotice.Visibility=Visibility.Visible;}
     private async void ChangeStartup(object sender,RoutedEventArgs e)

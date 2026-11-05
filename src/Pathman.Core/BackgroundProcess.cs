@@ -8,7 +8,8 @@ namespace Pathman.Core;
 
 public sealed class BackgroundProcess(PathmanLayout layout)
 {
-    public static Mutex OwnerMutex(string sid,string installation)=>WindowsUserContext.WorkspaceMutex(@"Global\PathMan.MonitorOwner."+sid);
+    public static Mutex OwnerMutex(string sid,string installation,int? sessionId=null)=>WindowsUserContext.WorkspaceMutex(@"Global\PathMan.MonitorOwner."+sid+".Session."+(sessionId ?? Process.GetCurrentProcess().SessionId));
+    public static Mutex WriterMutex(string sid)=>WindowsUserContext.WorkspaceMutex(@"Global\PathMan.MonitorWriter."+sid);
     // Per-user, per-installation names prevent another installation from stopping this process.
     public string InstanceName
     {

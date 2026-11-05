@@ -10,11 +10,13 @@ internal sealed class LoggedOnUsers : IDisposable
 {
     public SafeAccessTokenHandle Token {get;}
     public string Sid {get;}
+    public uint SessionId {get;}
     public string DataDirectory {get;}
     public bool Administrator {get;}
     public IReadOnlyDictionary<string,string> Runtime {get;}
-    private LoggedOnUsers(SafeAccessTokenHandle token)
+    private LoggedOnUsers(SafeAccessTokenHandle token,uint sessionId)
     {
+        SessionId=sessionId;
         Token=token;using var user=new WindowsIdentity(token.DangerousGetHandle());Sid=user.User!.Value;
         Administrator=new WindowsPrincipal(user).IsInRole(WindowsBuiltInRole.Administrator);
         if(GetTokenInformation(token,19,out var linked,IntPtr.Size,out _) && linked!=IntPtr.Zero)
@@ -37,7 +39,7 @@ internal sealed class LoggedOnUsers : IDisposable
     }
     public static IReadOnlyList<LoggedOnUsers> Enumerate()
     {
-        var users=new List<LoggedOnUsers>();var seen=new HashSet<string>();
+        var users=new List<LoggedOnUsers>();
         if(!WTSEnumerateSessions(IntPtr.Zero,0,1,out var entries,out var count)) return users;
         try
         {
@@ -45,7 +47,7 @@ internal sealed class LoggedOnUsers : IDisposable
             {
                 var entry=Marshal.PtrToStructure<Session>(IntPtr.Add(entries,index*Marshal.SizeOf<Session>()));
                 if(entry.State is not (0 or 4) || !WTSQueryUserToken(entry.Id,out var token)) continue;
-                try {var user=new LoggedOnUsers(token);if(seen.Add(user.Sid)) users.Add(user);else user.Dispose();}
+                try {users.Add(new LoggedOnUsers(token,entry.Id));}
                 catch {token.Dispose();}
             }
         }

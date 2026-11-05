@@ -70,7 +70,9 @@ try
     using var ready = new EventWaitHandle(false, EventResetMode.ManualReset, background.ReadyEventName);
     stop.Reset();
     var monitor = new EnvironmentMonitor(store);
-    monitor.SetEnabled(true);
+    using var writer=BackgroundProcess.WriterMutex(userIdentity.User!.Value);
+    try {writer.WaitOne();}catch(AbandonedMutexException) { }
+    try {monitor.SetEnabled(true);}finally {writer.ReleaseMutex();}
     using var signal = new EnvironmentRegistrySignal();
     ready.Set();
     RegistryOriginTracker? origins=null;var requestedOrigin=false;string? originError=null;string? originRequest=null;
@@ -96,7 +98,8 @@ try
             if(settings.OriginTrackingReady!=tracking || settings.OriginTrackingMessage!=message)
                 store.Update(state=> {state.OriginTrackingReady=tracking;state.OriginTrackingMessage=message;});
             if(tracking) Thread.Sleep(1000); // Allow buffered ETW writes and process events to reach the batch before comparing.
-            monitor.Poll(origins?.Batch());
+            try {writer.WaitOne();}catch(AbandonedMutexException) { }
+            try {monitor.Poll(origins?.Batch());}finally {writer.ReleaseMutex();}
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
         {try {monitor.ReportError(L.Get("监控暂时无法读取或保存环境变量：")+error.Message);}catch(IOException) {}}

@@ -1240,4 +1240,9 @@
   <data name="自动整理系统PATH环境变量" xml:space="preserve"><value>Automatically organize the system PATH</value></data>
   <data name="全局监控仅支持为所有用户安装。" xml:space="preserve"><value>Global monitoring requires an installation for all users.</value></data>
   <data name="无法配置全局监控服务。" xml:space="preserve"><value>Cannot configure the global monitoring service.</value></data>
+  <data name="全局监控服务正在启动或恢复，请稍候。" xml:space="preserve"><value>The global monitoring service is starting or recovering. Please wait.</value></data>
+  <data name="全局监控服务未正常响应，请由管理员检查或重新启用全局设置。" xml:space="preserve"><value>The global monitoring service is not responding. Ask an administrator to check it or enable global settings again.</value></data>
+  <data name="全局服务只能从管理员保护的本地安装目录部署，请重新安装到安全目录。" xml:space="preserve"><value>The global service requires an administrator-protected local installation directory. Reinstall PathMan in a secure directory.</value></data>
+  <data name="无法查询全局监控服务状态。" xml:space="preserve"><value>Cannot query the global monitoring service status.</value></data>
+  <data name="全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。" xml:space="preserve"><value>Global monitoring is enabled, but its service is not running. Ask an administrator to check it or enable global settings again.</value></data>
 </root>

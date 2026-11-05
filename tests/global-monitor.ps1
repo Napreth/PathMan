@@ -1,7 +1,25 @@
 [CmdletBinding()]
-param([string]$AppDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/publish/win-x64/SelfContained'),[string]$ResultDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/global-monitor'))
+param([string]$AppDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/publish/win-x64/SelfContained'),[string]$ResultDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts/global-monitor'),[string]$ProbeExecutable='')
 $ErrorActionPreference='Stop'
 if($env:GITHUB_ACTIONS -ne 'true' -and (Get-CimInstance Win32_ComputerSystem).Model -notmatch 'Virtual Machine'){throw 'Disposable Windows VM or CI runner required.'}
+$staging=$null
+if($env:GITHUB_ACTIONS -eq 'true'){
+    $staging=Join-Path $env:ProgramFiles ('PathMan-CI-'+[guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $staging|Out-Null
+    Copy-Item -Path (Join-Path $AppDirectory '*') -Destination $staging -Recurse
+    foreach($item in @((Get-Item $staging)) + @(Get-ChildItem $staging -Recurse)){
+        $acl=if($item.PSIsContainer){[Security.AccessControl.DirectorySecurity]::new()}else{[Security.AccessControl.FileSecurity]::new()}
+        $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+        $acl.SetAccessRuleProtection($true,$false)
+        foreach($identity in 'S-1-5-18','S-1-5-32-544','S-1-5-11'){
+            $rights=if($identity -eq 'S-1-5-11'){[Security.AccessControl.FileSystemRights]::ReadAndExecute}else{[Security.AccessControl.FileSystemRights]::FullControl}
+            if($item.PSIsContainer){$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($identity),$rights,([Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit),[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow))}
+            else{$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($identity),$rights,[Security.AccessControl.AccessControlType]::Allow))}
+        }
+        Set-Acl -LiteralPath $item.FullName -AclObject $acl
+    }
+    $AppDirectory=$staging
+}
 $AppDirectory=[IO.Path]::GetFullPath($AppDirectory)
 $service=Join-Path $AppDirectory 'internal/PathMan.Service.exe'
 $marker=Join-Path $AppDirectory 'internal/install.ini'
@@ -12,6 +30,7 @@ $oldExternal=$machine.GetValue('EXTERNAL_PATH',$null,[Microsoft.Win32.RegistryVa
 $oldExternalKind=if($null -ne $oldExternal){$machine.GetValueKind('EXTERNAL_PATH')}else{$null}
 $global=Join-Path $env:ProgramData 'PathMan/monitor'
 $checks=[Collections.Generic.List[string]]::new()
+$recoverySnapshot=$null
 New-Item -ItemType Directory -Force -Path $ResultDirectory|Out-Null
 function Assert($condition,[string]$message){if(!$condition){throw $message};$checks.Add($message)}
 function WaitFor([scriptblock]$test,[string]$message){for($i=0;$i -lt 300;$i++){if(& $test){return};Start-Sleep -Milliseconds 100};throw $message}
@@ -24,13 +43,70 @@ function ReadJson([string]$path){
 function State{ReadJson (Join-Path $global 'settings.json')}
 function Status{if(Test-Path (Join-Path $global 'status.json')){ReadJson (Join-Path $global 'status.json')}}
 function MachineState{ReadJson (Join-Path $global 'machine/environment.json')}
+function Probe([string[]]$arguments){
+    $start=[Diagnostics.ProcessStartInfo]::new($ProbeExecutable);$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    foreach($argument in $arguments){if($argument.Contains('"')){throw 'Unsupported probe argument'}}
+    $start.Arguments=($arguments|ForEach-Object {'"'+$_+'"'}) -join ' '
+    $process=[Diagnostics.Process]::Start($start);$output=$process.StandardOutput.ReadToEnd();$errorText=$process.StandardError.ReadToEnd();$process.WaitForExit()
+    return @{Exit=$process.ExitCode;Output=$output;Error=$errorText}
+}
 try{
     '[PathMan]','Scope=CurrentUser'|Set-Content $marker
     Assert ((Run '--configure-global-monitor true true true') -ne 0) 'Per-user installations reject global service configuration'
     '[PathMan]','Scope=AllUsers'|Set-Content $marker
+    $originalAcl=Get-Acl -LiteralPath $AppDirectory
+    try{
+        $weakAcl=Get-Acl -LiteralPath $AppDirectory
+        $weakAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'),[Security.AccessControl.FileSystemRights]::Write,[Security.AccessControl.AccessControlType]::Allow))
+        Set-Acl -LiteralPath $AppDirectory -AclObject $weakAcl
+        Assert ((Run '--configure-global-monitor true true false') -ne 0) 'Ordinary-user-writable installations cannot deploy a SYSTEM service'
+        Assert ($null -eq (Get-Service PathMan.Monitor -ErrorAction SilentlyContinue)) 'Unsafe source rejection happens before SCM registration'
+    }finally{Set-Acl -LiteralPath $AppDirectory -AclObject $originalAcl}
+    $originalAcl=Get-Acl -LiteralPath $service
+    try{
+        $weakAcl=Get-Acl -LiteralPath $service
+        $weakAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'),[Security.AccessControl.FileSystemRights]::Write,[Security.AccessControl.AccessControlType]::Allow))
+        Set-Acl -LiteralPath $service -AclObject $weakAcl
+        Assert ((Run '--configure-global-monitor true true false') -ne 0) 'A writable executable is rejected even inside a protected directory'
+    }finally{Set-Acl -LiteralPath $service -AclObject $originalAcl}
+    if($ProbeExecutable){
+        Assert ((Probe @('--check-service-source',$AppDirectory)).Exit -eq 0) 'The protected payload and its hash manifest pass validation'
+        Assert ((Probe @('--check-service-source',$AppDirectory,$AppDirectory)).Exit -ne 0) 'Deployment cannot replace a directory containing its own installation source'
+        $manifest=Join-Path $AppDirectory 'internal/service-payload.json';$originalManifest=[IO.File]::ReadAllText($manifest)
+        try{
+            '{"sha256":"00"}'|Set-Content $manifest
+            Assert ((Probe @('--check-service-source',$AppDirectory)).Exit -ne 0) 'A payload hash mismatch is rejected'
+        }finally{[IO.File]::WriteAllText($manifest,$originalManifest)}
+        $parent=Split-Path -Parent $AppDirectory
+        $originalAcl=Get-Acl -LiteralPath $parent
+        # Only the dedicated fixture parent may be weakened, never Program Files itself.
+        if((Split-Path -Leaf $parent) -eq 'PathMan-Review-Fixture'){
+            try{
+                $weakAcl=Get-Acl -LiteralPath $parent
+                $weakAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'),[Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles,[Security.AccessControl.AccessControlType]::Allow))
+                Set-Acl -LiteralPath $parent -AclObject $weakAcl
+                Assert ((Probe @('--check-service-source',$AppDirectory)).Exit -ne 0) 'A replaceable parent invalidates an otherwise protected payload'
+            }finally{Set-Acl -LiteralPath $parent -AclObject $originalAcl}
+            $junction=Join-Path $parent 'LinkedSource'
+            try{
+                New-Item -ItemType Junction -Path $junction -Target $AppDirectory|Out-Null
+                Assert ((Probe @('--check-service-source',$junction)).Exit -ne 0) 'A junction in the source path is rejected'
+            }finally{if(Test-Path $junction){[IO.Directory]::Delete($junction)}}
+        }
+    }
     $machine.SetValue('Path','C:\GlobalBase',[Microsoft.Win32.RegistryValueKind]::String);$machine.DeleteValue('EXTERNAL_PATH',$false)
     Assert ((Run '--configure-global-monitor true true false true true false false') -eq 0) 'An all-users installation enables the unified SCM service'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Running' -and (Status).OriginsReady} 'Unified service or ETW collector did not become ready'
+    Assert ((Get-ItemProperty ('HKLM:\SYSTEM\CurrentControlSet\Services\PathMan.Monitor')).FailureActionsOnNonCrashFailures -eq 1) 'SCM recovery includes reported nonzero service stops'
+    $oldProcess=(Get-CimInstance Win32_Service -Filter "Name='PathMan.Monitor'").ProcessId
+    $machineFile=Join-Path $global 'machine/environment.json';$recoverySnapshot=[IO.File]::ReadAllText($machineFile)
+    [IO.File]::WriteAllText($machineFile,'{invalid')
+    WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Stopped'} 'The induced service failure was not reported to SCM'
+    if($ProbeExecutable){Assert ((Probe @('--global-service-health')).Output.Trim() -ne 'OK') 'Enabled but stopped monitoring produces a GUI health warning'}
+    [IO.File]::WriteAllText($machineFile,$recoverySnapshot);$recoverySnapshot=$null
+    WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Running' -and (Status).OriginsReady -and (Get-CimInstance Win32_Service -Filter "Name='PathMan.Monitor'").ProcessId -ne $oldProcess} 'SCM did not recover a reported service failure'
+    Assert ($true) 'SCM automatically restarts the failed service without a manual launch'
+    if($ProbeExecutable){Assert ((Probe @('--global-service-health')).Output.Trim() -eq 'OK') 'The GUI health warning clears after service recovery'}
     Assert ((State).enabled -and (State).provideNonAdministratorOrigins -and !(State).autoArrangeMachinePath) 'Global switches persist independently in ProgramData'
     Assert ((Run '--data-root "C:\PathMan-Global-NoBackground"') -eq 0) 'Personal background launches exit while the unified service owns monitoring'
     $svc=Get-CimInstance Win32_Service -Filter "Name='PathMan.Monitor'"
@@ -100,8 +176,10 @@ class Writer {
     Write-Host 'PASS: installation scope, SCM lifecycle, single-process origins, global PATH writes/backups, option persistence, restart and uninstall.'
 }catch{@{Passed=$false;Error=$_.Exception.Message;Trace=$_.ScriptStackTrace;Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8;throw}
 finally{
+    if($recoverySnapshot){[IO.File]::WriteAllText((Join-Path $global 'machine/environment.json'),$recoverySnapshot)}
     $null=Run '--remove-origin-tasks'
     $machine.SetValue('Path',$oldPath,$oldPathKind)
     if($null -eq $oldExternal){$machine.DeleteValue('EXTERNAL_PATH',$false)}else{$machine.SetValue('EXTERNAL_PATH',$oldExternal,$oldExternalKind)};$machine.Dispose()
     if($null -ne $oldMarker){[IO.File]::WriteAllBytes($marker,$oldMarker)}elseif(Test-Path $marker){Remove-Item -LiteralPath $marker -Force}
+    if($staging -and [IO.Path]::GetFullPath($staging).StartsWith((Join-Path $env:ProgramFiles 'PathMan-CI-'),[StringComparison]::OrdinalIgnoreCase)){Remove-Item -LiteralPath $staging -Recurse -Force}
 }
