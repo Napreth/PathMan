@@ -7,6 +7,8 @@ $testRoot=Join-Path $root "artifacts/installer-acceptance/$Architecture"
 $resultFile=Join-Path $testRoot 'results.json'
 New-Item -ItemType Directory -Force -Path $testRoot|Out-Null
 $checks=[Collections.Generic.List[string]]::new()
+$cleanupErrors=[Collections.Generic.List[string]]::new()
+$machineRoot=Join-Path $env:ProgramFiles ('PathMan-Installer-Acceptance-'+$Architecture+'-'+[guid]::NewGuid().ToString('N'))
 function Assert($value,[string]$message) {if(!$value){throw $message};$checks.Add($message)}
 function Run([string]$File,[string]$Arguments,[int]$Expected=0) {
     $process=Start-Process -FilePath $File -ArgumentList $Arguments -PassThru -WindowStyle Hidden
@@ -28,15 +30,27 @@ $expectedMachine=@{x86=0x14c;x64=0x8664;arm64=0xaa64}[$Architecture]
 $data=Join-Path $env:LOCALAPPDATA 'PathMan/environment.json'
 foreach($scope in $false,$true) {if(Registered $scope){throw 'A preexisting installation must not be overwritten by acceptance tests.'}}
 try {
+    # All-users payloads must be protected before the installer launches maintenance.
+    # The runner checkout deliberately remains writable for current-user scenarios.
+    New-Item -ItemType Directory -Path $machineRoot|Out-Null
+    $acl=[Security.AccessControl.DirectorySecurity]::new()
+    $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+    $acl.SetAccessRuleProtection($true,$false)
+    foreach($identity in 'S-1-5-18','S-1-5-32-544','S-1-5-11'){
+        $rights=if($identity -eq 'S-1-5-11'){[Security.AccessControl.FileSystemRights]::ReadAndExecute}else{[Security.AccessControl.FileSystemRights]::FullControl}
+        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($identity),$rights,([Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit),[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow))
+    }
+    Set-Acl -LiteralPath $machineRoot -AclObject $acl
     foreach($machine in $false,$true) {foreach($kind in 'FrameworkDependent','SelfContained') {
         $label="$Architecture / $kind / $(if($machine){'AllUsers'}else{'CurrentUser'})"
         $scope=if($machine){'/AllUsers'}else{'/CurrentUser'}
-        $directory=Join-Path $testRoot "$(if($machine){'system'}else{'user'})-$kind"
+        $directory=if($machine){Join-Path $machineRoot $kind}else{Join-Path $testRoot "user-$kind"}
         $suffix=if($kind -eq 'SelfContained'){'-SelfContained'}else{''}
         $oldInstaller=Join-Path $PackageDirectory "PathMan-$BaselineVersion-$Architecture$suffix.exe"
         $installer=Join-Path $PackageDirectory "PathMan-$Version-$Architecture$suffix.exe"
         $uninstaller=Join-Path $directory 'internal/Uninstall.exe'
         $originalPath=PathValue $machine
+        $scenarioError=$null
         try {
             Run $oldInstaller "/S $scope /D=$directory"
             $oldHash=(Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash
@@ -93,15 +107,23 @@ try {
             Assert ((Get-FileHash (Join-Path $directory 'PathMan.exe')).Hash -eq $hash) "$label downgrade is rejected before changing files"
             Run $uninstaller "/S $scope _?=$directory\internal"
             Assert (!(Registered $machine)) "$label uninstall removes registration"
-            foreach($relative in 'PathMan.exe','bin/pathman.exe','bin/Switch-PathMan.ps1','bin/switch-pathman.cmd','bin/switch-pathman','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','release.json','THIRD-PARTY-NOTICES.txt','licenses/dotnet-THIRD-PARTY-NOTICES.txt') {Assert (!(Test-Path (Join-Path $directory $relative))) "$label uninstall removes $relative"}
+            foreach($relative in 'PathMan.exe','bin/pathman.exe','bin/Switch-PathMan.ps1','bin/switch-pathman.cmd','bin/switch-pathman','internal/PathMan.Service.exe','internal/PathMan.Shim.exe','internal/service-payload.json','release.json','THIRD-PARTY-NOTICES.txt','licenses/dotnet-THIRD-PARTY-NOTICES.txt') {Assert (!(Test-Path (Join-Path $directory $relative))) "$label uninstall removes $relative"}
             Assert ((PathValue $machine) -ceq $originalPath) "$label uninstall restores the original PATH"
             Assert ((Get-FileHash $data).Hash -eq $configHash) "$label uninstall retains user configuration"
-        }finally {
-            if(Registered $machine) {if(Test-Path $uninstaller){Run $uninstaller "/S $scope _?=$directory\internal"}}
+        }catch{$scenarioError=$_;throw}finally {
+            try{if(Registered $machine) {if(Test-Path $uninstaller){Run $uninstaller "/S $scope _?=$directory\internal"}}}
+            catch{if(!$scenarioError){throw};$cleanupErrors.Add($_.Exception.Message);Write-Warning ("Cleanup also failed: "+$_.Exception.Message)}
         }
     }}
     @{Passed=$true;Architecture=$Architecture;BaselineVersion=$BaselineVersion;Checks=$checks.ToArray()}|ConvertTo-Json -Depth 5|Set-Content $resultFile
 }catch{
-    @{Passed=$false;Architecture=$Architecture;BaselineVersion=$BaselineVersion;Checks=$checks.ToArray();Error=$_.Exception.Message}|ConvertTo-Json -Depth 5|Set-Content $resultFile
+    @{Passed=$false;Architecture=$Architecture;BaselineVersion=$BaselineVersion;Checks=$checks.ToArray();Error=$_.Exception.Message;Trace=$_.ScriptStackTrace;CleanupErrors=$cleanupErrors.ToArray()}|ConvertTo-Json -Depth 5|Set-Content $resultFile
     throw
+}finally{
+    if((Test-Path -LiteralPath $machineRoot) -and !(Registered $true)){
+        $expectedPrefix=Join-Path $env:ProgramFiles 'PathMan-Installer-Acceptance-'
+        if([IO.Path]::GetFullPath($machineRoot).StartsWith($expectedPrefix,[StringComparison]::OrdinalIgnoreCase) -and !((Get-Item -LiteralPath $machineRoot).Attributes -band [IO.FileAttributes]::ReparsePoint)){
+            try{Remove-Item -LiteralPath $machineRoot -Recurse -Force}catch{Write-Warning ("Fixture cleanup failed: "+$_.Exception.Message)}
+        }
+    }
 }
