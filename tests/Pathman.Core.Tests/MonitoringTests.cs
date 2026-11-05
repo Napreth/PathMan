@@ -120,6 +120,13 @@ internal static class MonitoringTests
         assert(!PathOrderComparison.Compare("%UNKNOWN%","%UNKNOWN%",VariableScope.User,[],[],runtime).IsResolved,"Unknown references must not claim a verified order");
         var cleanup=EnvironmentPathCleanup.Analyze([V("Path",@"C:\tool;C:\Windows;D:\tool",VariableScope.Machine)],runtime);
         assert(cleanup.Scopes.Single().ChangesPathOrder,"Manual software migration must expose its search-order warning in the preview model");
+        var owned=new EnvironmentWorkspace {MonitoringEnabled=true,AutoArrangeUserPath=true,AutoArrangeMachinePath=true};
+        var baseline=new[] {new VariableSnapshot(VariableScope.User,"Path",@"C:\base",1),new VariableSnapshot(VariableScope.Machine,"Path",@"C:\base",1)};
+        var changedBoth=new[] {V("Path",@"C:\base;D:\user"),V("Path",@"C:\base;E:\machine",VariableScope.Machine)};
+        EnvironmentMonitor.PreparePlans(owned,baseline,changedBoth,true,runtime:runtime,managedScope:VariableScope.User);
+        assert(owned.AutoArrangeMachinePath && owned.PendingPathOrganizations.All(plan=>plan.Scope==VariableScope.User) && owned.PendingPathOrganizations.Count==1,"Unified user monitoring preserves the saved machine preference without creating machine write plans");
+        EnvironmentMonitor.PreparePlans(owned,baseline,changedBoth,true,runtime:runtime,managedScope:VariableScope.Machine);
+        assert(owned.AutoArrangeUserPath && owned.PendingPathOrganizations.All(plan=>plan.Scope==VariableScope.Machine) && owned.PendingPathOrganizations.Count==1,"The global machine writer never executes a user's PATH plan");
         Console.WriteLine("PASS: external-only PATH organization, independent options, scope/recursive deduplication, pending work, cycle safety, classification, and effective-order warnings.");
     }
 }

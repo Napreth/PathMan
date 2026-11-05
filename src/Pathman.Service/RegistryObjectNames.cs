@@ -27,11 +27,18 @@ internal sealed class RegistryObjectNames(string userKey,string machineKey)
         if(supplied.Length>0) return supplied;
         return names.TryGetValue(keyObject,out var name) ? name : "";
     }
-    private bool Relevant(string name)=>name.Length>0 && (userKey.Equals(name,StringComparison.OrdinalIgnoreCase) ||
+    private bool Relevant(string name)=>name.Length>0 && (userKey.Equals(@"\REGISTRY\USER",StringComparison.OrdinalIgnoreCase) && GlobalUserKey(name) || userKey.Equals(name,StringComparison.OrdinalIgnoreCase) ||
         userKey.StartsWith(name+"\\",StringComparison.OrdinalIgnoreCase) || machineKey.Equals(name,StringComparison.OrdinalIgnoreCase) ||
         machineKey.StartsWith(name+"\\",StringComparison.OrdinalIgnoreCase));
     private bool Candidate(string relative)=>relative.EndsWith("Environment",StringComparison.OrdinalIgnoreCase) ||
-        relative.Equals(userKey.Split('\\')[3],StringComparison.OrdinalIgnoreCase);
+        userKey.Equals(@"\REGISTRY\USER",StringComparison.OrdinalIgnoreCase) && relative.StartsWith("S-1-",StringComparison.OrdinalIgnoreCase) || relative.Equals(userKey.Split('\\').ElementAtOrDefault(3) ?? "",StringComparison.OrdinalIgnoreCase);
+    private static bool GlobalUserKey(string name)
+    {
+        const string prefix=@"\REGISTRY\USER\";
+        if(!name.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)) return false;
+        var parts=name[prefix.Length..].Split('\\');
+        return parts[0].StartsWith("S-1-",StringComparison.OrdinalIgnoreCase) && (parts.Length==1 || parts.Length==2 && parts[1].Equals("Environment",StringComparison.OrdinalIgnoreCase));
+    }
     private string? Resolve(int processId,ulong keyObject)
     {
         if(keyObject==0 || processId<=0) return null;

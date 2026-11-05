@@ -32,7 +32,7 @@ public static class WindowsEnvironmentVariableEditor
         if (mutation.Scope is not (VariableScope.User or VariableScope.Machine)) throw new ArgumentOutOfRangeException(nameof(mutation));
         store.Update(state =>
         {
-            using var key = mutation.Scope == VariableScope.User ? Registry.CurrentUser.CreateSubKey("Environment", writable: true) :
+            using var key = mutation.Scope == VariableScope.User ? WindowsUserContext.EnvironmentKey(true) ?? throw new IOException("Cannot open user environment.") :
                 Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", writable: true)
                     ?? throw new IOException(L.Get("找不到系统环境变量注册表项。"));
             ApplyKey(key, mutation);
@@ -54,7 +54,7 @@ public static class WindowsEnvironmentVariableEditor
             {
                 var writable = requiredScope == scope;
                 keys[requiredScope] = requiredScope == VariableScope.User
-                    ? Registry.CurrentUser.CreateSubKey("Environment", writable)
+                    ? WindowsUserContext.EnvironmentKey(writable) ?? throw new IOException("Cannot open user environment.")
                     : Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", writable)
                         ?? throw new IOException(L.Get("找不到环境变量注册表项。"));
             }
@@ -187,4 +187,5 @@ public static class WindowsEnvironmentVariableEditor
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
     private static void Broadcast() => SendMessageTimeout(new IntPtr(0xffff), 0x1a, UIntPtr.Zero, "Environment", 2, 200, out _);
+    public static void NotifyEnvironmentChanged()=>Broadcast();
 }

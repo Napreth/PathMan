@@ -11,7 +11,7 @@ public sealed class WindowsEnvironmentVariableReader
         // environment inherited by this process. Reading needs no elevation.
         using var key = scope switch
         {
-            VariableScope.User => Registry.CurrentUser.OpenSubKey("Environment", writable: false),
+            VariableScope.User => WindowsUserContext.EnvironmentKey(false),
             VariableScope.Machine => Registry.LocalMachine.OpenSubKey(
                 @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", writable: false),
             _ => throw new ArgumentOutOfRangeException(nameof(scope))

@@ -12,6 +12,8 @@
 #include <cwctype>
 #include "version.h"
 #include "verified-worker.h"
+#include "protected-source.h"
+#include <memory>
 
 #ifdef _M_IX86
 #pragma comment(linker, "/EXPORT:CompareVersions=_CompareVersions@8")
@@ -31,6 +33,8 @@
 #pragma comment(linker, "/EXPORT:BeginSetup=_BeginSetup@0")
 #pragma comment(linker, "/EXPORT:CleanupUserInstall=_CleanupUserInstall@8")
 #pragma comment(linker, "/EXPORT:PrepareOriginBroker=_PrepareOriginBroker@12")
+#pragma comment(linker, "/EXPORT:RemoveOriginTasks=_RemoveOriginTasks@8")
+#pragma comment(linker, "/EXPORT:MaintainOriginTask=_MaintainOriginTask@16")
 #endif
 
 extern "C" __declspec(dllexport) DWORD __stdcall CompareVersions(const wchar_t* left,const wchar_t* right) {
@@ -469,6 +473,43 @@ DWORD run_verified_elevated(HWND owner, const std::filesystem::path& worker, con
     }
     return result;
 }
+}
+namespace {
+DWORD origin_maintenance(const wchar_t* directory, const std::wstring& parameters, BOOL machine) {
+    try {
+        const auto executable = std::filesystem::path(directory) / L"internal" / L"PathMan.Service.exe";
+        if (!std::filesystem::exists(executable)) return ERROR_SUCCESS;
+        std::unique_ptr<pathman_setup::protected_source> source;
+        if (machine) {
+            source = std::make_unique<pathman_setup::protected_source>(std::filesystem::path(directory));
+            if (source->error()) return source->error();
+        }
+        auto command = L"\"" + executable.wstring() + L"\" " + parameters;
+        STARTUPINFOW start{sizeof(start)}; PROCESS_INFORMATION process{};
+        if (!CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, directory, &start, &process)) return GetLastError();
+        wait_with_messages(process.hProcess);
+        DWORD result = ERROR_INSTALL_FAILURE;
+        GetExitCodeProcess(process.hProcess, &result);
+        CloseHandle(process.hThread); CloseHandle(process.hProcess);
+        if (result != ERROR_ELEVATION_REQUIRED) return result;
+        SHELLEXECUTEINFOW execute{sizeof(execute)};
+        execute.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        execute.lpVerb = L"runas"; execute.lpFile = executable.c_str(); execute.lpParameters = parameters.c_str(); execute.nShow = SW_HIDE;
+        if (!ShellExecuteExW(&execute)) return GetLastError();
+        if (!execute.hProcess) return ERROR_INSTALL_FAILURE;
+        wait_with_messages(execute.hProcess);
+        GetExitCodeProcess(execute.hProcess, &result); CloseHandle(execute.hProcess);
+        return result;
+    } catch (...) { return ERROR_INSTALL_FAILURE; }
+}
+}
+extern "C" __declspec(dllexport) DWORD __stdcall RemoveOriginTasks(const wchar_t* directory, BOOL machine) {
+    return origin_maintenance(directory, L"--remove-origin-tasks", machine);
+}
+extern "C" __declspec(dllexport) DWORD __stdcall MaintainOriginTask(const wchar_t* directory, const wchar_t* localData, const wchar_t* originalSid, BOOL machine) {
+    const auto sid = originalSid && *originalSid ? std::wstring(originalSid) : current_sid();
+    const auto data = std::filesystem::path(localData) / L"PathMan";
+    return origin_maintenance(directory, L"--maintain-origin-task \"" + sid + L"\" \"" + data.wstring() + L"\"", machine);
 }
 extern "C" __declspec(dllexport) DWORD __stdcall PrepareOriginBroker(const wchar_t* directory, const wchar_t* localData, const wchar_t* originalSid) {
     try {

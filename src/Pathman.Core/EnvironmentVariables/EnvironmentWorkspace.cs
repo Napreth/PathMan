@@ -171,14 +171,20 @@ public sealed class EnvironmentWorkspaceStore
     public EnvironmentWorkspaceStore(string dataDirectory)
     {
         FilePath = Path.Combine(Path.GetFullPath(dataDirectory), "environment.json");
-        mutexName = @"Local\PathMan.Environment." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(FilePath.ToUpperInvariant())))[..24];
+        mutexName = @"Global\PathMan.Environment." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(FilePath.ToUpperInvariant())))[..24];
     }
     internal static T ReadDefault<T>(string name) => JsonSerializer.Deserialize<T>(typeof(EnvironmentWorkspaceStore).Assembly
         .GetManifestResourceStream($"Pathman.Core.EnvironmentVariables.Defaults.{name}.json")!, JsonOptions)!;
     private EnvironmentWorkspace Load()
     {
-        var state = File.Exists(FilePath) ? JsonSerializer.Deserialize<EnvironmentWorkspace>(File.ReadAllText(FilePath), JsonOptions)
-            ?? throw new InvalidDataException(L.Get("环境变量配置为空。")) : ReadDefault<EnvironmentWorkspace>("groups");
+        EnvironmentWorkspace state;
+        if(File.Exists(FilePath))
+        {
+            // Global history readers do not hold the service's writer mutex.
+            using var stream=File.Open(FilePath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
+            state=JsonSerializer.Deserialize<EnvironmentWorkspace>(stream,JsonOptions) ?? throw new InvalidDataException(L.Get("环境变量配置为空。"));
+        }
+        else state=ReadDefault<EnvironmentWorkspace>("groups");
         state.Preferences??=new();state.Preferences.Language??="system";state.Preferences.Theme??="system";
         foreach(var project in state.VersionProjects) project.Versions=new(project.Versions,StringComparer.OrdinalIgnoreCase);
         VersionCatalog.Validate(state.VersionProjects);
@@ -203,7 +209,7 @@ public sealed class EnvironmentWorkspaceStore
     }
     private T Locked<T>(Func<T> action)
     {
-        using var mutex = new Mutex(false, mutexName);
+        using var mutex = WindowsUserContext.WorkspaceMutex(mutexName);
         try { if (!mutex.WaitOne(TimeSpan.FromSeconds(15))) throw new IOException(L.Get("环境变量配置正在使用中，请稍后重试。")); }
         catch (AbandonedMutexException) { }
         try { return action(); } finally { mutex.ReleaseMutex(); }
@@ -212,6 +218,7 @@ public sealed class EnvironmentWorkspaceStore
     {
         var state=Load();if(EnvironmentMonitorNotices.Reconcile(state)) Save(state);return state;
     });
+    public EnvironmentWorkspace ReadSnapshot()=>Load();
     public void Update(Action<EnvironmentWorkspace> change) => Locked(() =>
     {
         var state = Load(); change(state); EnvironmentMonitorNotices.Reconcile(state); Save(state); return true;
@@ -220,6 +227,7 @@ public sealed class EnvironmentWorkspaceStore
     {
         var state = Load(); var reconciled=EnvironmentMonitorNotices.Reconcile(state); if (change(state) || reconciled) Save(state); return true;
     });
+    public void InspectForService(Func<EnvironmentWorkspace,bool> change)=>Inspect(change);
     private void Save(EnvironmentWorkspace state)
     {
         state.Revision = Guid.NewGuid().ToString("N");

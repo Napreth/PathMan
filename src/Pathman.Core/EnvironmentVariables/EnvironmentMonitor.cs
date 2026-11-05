@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Pathman.Core.EnvironmentVariables;
 
-public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
+public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableScope? managedScope=null,IReadOnlyDictionary<string,string>? runtime=null)
 {
     private readonly HashSet<string> failedPlans=[];
     public static IReadOnlyList<EnvironmentVariableInfo> ReadAll()
@@ -15,31 +15,33 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
         var reader = new WindowsEnvironmentVariableReader();
         return reader.Read(VariableScope.User).Concat(reader.Read(VariableScope.Machine)).ToArray();
     }
-    public void SetEnabled(bool enabled) => store.Update(state =>
+    private IReadOnlyList<EnvironmentVariableInfo> ReadCurrent()=>managedScope==VariableScope.Machine ? new WindowsEnvironmentVariableReader().Read(VariableScope.Machine) : ReadAll();
+    public void SetEnabled(bool enabled,IReadOnlyList<EnvironmentVariableInfo>? captured=null) => store.Update(state =>
     {
         state.MonitoringEnabled = enabled;
-        if (enabled) state.Snapshot = ReadAll().Select(Snapshot).ToList();
+        if (enabled) state.Snapshot = (captured ?? ReadCurrent()).Select(Snapshot).ToList();
     });
-    public void Poll(IEnvironmentChangeOrigins? origins=null)
+    public bool Poll(IEnvironmentChangeOrigins? origins=null,IReadOnlyList<EnvironmentVariableInfo>? captured=null)
     {
         var paused=false;
         store.Inspect(state=>
         {
             if(!state.MonitoringEnabled) return false;
             if(state.RegistryWriteInProgressUntil>DateTime.UtcNow) {paused=true;return false;}
-            var current=ReadAll();
+            var current=captured ?? ReadCurrent();
             var before=state.Snapshot.ToArray();
             var changed=Compare(state,current,origins);
-            return PreparePlans(state,before,current,changed,origins:origins) || changed;
+            return PreparePlans(state,before,current,changed,runtime:runtime,origins:origins,managedScope:managedScope) || changed;
         });
-        if(paused) return;
+        if(paused) return false;
         var saved=store.Read();
-        if(!saved.MonitoringEnabled || !saved.AnyPathOrganizationEnabled) return;
+        if(!saved.MonitoringEnabled || !saved.AnyPathOrganizationEnabled) return false;
+        var applied=false;
         using var identity=WindowsIdentity.GetCurrent();
         var administrator=new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
         foreach(var plan in saved.PendingPathOrganizations)
         {
-            if(!saved.IsPathOrganizationEnabled(plan.Scope) || RequiresOrigin(saved,plan.Scope) && origins?.IsReady!=true) continue;
+            if(managedScope is {} selected && plan.Scope!=selected || !saved.IsPathOrganizationEnabled(plan.Scope) || RequiresOrigin(saved,plan.Scope) && origins?.IsReady!=true) continue;
             if(failedPlans.Contains(plan.Id)) continue;
             if(plan.Scope==VariableScope.Machine && !administrator) continue;
             try
@@ -51,21 +53,23 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store)
                         throw new IOException(L.Get("监控设置或待整理项目已改变，本次整理已跳过。"));
                 });
                 Complete(store,plan);
+                applied=true;
             }
             catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
             {failedPlans.Add(plan.Id);ReportError(L.Get("自动整理未完成：")+error.Message);}
         }
         failedPlans.RemoveWhere(id=>!saved.PendingPathOrganizations.Any(plan=>plan.Id==id));
+        return applied;
     }
     internal static bool PreparePlans(EnvironmentWorkspace state,IReadOnlyList<VariableSnapshot> before,
-        IReadOnlyList<EnvironmentVariableInfo> current,bool changed,IReadOnlyDictionary<string,string>? runtime=null,IEnvironmentChangeOrigins? origins=null)
+        IReadOnlyList<EnvironmentVariableInfo> current,bool changed,IReadOnlyDictionary<string,string>? runtime=null,IEnvironmentChangeOrigins? origins=null,VariableScope? managedScope=null)
     {
         if(!state.AnyPathOrganizationEnabled)
         {var had=state.PendingPathOrganizations.Count>0;state.PendingPathOrganizations.Clear();return had;}
         var updated=false;
         foreach(var scope in new[] {VariableScope.User,VariableScope.Machine})
         {
-            if(!state.IsPathOrganizationEnabled(scope))
+            if(managedScope is {} selected && scope!=selected || !state.IsPathOrganizationEnabled(scope))
             {updated|=state.PendingPathOrganizations.RemoveAll(item=>item.Scope==scope)>0;continue;}
             var pending=state.PendingPathOrganizations.FirstOrDefault(item=>item.Scope==scope);
             var old=before.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals("Path",StringComparison.OrdinalIgnoreCase));

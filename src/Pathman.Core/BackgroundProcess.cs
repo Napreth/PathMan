@@ -8,6 +8,8 @@ namespace Pathman.Core;
 
 public sealed class BackgroundProcess(PathmanLayout layout)
 {
+    public static Mutex OwnerMutex(string sid,string installation,int? sessionId=null)=>WindowsUserContext.WorkspaceMutex(@"Global\PathMan.MonitorOwner."+sid+".Session."+(sessionId ?? Process.GetCurrentProcess().SessionId));
+    public static Mutex WriterMutex(string sid)=>WindowsUserContext.WorkspaceMutex(@"Global\PathMan.MonitorWriter."+sid);
     // Per-user, per-installation names prevent another installation from stopping this process.
     public string InstanceName
     {
@@ -32,6 +34,7 @@ public sealed class BackgroundProcess(PathmanLayout layout)
 
     public void Start()
     {
+        if(new GlobalMonitoring(layout).IsEnabled) return;
         if (IsRunning) return;
         var state=new EnvironmentWorkspaceStore(layout.DataDirectory).Read();
         if(!StartupManager.CanRun(state,new StartupManager(layout).IsEnabled))

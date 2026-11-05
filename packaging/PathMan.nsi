@@ -670,6 +670,12 @@ Section "PathMan" Main
     SetErrorLevel 1603
     Abort
   ${EndIf}
+  System::Call '$Helper::MaintainOriginTask(w "$INSTDIR", w "$UserLocalData", w "$OriginalUserSid", i $Machine) i.r0'
+  ${If} $0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+    SetErrorLevel 1603
+    Abort
+  ${EndIf}
   InstallUserFinalization:
   ${If} $Worker == 1
     Call RestoreBackground
@@ -752,6 +758,12 @@ Section "Uninstall"
     SetErrorLevel 0
     Return
   ${EndIf}
+  System::Call '$Helper::RemoveOriginTasks(w "$INSTDIR", i $Machine) i.r0'
+  ${If} $0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
+    SetErrorLevel 1603
+    Abort
+  ${EndIf}
   System::Call '$Helper::CleanupInstall(w "$INSTDIR", i $Machine, w "$DESKTOP") i.r0'
   ${If} $0 != 0
     MessageBox MB_OK|MB_ICONSTOP "$(MaintenanceFailed)" /SD IDOK
@@ -766,6 +778,7 @@ Section "Uninstall"
   !insertmacro DeleteInstalledFile "PathMan.exe"
   !insertmacro DeleteInstalledFile "LICENSE"
   !insertmacro DeleteInstalledFile "release.json"
+  !insertmacro DeleteInstalledFile "internal\service-payload.json"
   !insertmacro DeleteInstalledFile "THIRD-PARTY-NOTICES.txt"
   !insertmacro DeleteInstalledFile "licenses\dotnet-THIRD-PARTY-NOTICES.txt"
   !insertmacro DeleteInstalledFile "bin\pathman.exe"

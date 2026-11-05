@@ -1,6 +1,13 @@
 using Microsoft.Win32;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
+if(args is ["--global-service-health"]) {Console.WriteLine(Pathman.Core.GlobalMonitoring.GetUnavailableMessage() ?? "OK");return;}
+if(args.Length is 2 or 3 && args[0]=="--check-service-source")
+{
+    try {using var source=Pathman.Core.PrivilegedServiceSource.Open(new Pathman.Core.PathmanLayout(args[1]));if(args.Length==3) source.ValidateDestination(args[2]);Console.WriteLine("OK");}
+    catch(Exception error) {Console.Error.WriteLine(error.Message);Environment.ExitCode=1;}
+    return;
+}
 
 static void Assert(bool condition,string message) { if(!condition) throw new InvalidOperationException(message); }
 static void Reject(Action action,string message) { try { action(); } catch(IOException) { return; } throw new InvalidOperationException(message); }
@@ -25,6 +32,7 @@ foreach(var (name,raw,list,entries) in cases)
 PathCleanupTests.Run(Assert);
 MonitoringTests.Run(Assert);
 LiveMonitoringTests.Run(Assert);
+GlobalServiceTests.Run(Assert);
 InstallerSyncTests.Run(Assert);
 VersionManagementTests.Run(Assert);
 CommandLinePathTests.Run(Assert);

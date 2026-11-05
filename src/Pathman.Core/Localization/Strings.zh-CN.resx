@@ -982,8 +982,26 @@
   <data name="管理员连接超时，请刷新确认写入结果后重试。" xml:space="preserve">
     <value>管理员连接超时，请刷新确认写入结果后重试。</value>
   </data>
-  <data name="精确识别修改来源（需要管理员权限）" xml:space="preserve">
-    <value>精确识别修改来源（需要管理员权限）</value>
+  <data name="精确识别修改来源" xml:space="preserve">
+    <value>精确识别修改来源</value>
+  </data>
+  <data name="需要管理员权限" xml:space="preserve">
+    <value>需要管理员权限</value>
+  </data>
+  <data name="此功能需要开启精确识别修改来源" xml:space="preserve">
+    <value>此功能需要开启精确识别修改来源</value>
+  </data>
+  <data name="无法访问来源识别计划任务。" xml:space="preserve">
+    <value>无法访问来源识别计划任务。</value>
+  </data>
+  <data name="无法注册来源识别计划任务。" xml:space="preserve">
+    <value>无法注册来源识别计划任务。</value>
+  </data>
+  <data name="无法启动来源识别计划任务。" xml:space="preserve">
+    <value>无法启动来源识别计划任务。</value>
+  </data>
+  <data name="请重新开启“精确识别修改来源”，完成一次管理员授权。" xml:space="preserve">
+    <value>请重新开启“精确识别修改来源”，完成一次管理员授权。</value>
   </data>
   <data name="系统" xml:space="preserve">
     <value>系统</value>
@@ -1215,4 +1233,16 @@
 <data name="前往版本管理" xml:space="preserve"><value>前往版本管理</value></data>
   <data name="此功能将在PATH中添加命令行目录" xml:space="preserve"><value>此功能将在PATH中添加命令行目录</value></data>
   <data name="接收测试版更新" xml:space="preserve"><value>接收测试版更新</value></data>
+  <data name="全局设置" xml:space="preserve"><value>全局设置</value></data>
+  <data name="为所有用户开启统一设置" xml:space="preserve"><value>为所有用户开启统一设置</value></data>
+  <data name="用户级的“自动整理系统PATH环境变量”将不可用" xml:space="preserve"><value>用户级的“自动整理系统PATH环境变量”将不可用</value></data>
+  <data name="为非管理员用户提供精确修改来源" xml:space="preserve"><value>为非管理员用户提供精确修改来源</value></data>
+  <data name="自动整理系统PATH环境变量" xml:space="preserve"><value>自动整理系统PATH环境变量</value></data>
+  <data name="全局监控仅支持为所有用户安装。" xml:space="preserve"><value>全局监控仅支持为所有用户安装。</value></data>
+  <data name="无法配置全局监控服务。" xml:space="preserve"><value>无法配置全局监控服务。</value></data>
+  <data name="全局监控服务正在启动或恢复，请稍候。" xml:space="preserve"><value>全局监控服务正在启动或恢复，请稍候。</value></data>
+  <data name="全局监控服务未正常响应，请由管理员检查或重新启用全局设置。" xml:space="preserve"><value>全局监控服务未正常响应，请由管理员检查或重新启用全局设置。</value></data>
+  <data name="全局服务只能从管理员保护的本地安装目录部署，请重新安装到安全目录。" xml:space="preserve"><value>全局服务只能从管理员保护的本地安装目录部署，请重新安装到安全目录。</value></data>
+  <data name="无法查询全局监控服务状态。" xml:space="preserve"><value>无法查询全局监控服务状态。</value></data>
+  <data name="全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。" xml:space="preserve"><value>全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。</value></data>
 </root>

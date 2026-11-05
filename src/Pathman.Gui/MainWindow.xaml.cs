@@ -39,7 +39,7 @@ public partial class MainWindow : Window
         InitializeComponent();Language=System.Windows.Markup.XmlLanguage.GetLanguage(L.Current.CultureName);RefreshWindowTitle(null,EventArgs.Empty);store=new(layout.DataDirectory);
         updates=new(layout.DataDirectory,release=>UpdateToast.Show(release,layout),store.Read().Preferences.ReceivePrereleaseUpdates);
         variables=new(layout,store); aliases=new(layout,store); monitor=new(layout,store); about=new(updates,InstallUpdateAsync);settings=new(store);
-        versions=new(layout,store,InstalledScope()=="/AllUsers" ? Pathman.Core.Models.VariableScope.Machine : Pathman.Core.Models.VariableScope.User);AppVersion.Text=AppInfo.DisplayVersion;
+        versions=new(layout,store,InstalledScope()=="/AllUsers" ? Pathman.Core.Models.VariableScope.Machine : Pathman.Core.Models.VariableScope.User);AppVersion.Text=AppInfo.Version;
         settings.PreferencesChanged+=async(_,_)=>await ApplyPreferencesAsync();
         PageHost.Content=variables; previousNavigation=Navigation.SelectedItem as ListBoxItem;
         NotificationsList.ItemsSource=notifications.Items;
@@ -220,7 +220,7 @@ public partial class MainWindow : Window
     }
     private void ShowMonitorNotification(EnvironmentWorkspace state)
     {
-        var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine);
+        var pending=!new GlobalMonitoring(layout).IsEnabled && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine);
         var signature=$"{pending}:{state.MonitorMessageTime:O}:{state.MonitorMessage}:{state.OriginTrackingMessage}";
         if(signature==monitorSignature) return;monitorSignature=signature;
         if(state.OriginTrackingMessage is {} tracking) notifications.Show(new("monitor",L.Get("修改来源识别"),tracking+"\n"+Osc8Text.Link(L.Get("前往变量监控"),"apppage:monitor"),NotificationColor.Yellow));
@@ -230,6 +230,7 @@ public partial class MainWindow : Window
     }
     private async Task ApplyPendingMonitoringAsync(bool automatic=false)
     {
+        if(new GlobalMonitoring(layout).IsEnabled) return;
         if(monitorApplying) return;
         monitorApplying=true;monitor.SetApplying(true);
         try

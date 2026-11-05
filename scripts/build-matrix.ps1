@@ -86,6 +86,7 @@ foreach ($cpu in $Arch) {
                 '-p:DebugType=None', '-o', $project.Destination)+$versionProperties)
         }
         Copy-Item -LiteralPath (Join-Path $nativeBuild "$Configuration/PathMan.Shim.exe") -Destination (Join-Path $output 'internal/PathMan.Shim.exe')
+        @{sha256=(Get-FileHash -LiteralPath (Join-Path $output 'internal/PathMan.Service.exe') -Algorithm SHA256).Hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'internal/service-payload.json') -Encoding utf8
         Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $output
         Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.txt') -Destination $output
         Copy-Item -LiteralPath (Join-Path $projectRoot 'licenses') -Destination $output -Recurse
