@@ -12,12 +12,20 @@ public partial class MonitorView : UserControl
     private readonly EnvironmentWorkspaceStore store;
     private readonly DispatcherTimer statusTimer=new() {Interval=TimeSpan.FromSeconds(1)};
     private bool updating,busy;
+    private DateTime globalHistoryWrite;
     public event EventHandler? PendingApplyRequested;
     public event EventHandler? OptionsChanged;
     public MonitorView(PathmanLayout layout,EnvironmentWorkspaceStore store)
     {
         this.layout=layout;this.store=store;InitializeComponent();Update(store.Read());
-        statusTimer.Tick+=(_,_)=> {if(!busy) RefreshProcessState();};
+        statusTimer.Tick+=(_,_)=>
+        {
+            if(busy) return;
+            RefreshProcessState();
+            var file=Path.Combine(GlobalMonitoring.MachineDirectory,"environment.json");
+            var written=File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
+            if(written!=globalHistoryWrite) {globalHistoryWrite=written;Update(store.Read());}
+        };
         Loaded+=(_,_)=> {RefreshProcessState();statusTimer.Start();};Unloaded+=(_,_)=>statusTimer.Stop();
     }
     private void RefreshProcessState()
@@ -26,8 +34,15 @@ public partial class MonitorView : UserControl
         try
         {
             var state=store.Read();var startup=new StartupManager(layout);startup.Reconcile();
+            var global=new GlobalMonitoring(layout);var settings=GlobalMonitoring.ReadSettings();var unified=settings.Enabled;
             EnableMonitoring.IsChecked=state.MonitoringEnabled;StartupEnabled.IsChecked=startup.IsEnabled;
             StartupEnabled.IsEnabled=TrackOrigins.IsEnabled=MonitoringRules.IsEnabled=state.MonitoringEnabled;
+            StartupEnabled.IsEnabled&=!unified;
+            TrackOrigins.IsEnabled&=!unified || settings.ProvideNonAdministratorOrigins || IsAdministratorAccount();
+            AutoArrangeMachine.IsEnabled=!unified;MachineArrangeOptions.IsEnabled=state.AutoArrangeMachinePath && !unified;
+            GlobalSettings.Visibility=global.IsAllUsers ? Visibility.Visible : Visibility.Collapsed;
+            GlobalEnabled.IsChecked=settings.Enabled;GlobalOrigins.IsChecked=settings.ProvideNonAdministratorOrigins;GlobalAutoArrange.IsChecked=settings.AutoArrangeMachinePath;
+            GlobalOrigins.IsEnabled=GlobalAutoArrange.IsEnabled=settings.Enabled;
             UserEditorExclusions.IsEnabled=MachineEditorExclusions.IsEnabled=state.TrackChangeOrigins;
         }
         finally {updating=false;}
@@ -45,12 +60,15 @@ public partial class MonitorView : UserControl
         IgnorePowerToysUser.IsChecked=state.IgnorePowerToysUserChanges;IgnorePowerToysMachine.IsChecked=state.IgnorePowerToysMachineChanges;
         UserArrangeOptions.IsEnabled=state.AutoArrangeUserPath;MachineArrangeOptions.IsEnabled=state.AutoArrangeMachinePath;
         updating=false;RefreshProcessState();
-        var pending=state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
+        var unified=new GlobalMonitoring(layout).IsEnabled;
+        var pending=!unified && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
         var message=state.OriginTrackingMessage ?? (pending ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
         MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
         ApplyPending.Visibility=pending ? Visibility.Visible : Visibility.Collapsed;
         ApplyPending.IsEnabled=!EnvironmentMonitor.RequiresOrigin(state,VariableScope.Machine) || state.OriginTrackingReady;
-        var changes=state.Changes.Where(change=>change.IsExternal).Select(change=>new {
+        var history=state.Changes.AsEnumerable();
+        if(unified) history=history.Where(change=>change.Scope!=VariableScope.Machine).Concat(new EnvironmentWorkspaceStore(GlobalMonitoring.MachineDirectory).ReadSnapshot().Changes.Where(change=>change.Scope==VariableScope.Machine));
+        var changes=history.Where(change=>change.IsExternal).OrderByDescending(change=>change.Time).Take(200).Select(change=>new {
             Heading=$"{change.Time:yyyy-MM-dd HH:mm:ss}  ·  {(change.Scope==VariableScope.User ? L.Get("用户") : L.Get("系统"))} · {change.Name}  ·  {L.Get(change.Action switch {"create"=>"新增","delete"=>"删除",_=>"修改"})}",
             ProcessText=L.Get("修改进程")+"："+(change.Origins.Count==0 ? L.Get("未识别") : string.Join("、",change.Origins.Select(origin=>$"{origin.ProcessName} ({origin.ProcessId})").Distinct())),
             change.Before,change.After,
@@ -69,7 +87,7 @@ public partial class MonitorView : UserControl
         var enabled=StartupEnabled.IsChecked==true;busy=true;SettingsPanel.IsEnabled=false;
         try
         {
-            await Task.Run(()=> {if(enabled && store.Read().TrackChangeOrigins) new OriginTrackingTask(layout).EnsureRegistered();new StartupManager(layout).SetEnabled(enabled);var process=new BackgroundProcess(layout);if(enabled) process.Start();else process.Stop();});
+            await Task.Run(()=> {if(enabled && store.Read().TrackChangeOrigins && !new GlobalMonitoring(layout).IsEnabled) new OriginTrackingTask(layout).EnsureRegistered();new StartupManager(layout).SetEnabled(enabled);var process=new BackgroundProcess(layout);if(enabled) process.Start();else process.Stop();});
             busy=false;Update(store.Read());
         }
         catch(Exception error) when(Expected(error)) {RefreshProcessState();ShowError(error);}
@@ -85,7 +103,7 @@ public partial class MonitorView : UserControl
             {
                 new EnvironmentMonitor(store).SetEnabled(enabled);
                 var process=new BackgroundProcess(layout);var startup=new StartupManager(layout);
-                if(enabled) {if(startup.IsEnabled) {if(store.Read().TrackChangeOrigins) new OriginTrackingTask(layout).EnsureRegistered();process.Start();}}
+                if(enabled) {if(startup.IsEnabled && !new GlobalMonitoring(layout).IsEnabled) {if(store.Read().TrackChangeOrigins) new OriginTrackingTask(layout).EnsureRegistered();process.Start();}}
                 else {startup.SetEnabled(false);process.Stop();}
             });
             busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);
@@ -100,7 +118,7 @@ public partial class MonitorView : UserControl
         try
         {
             if(ReferenceEquals(sender,TrackOrigins) && TrackOrigins.IsChecked==true)
-                await Task.Run(()=>new OriginTrackingTask(layout).EnsureRegistered());
+                if(!new GlobalMonitoring(layout).IsEnabled) await Task.Run(()=>new OriginTrackingTask(layout).EnsureRegistered());
             store.Update(state=>
             {
                 state.GroupExternalUserVariables=GroupExternalUser.IsChecked==true;state.GroupExternalMachineVariables=GroupExternalMachine.IsChecked==true;
@@ -119,6 +137,19 @@ public partial class MonitorView : UserControl
         finally {busy=false;SettingsPanel.IsEnabled=true;}
     }
     private void ApplyPendingChanges(object sender,RoutedEventArgs e)=>PendingApplyRequested?.Invoke(this,EventArgs.Empty);
+    private async void ChangeGlobalOptions(object sender,RoutedEventArgs e)
+    {
+        if(updating || busy) return;
+        var enabled=GlobalEnabled.IsChecked==true;var origins=GlobalOrigins.IsChecked==true;var organize=GlobalAutoArrange.IsChecked==true;
+        busy=true;SettingsPanel.IsEnabled=false;
+        try {await Task.Run(()=>new GlobalMonitoring(layout).Configure(enabled,origins,organize));busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);}
+        catch(Exception error) when(Expected(error)) {busy=false;Update(store.Read());ShowError(error);}
+        finally {busy=false;SettingsPanel.IsEnabled=true;}
+    }
+    private static bool IsAdministratorAccount()
+    {
+        return WindowsUserContext.IsAdministratorAccount();
+    }
     public void SetApplying(bool value) {busy=value;SettingsPanel.IsEnabled=!value;}
     private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException;
 }

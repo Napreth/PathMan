@@ -64,12 +64,25 @@
                             </StackPanel>
                         </StackPanel>
                     </StackPanel></Border>
+                    </StackPanel>
+                    <StackPanel x:Name="GlobalSettings" Visibility="Collapsed">
+                        <TextBlock Text="{loc:Translate '全局设置'}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                        <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
+                            <CheckBox x:Name="GlobalEnabled" AutomationProperties.Name="{loc:Translate '为所有用户开启统一设置'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"><StackPanel>
+                                <TextBlock Text="{loc:Translate '为所有用户开启统一设置'}"/>
+                                <TextBlock Text="{loc:Translate '用户级的‘自动整理系统PATH环境变量’将不可用'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel></CheckBox>
+                            <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                            <CheckBox x:Name="GlobalOrigins" Content="{loc:Translate '为非管理员用户提供精确修改来源'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
+                            <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
+                            <CheckBox x:Name="GlobalAutoArrange" Content="{loc:Translate '自动整理系统PATH环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
+                        </StackPanel></Border>
+                    </StackPanel>
                     <controls:SettingsLinkCard Content="{loc:Translate '外部更改记录'}" Icon="&#xE81C;" Click="OpenHistory"/>
                     <Border x:Name="MonitorNotice" Style="{StaticResource Surface}" Padding="16" Margin="0,12,0,0" Visibility="Collapsed"><StackPanel>
                         <TextBlock x:Name="MonitorStatus" TextWrapping="Wrap"/>
                         <Button x:Name="ApplyPending" Content="{loc:Translate '授权并整理系统 PATH'}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="ApplyPendingChanges" Visibility="Collapsed"/>
                     </StackPanel></Border>
-                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

@@ -103,6 +103,9 @@ jobs:
       - name: Test origin tracking authorization
         if: matrix.arch == 'x64' && !env.ACT
         run: ./tests/origin-task.ps1
+      - name: Test unified monitoring service
+        if: matrix.arch == 'x64' && !env.ACT
+        run: ./tests/global-monitor.ps1
       - name: Accept final installers
         if: ${{ !env.ACT }}
         run: ./tests/installer-acceptance.ps1 -Architecture $env:PATHMAN_ARCH -Version $env:PATHMAN_VERSION

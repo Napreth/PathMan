@@ -49,7 +49,7 @@ if($UserPhase){
             $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment',$true)
             try{$key.SetValue($probeName,'origin-test')}finally{$key.Dispose()}
             WaitFor {@((State).changes|Where-Object {$_.name -eq $probeName -and @($_.origins|Where-Object processId -eq $PID).Count -gt 0}).Count -gt 0} 'The scheduled collector did not identify the actual registry writer'
-            Assert $true 'The SYSTEM collector reports the correct desktop user registry and writer PID'
+            Assert $true 'The privileged collector reports the correct desktop user registry and writer PID'
             Configure $true $false;WaitFor {!(State).originTrackingReady} 'Disabling tracking did not stop collection'
             Configure $true $true;WaitFor {(State).originTrackingReady} 'Reenabling tracking did not reuse the saved task'
             Assert $true 'Origin tracking can stop and restart without another administrator authorization'
@@ -95,7 +95,8 @@ function RunUserPhase([switch]$Missing){
 try{
     Assert ((RunService @('--register-origin-task',$sid)) -eq 0) 'One-time administrator setup registers the collector'
     $task=Get-ScheduledTask -TaskName $taskName
-    Assert ($task.Principal.UserId -in @('SYSTEM','S-1-5-18') -and $task.Triggers.Count -eq 0) 'The SYSTEM task runs only on demand from the ordinary login monitor'
+    $principalSid=if($task.Principal.UserId.StartsWith('S-1-')){$task.Principal.UserId}else{([Security.Principal.NTAccount]::new($task.Principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value}
+    Assert ($principalSid -eq $sid -and $task.Principal.RunLevel -eq 'Highest' -and $task.Triggers.Count -eq 0) 'An administrator owns their elevated interactive collector task'
     Assert ($task.Actions.Execute.StartsWith([Environment]::GetFolderPath('ProgramFiles')+'\') -and $task.Actions.Execute -ne $service) 'The privileged executable is copied into a protected location'
     RunUserPhase
     Assert ((RunService @('--remove-origin-tasks')) -eq 0) 'Uninstall maintenance removes this installation task and protected files'

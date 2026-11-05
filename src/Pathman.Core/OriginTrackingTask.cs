@@ -9,8 +9,8 @@ using System.Xml.Linq;
 
 namespace Pathman.Core;
 
-// Only the read-only collector runs as SYSTEM. The monitor retains the desktop
-// user's token and HKCU. No task parameters select executable paths or commands.
+// An administrator's own collector uses their elevated interactive token.
+// Cross-user authorization uses SYSTEM for the fixed, read-only collector.
 public sealed class OriginTrackingTask(PathmanLayout layout)
 {
     private string InstallationId => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(layout.BackgroundExecutable.ToUpperInvariant())))[..24];
@@ -40,12 +40,18 @@ public sealed class OriginTrackingTask(PathmanLayout layout)
                 dynamic? task=Find(Connect(),CurrentSid);
                 if(task is null || !task.Enabled) return false;
                 dynamic definition=task!.Definition;
-                return ((string)definition.Principal.UserId is "SYSTEM" or "S-1-5-18") && definition.Actions.Count==1 &&
+                return ValidPrincipal((string)definition.Principal.UserId,CurrentSid) && definition.Principal.RunLevel==1 && definition.Actions.Count==1 &&
                     string.Equals((string)definition.Actions.Item(1).Path,Executable,StringComparison.OrdinalIgnoreCase) &&
                     definition.Actions.Item(1).Arguments==ArgumentsFor(CurrentSid) && File.Exists(Executable);
             }
             catch(COMException error) {throw new IOException(L.Get("无法访问来源识别计划任务。"),error);}
         }
+    }
+    private static bool ValidPrincipal(string principal,string sid)
+    {
+        if(principal is "SYSTEM" or "S-1-5-18" || principal==sid) return true;
+        try {return ((SecurityIdentifier)new NTAccount(principal).Translate(typeof(SecurityIdentifier))).Value==sid;}
+        catch(IdentityNotMappedException) {return false;}
     }
     public void EnsureRegistered()
     {
@@ -67,7 +73,8 @@ public sealed class OriginTrackingTask(PathmanLayout layout)
     {
         sid=new SecurityIdentifier(sid).Value;
         DemandAdministrator();
-        dynamic folder=Connect();dynamic? old=Find(folder,sid);old?.Stop(0);
+        using var identity=WindowsIdentity.GetCurrent();var own=identity.User!.Value==sid;
+        dynamic folder=Connect();dynamic? old=Find(folder,sid);if(old is not null) StopTask(old);
         var target=DirectoryFor(sid);
         // Program Files is a trusted anchor even for a per-user installation.
         // Do not follow junctions or reuse a directory owned by an ordinary user.
@@ -84,14 +91,14 @@ public sealed class OriginTrackingTask(PathmanLayout layout)
         XNamespace ns="http://schemas.microsoft.com/windows/2004/02/mit/task";
         XElement Element(string name,object value)=>new(ns+name,value);
         var xml=new XDocument(new XElement(ns+"Task",new XAttribute("version","1.2"),
-            Element("Principals",new XElement(ns+"Principal",new XAttribute("id","Collector"),Element("UserId","S-1-5-18"),Element("RunLevel","HighestAvailable"))),
+            Element("Principals",new XElement(ns+"Principal",new XAttribute("id","Collector"),Element("UserId",own ? sid : "S-1-5-18"),own ? Element("LogonType","InteractiveToken") : null,Element("RunLevel","HighestAvailable"))),
             new XElement(ns+"Settings",Element("MultipleInstancesPolicy","Parallel"),Element("DisallowStartIfOnBatteries","false"),Element("StopIfGoingOnBatteries","false"),
                 Element("AllowStartOnDemand","true"),Element("Enabled","true"),Element("ExecutionTimeLimit","PT0S")),
             new XElement(ns+"Actions",new XAttribute("Context","Collector"),new XElement(ns+"Exec",Element("Command",Path.Combine(target,"PathMan.Service.exe")),Element("Arguments",ArgumentsFor(sid)),Element("WorkingDirectory",target)))));
         // The desktop user may read/run the fixed task, but cannot edit it.
-        folder.RegisterTask(Prefix+sid,xml.ToString(),6,"SYSTEM",null,5,$"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGX;;;{sid})");
+        folder.RegisterTask(Prefix+sid,xml.ToString(),6,own ? sid : "SYSTEM",null,own ? 3 : 5,$"O:BAG:BAD:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGX;;;{sid})");
     }
-    private static void SecureDirectory(string path)
+    internal static void SecureDirectory(string path)
     {
         var directory=Directory.CreateDirectory(path);
         if((directory.Attributes&FileAttributes.ReparsePoint)!=0) throw new IOException("Collector directories cannot be reparse points.");
@@ -117,11 +124,26 @@ public sealed class OriginTrackingTask(PathmanLayout layout)
         if(!HasInstallationTasks() && !Directory.Exists(directory)) return;
         DemandAdministrator();dynamic folder=Connect();
         foreach(dynamic task in folder.GetTasks(1))
-            if(((string)task.Name).StartsWith(Prefix,StringComparison.Ordinal)) {task.Stop(0);folder.DeleteTask(task.Name,0);}
+            if(((string)task.Name).StartsWith(Prefix,StringComparison.Ordinal)) {StopTask(task);folder.DeleteTask(task.Name,0);}
         if(Directory.Exists(directory))
         {
             if((File.GetAttributes(directory)&FileAttributes.ReparsePoint)!=0) throw new IOException("Invalid collector cleanup directory.");
-            Directory.Delete(directory,true);
+            DeleteStoppedDirectory(directory);
+        }
+    }
+    private static void StopTask(dynamic task)
+    {
+        task.Stop(0);
+        for(var retry=0;retry<100;retry++) {if(task.GetInstances(0).Count==0) return;Thread.Sleep(100);}
+        throw new IOException("Collector task did not stop.");
+    }
+    internal static void DeleteStoppedDirectory(string directory)
+    {
+        for(var retry=0;;retry++)
+        {
+            try {Directory.Delete(directory,true);return;}
+            catch(IOException failure) when(retry<100 && (failure.HResult&0xffff) is 5 or 32 or 33) {Thread.Sleep(100);}
+            catch(UnauthorizedAccessException) when(retry<100) {Thread.Sleep(100);}
         }
     }
     private static void DemandAdministrator()
