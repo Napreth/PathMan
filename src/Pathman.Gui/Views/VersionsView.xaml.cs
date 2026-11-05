@@ -156,7 +156,7 @@ public partial class VersionsView : UserControl
     }
     private async Task ApplyCommandLinePathAsync(bool enabled)
     {
-        var plan=await Task.Run(()=>new CommandLinePathSetting(layout,installationScope).Plan(enabled,store.Read(),EnvironmentMonitor.ReadAll()));
+        var plan=await Task.Run(()=>new CommandLinePathSetting(layout,installationScope).Plan(enabled,GlobalMonitoring.EffectiveOptions(store.Read()),EnvironmentMonitor.ReadAll()));
         await EnvironmentEditHost.ApplyBatchAsync(plan.Mutations,plan.Preconditions,store,layout.DataDirectory);
     }
     public async Task<string?> SynchronizeCommandLinePathAsync()

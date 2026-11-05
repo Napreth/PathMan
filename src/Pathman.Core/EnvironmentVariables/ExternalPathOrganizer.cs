@@ -13,14 +13,27 @@ public sealed record ExternalPathOrganizationPlan(VariableScope Scope,VariableSn
 
 public static class ExternalPathOrganizer
 {
-    public static string GroupName(VariableScope scope)=>scope==VariableScope.User ? "EXTERNAL_USER_PATH" : "EXTERNAL_PATH";
-    public static string Policy(EnvironmentWorkspace state,VariableScope scope)=>$"{scope}:{state.IsPathOrganizationEnabled(scope)}:{state.ShouldRemovePathDuplicates(scope)}:{state.ShouldMovePathEntries(scope)}:{state.TrackChangeOrigins}:{state.ShouldIgnoreSystemEditor(scope)}:{state.ShouldIgnorePowerToys(scope)}";
+    public static string GroupName(VariableScope scope,EnvironmentWorkspace? state=null)
+    {
+        var configured=scope==VariableScope.User ? state?.ExternalUserPathVariable : state?.ExternalMachinePathVariable;
+        return IsValidTarget(configured) ? configured!.Trim() : scope==VariableScope.User ? "EXTERNAL_USER_PATH" : "EXTERNAL_PATH";
+    }
+    public static bool IsValidTarget(string? name)
+    {
+        if(string.IsNullOrWhiteSpace(name)) return false;
+        try {WindowsEnvironmentVariableEditor.ValidateName(name.Trim());}
+        catch(ArgumentException) {return false;}
+        return !name.Trim().Equals("Path",StringComparison.OrdinalIgnoreCase) && !EnvironmentVariableClassifier.IsWindowsBuiltIn(name.Trim());
+    }
+    public static void ValidateTarget(string name)
+    {if(!IsValidTarget(name)) throw new ArgumentException(L.Get("请选择有效的路径变量，不能使用 PATH 或系统内置变量。"));}
+    public static string Policy(EnvironmentWorkspace state,VariableScope scope)=>$"{scope}:{state.IsPathOrganizationEnabled(scope)}:{state.ShouldRemovePathDuplicates(scope)}:{state.ShouldMovePathEntries(scope)}:{state.TrackChangeOrigins}:{state.ShouldIgnoreSystemEditor(scope)}:{state.ShouldIgnorePowerToys(scope)}:{GroupName(scope,state).ToUpperInvariant()}";
     public static ExternalPathOrganizationPlan Plan(VariableScope scope,VariableSnapshot? beforePath,
         IReadOnlyList<EnvironmentVariableInfo> current,EnvironmentWorkspace state,IReadOnlyDictionary<string,string>? runtime=null,string pathName="Path")
     {
         ExternalPathOrganizationPlan Empty(string? warning=null)=>new(scope,beforePath,[],[],0,0,Policy(state,scope)) {Warning=warning};
         if(!state.IsPathOrganizationEnabled(scope) || !state.ShouldRemovePathDuplicates(scope) && !state.ShouldMovePathEntries(scope)) return Empty();
-        var groupName=GroupName(scope);
+        var groupName=GroupName(scope,state);
         var path=current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(pathName,StringComparison.OrdinalIgnoreCase));
         if(path is null) return Empty();
         var resolver=new EnvironmentPathResolver(current,runtime);

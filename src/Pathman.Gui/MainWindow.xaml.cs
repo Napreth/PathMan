@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private string healthSignature="";
     private string monitorSignature="";
     private bool monitorApplying;
+    private bool closingPromptActive;
     private readonly HashSet<string> attemptedMonitorPlans=[];
     private EnvironmentSnapshotWatcher? foregroundMonitor;
     private IReadOnlyList<EnvironmentVariableInfo>? pendingRegistrySnapshot;
@@ -174,6 +175,8 @@ public partial class MainWindow : Window
                 var result=await Task.Run(()=>
                 {
                     var state=store.Read();
+                    var global=GlobalMonitoring.ReadSettings();
+                    if(global.Enabled) {state.AutoArrangeUserPath&=state.MonitoringEnabled;global.ApplyMachineOptions(state);}
                     return (Report:EnvironmentHealth.Analyze(EnvironmentMonitor.ReadAll(),shimsDirectory:layout.ShimsDirectory,workspace:state),Ignored:state.IgnoredHealthIssues);
                 });
                 health.Update(result.Report,result.Ignored);
@@ -221,10 +224,10 @@ public partial class MainWindow : Window
     private void ShowMonitorNotification(EnvironmentWorkspace state)
     {
         var pending=!new GlobalMonitoring(layout).IsEnabled && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==Pathman.Core.Models.VariableScope.Machine);
-        var signature=$"{pending}:{state.MonitorMessageTime:O}:{state.MonitorMessage}:{state.OriginTrackingMessage}";
+        var signature=$"{pending}:{EnvironmentEditHost.IsAuthorized}:{EnvironmentEditHost.IsAdministrator}:{state.MonitorMessageTime:O}:{state.MonitorMessage}:{state.OriginTrackingMessage}";
         if(signature==monitorSignature) return;monitorSignature=signature;
         if(state.OriginTrackingMessage is {} tracking) notifications.Show(new("monitor",L.Get("修改来源识别"),tracking+"\n"+Osc8Text.Link(L.Get("前往变量监控"),"apppage:monitor"),NotificationColor.Yellow));
-        else if(pending) notifications.Show(new("monitor",L.Get("系统 PATH 等待整理"),L.Get("外部新增项需要管理员授权。\n")+Osc8Text.Link(L.Get("前往变量监控"),"apppage:monitor"),NotificationColor.Yellow));
+        else if(pending && !EnvironmentEditHost.IsAuthorized && !EnvironmentEditHost.IsAdministrator) notifications.Show(new("monitor",L.Get("系统 PATH 等待整理"),L.Get("外部新增项需要管理员授权。\n")+Osc8Text.Link(L.Get("前往变量监控"),"apppage:monitor"),NotificationColor.Yellow));
         else if(state.MonitorMessage is {} message) notifications.Show(new("monitor",L.Get("变量监控"),message+"\n"+Osc8Text.Link(L.Get("查看变量监控"),"apppage:monitor"),NotificationColor.Yellow));
         else notifications.Dismiss("monitor");
     }
@@ -249,6 +252,14 @@ public partial class MainWindow : Window
             }
             await ScanHealthAsync();
         }
+        catch(EnvironmentConflictException)
+        {
+            // An external write or the user's own health repair superseded this
+            // preview. Rebuild it without revoking authorization or showing a stale error.
+            try {await Task.Run(()=>new EnvironmentMonitor(store).RefreshPlans());}
+            catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or System.Text.Json.JsonException)
+            {notifications.Show(new("monitor",L.Get("变量监控"),error.Message,NotificationColor.Yellow));}
+        }
         catch(Exception error) when(error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or OperationCanceledException)
         {
             if(error is not OperationCanceledException)
@@ -268,7 +279,12 @@ public partial class MainWindow : Window
     }
     private async void OnClosing(object? sender,CancelEventArgs e)
     {
-        if(healthWorking || monitorApplying || versions.IsBusy) {e.Cancel=true;return;}
+        if(closingApproved) return;
+        if(closingPromptActive) {e.Cancel=true;return;}
+        closingPromptActive=true;
+        try
+        {
+        if(healthWorking || monitorApplying || versions.IsBusy || variables.IsBusy && !variables.HasInlineEditor) {e.Cancel=true;return;}
         if(closingApproved) return;
         if(versions.HasInlineEditor)
         {e.Cancel=true;if(await versions.ConfirmLeaveAsync()) {closingApproved=true;Close();}return;}
@@ -281,5 +297,7 @@ public partial class MainWindow : Window
             if(await variables.ConfirmLeaveAsync()) { closingApproved=true; Close(); }
         }
         else if(!variables.ConfirmLeave()) e.Cancel=true;
+        }
+        finally {closingPromptActive=false;}
     }
 }

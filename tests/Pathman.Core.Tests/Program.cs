@@ -31,6 +31,7 @@ foreach(var (name,raw,list,entries) in cases)
 }
 PathCleanupTests.Run(Assert);
 MonitoringTests.Run(Assert);
+MonitoringTargetTests.Run(Assert);
 LiveMonitoringTests.Run(Assert);
 GlobalServiceTests.Run(Assert);
 InstallerSyncTests.Run(Assert);

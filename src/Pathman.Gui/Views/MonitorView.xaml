@@ -11,21 +11,21 @@
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
                         <CheckBox x:Name="TrackOrigins" AutomationProperties.Name="{loc:Translate '精确识别修改来源'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
                             <TextBlock Text="{loc:Translate '精确识别修改来源'}"/>
-                            <TextBlock Text="{loc:Translate '需要管理员权限'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="SourceAuthorizationHint" Text="{loc:Translate '需要管理员权限'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel></CheckBox>
                     </StackPanel></Border>
                     <StackPanel x:Name="MonitoringRules">
                     <TextBlock Text="{loc:Translate '用户变量'}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
-                        <CheckBox x:Name="GroupExternalUser" AutomationProperties.Name="{loc:Translate '将外部新用户环境变量归入‘外部变量’分类'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
-                            <TextBlock Text="{loc:Translate '将外部新环境变量归入‘外部变量’分类'}"/>
+                        <CheckBox x:Name="GroupExternalUser" AutomationProperties.Name="{loc:Translate '将外部新用户环境变量归入所选分类'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                            <WrapPanel><TextBlock Text="{loc:Translate '将外部新环境变量归入'}" VerticalAlignment="Center"/><ComboBox x:Name="UserExternalGroup" MinWidth="140" Margin="8,0" SelectedValuePath="Id" SelectionChanged="GroupTargetChanged" AutomationProperties.Name="{loc:Translate '用户变量归类目标'}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName, StringFormat='“{0}”'}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><TextBlock Text="{loc:Translate '分类'}" VerticalAlignment="Center"/></WrapPanel>
                             <TextBlock Text="{loc:Translate '此分类仅在本应用内有效'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel></CheckBox>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
                         <CheckBox x:Name="AutoArrangeUser" Content="{loc:Translate '自动整理PATH环境变量'}" AutomationProperties.Name="{loc:Translate '自动整理用户 PATH 环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
                         <StackPanel x:Name="UserArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveUserDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
-                            <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_USER_PATH'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_USER_PATH'}"/></CheckBox>
+                            <CheckBox x:Name="MoveUserEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><WrapPanel><TextBlock Text="{loc:Translate '将外部添加的PATH项移至'}" VerticalAlignment="Center"/><ComboBox x:Name="UserPathTarget" MinWidth="200" Margin="8,0,0,0" IsEditable="True" DropDownClosed="PathTargetChanged" LostKeyboardFocus="PathTargetLostFocus" KeyDown="PathTargetKeyDown" AutomationProperties.Name="{loc:Translate '用户PATH迁移目标'}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></WrapPanel></CheckBox>
                             <StackPanel x:Name="UserEditorExclusions" Margin="0,14,0,0">
                                 <CheckBox x:Name="IgnoreSystemEditorUser" AutomationProperties.Name="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"><StackPanel>
                                     <TextBlock Text="{loc:Translate '不整理系统编辑器修改的变量'}"/>
@@ -40,18 +40,18 @@
                     </StackPanel></Border>
                     <TextBlock Text="{loc:Translate '系统变量'}" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Surface}" Margin="0,0,0,20"><StackPanel>
-                        <CheckBox x:Name="GroupExternalMachine" AutomationProperties.Name="{loc:Translate '将外部新系统环境变量归入‘外部变量’分类'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
-                            <TextBlock Text="{loc:Translate '将外部新环境变量归入‘外部变量’分类'}"/>
+                        <CheckBox x:Name="GroupExternalMachine" AutomationProperties.Name="{loc:Translate '将外部新系统环境变量归入所选分类'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
+                            <WrapPanel><TextBlock Text="{loc:Translate '将外部新环境变量归入'}" VerticalAlignment="Center"/><ComboBox x:Name="MachineExternalGroup" MinWidth="140" Margin="8,0" SelectedValuePath="Id" SelectionChanged="GroupTargetChanged" AutomationProperties.Name="{loc:Translate '系统变量归类目标'}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName, StringFormat='“{0}”'}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><TextBlock Text="{loc:Translate '分类'}" VerticalAlignment="Center"/></WrapPanel>
                             <TextBlock Text="{loc:Translate '此分类仅在本应用内有效'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel></CheckBox>
                         <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}"/>
                         <CheckBox x:Name="AutoArrangeMachine" AutomationProperties.Name="{loc:Translate '自动整理系统 PATH 环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeOptions" Unchecked="ChangeOptions"><StackPanel>
                             <TextBlock Text="{loc:Translate '自动整理PATH环境变量'}"/>
-                            <TextBlock Text="{loc:Translate '需要管理员权限'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="MachineAuthorizationHint" Text="{loc:Translate '需要管理员权限'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel></CheckBox>
                         <StackPanel x:Name="MachineArrangeOptions" Margin="44,0,20,20">
                             <CheckBox x:Name="RemoveMachineDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeOptions" Unchecked="ChangeOptions"/>
-                            <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}"/></CheckBox>
+                            <CheckBox x:Name="MoveMachineEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至'}" Checked="ChangeOptions" Unchecked="ChangeOptions"><WrapPanel><TextBlock Text="{loc:Translate '将外部添加的PATH项移至'}" VerticalAlignment="Center"/><ComboBox x:Name="MachinePathTarget" MinWidth="200" Margin="8,0,0,0" IsEditable="True" DropDownClosed="PathTargetChanged" LostKeyboardFocus="PathTargetLostFocus" KeyDown="PathTargetKeyDown" AutomationProperties.Name="{loc:Translate '系统PATH迁移目标'}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></WrapPanel></CheckBox>
                             <StackPanel x:Name="MachineEditorExclusions" Margin="0,14,0,0">
                                 <CheckBox x:Name="IgnoreSystemEditorMachine" AutomationProperties.Name="{loc:Translate '不整理系统编辑器修改的变量'}" Checked="ChangeOptions" Unchecked="ChangeOptions" Margin="0,0,0,14"><StackPanel>
                                     <TextBlock Text="{loc:Translate '不整理系统编辑器修改的变量'}"/>
@@ -78,7 +78,7 @@
                             <CheckBox x:Name="GlobalAutoArrange" Content="{loc:Translate '自动整理系统PATH环境变量'}" Style="{StaticResource SettingsToggleSwitch}" Margin="20" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
                             <StackPanel x:Name="GlobalArrangeOptions" Margin="44,0,20,20">
                                 <CheckBox x:Name="GlobalRemoveDuplicates" Content="{loc:Translate '删除外部添加的重复PATH项'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
-                                <CheckBox x:Name="GlobalMoveEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"><TextBlock Text="{loc:Translate '将外部添加的PATH项移至EXTERNAL_PATH'}"/></CheckBox>
+                                <CheckBox x:Name="GlobalMoveEntries" AutomationProperties.Name="{loc:Translate '将外部添加的PATH项移至'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"><WrapPanel><TextBlock Text="{loc:Translate '将外部添加的PATH项移至'}" VerticalAlignment="Center"/><ComboBox x:Name="GlobalPathTarget" MinWidth="200" Margin="8,0,0,0" IsEditable="True" DropDownClosed="PathTargetChanged" LostKeyboardFocus="PathTargetLostFocus" KeyDown="PathTargetKeyDown" AutomationProperties.Name="{loc:Translate '全局系统PATH迁移目标'}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></WrapPanel></CheckBox>
                                 <CheckBox x:Name="GlobalIgnoreSystemEditor" Content="{loc:Translate '不整理系统编辑器修改的变量'}" Margin="0,0,0,14" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
                                 <CheckBox x:Name="GlobalIgnorePowerToys" Content="{loc:Translate '不整理PowerToys修改的变量'}" Checked="ChangeGlobalOptions" Unchecked="ChangeGlobalOptions"/>
                             </StackPanel>

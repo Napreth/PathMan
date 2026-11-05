@@ -28,6 +28,9 @@ $machine=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentCont
 $oldPath=$machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames);$oldPathKind=$machine.GetValueKind('Path')
 $oldExternal=$machine.GetValue('EXTERNAL_PATH',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 $oldExternalKind=if($null -ne $oldExternal){$machine.GetValueKind('EXTERNAL_PATH')}else{$null}
+$customTarget='PATHMAN_TEST_GLOBAL_PATH'
+$oldCustom=$machine.GetValue($customTarget,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$oldCustomKind=if($null -ne $oldCustom){$machine.GetValueKind($customTarget)}else{$null}
 $global=Join-Path $env:ProgramData 'PathMan/monitor'
 $checks=[Collections.Generic.List[string]]::new()
 $recoverySnapshot=$null
@@ -150,7 +153,7 @@ class Writer {
         & $csc /nologo /target:exe ("/out:"+$writer) $source
         if($LASTEXITCODE -ne 0){throw 'Cannot compile the registry writer fixture'}
         $excludedPath=$duplicatePath+';H:\'+$name
-        $process=Start-Process $writer -ArgumentList ('"'+$excludedPath+'"') -WindowStyle Hidden -PassThru -Wait
+        $process=Start-Process $writer -ArgumentList ('"'+$excludedPath+'"') -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'writer.stderr.log')
         Assert ($process.ExitCode -eq 0) ($name+' fixture writes the system PATH')
         WaitFor {@((MachineState).snapshot|Where-Object {$_.name -eq 'Path' -and $_.value -eq $excludedPath}).Count -eq 1} 'The service did not observe the excluded change'
         Start-Sleep -Seconds 2
@@ -160,14 +163,24 @@ class Writer {
     & $csc /nologo /target:exe ("/out:"+$writer) $source
     if($LASTEXITCODE -ne 0){throw 'Cannot compile the allowed registry writer fixture'}
     $allowedPath=$excludedPath+';G:\GlobalAllowed;G:\GlobalAllowed'
-    $process=Start-Process $writer -ArgumentList ('"'+$allowedPath+'"') -WindowStyle Hidden -PassThru -Wait
+    $process=Start-Process $writer -ArgumentList ('"'+$allowedPath+'"') -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'writer.stderr.log')
     Assert ($process.ExitCode -eq 0) 'The allowed fixture writes PATH with a newly opened, traceable registry handle'
     WaitFor {$machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew;F:\GlobalMove;F:\GlobalMove;G:\GlobalAllowed'} 'A known, allowed writer was blocked by the source exclusion policy'
     Assert ($machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq $excludedPath) 'Allowed writers still organize PATH while both source exclusions are enabled'
+    $machine.DeleteValue($customTarget,$false)
+    Assert ((Run ('--configure-global-monitor true true true true true false false '+$customTarget)) -eq 0) 'The global service accepts a custom PATH migration target'
+    WaitFor {(MachineState).externalMachinePathVariable -eq $customTarget} 'The service did not load its custom destination'
+    $machine.SetValue('Path',($excludedPath+';I:\CustomTarget'),[Microsoft.Win32.RegistryValueKind]::ExpandString)
+    WaitFor {$machine.GetValue($customTarget) -eq 'I:\CustomTarget'} 'The service did not migrate additions to the selected variable'
+    Assert ($machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew;F:\GlobalMove;F:\GlobalMove;G:\GlobalAllowed') 'Selecting a new destination preserves the previous target contents'
+    Assert ((Run '--configure-global-monitor true true true true true false false Path') -ne 0) 'The privileged service rejects PATH as its own migration destination'
+    Assert ((State).externalMachinePathVariable -eq $customTarget) 'Rejected destinations leave the saved policy unchanged'
+    Assert ((Run '--configure-global-monitor true true true true true true true') -eq 0) 'The previous seven-switch interface retains the selected destination'
     Assert ((Run '--configure-global-monitor false true true') -eq 0) 'The unified service can be disabled'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Stopped'} 'Unified service did not stop'
     Assert (!(State).enabled -and (State).autoArrangeMachinePath -and (State).provideNonAdministratorOrigins) 'Disabling unified monitoring retains its saved options'
     Assert ((State).removeMachinePathDuplicates -and (State).moveExternalMachinePathEntries -and (State).ignoreSystemEditorMachineChanges -and (State).ignorePowerToysMachineChanges) 'All four global child options survive a legacy three-switch update'
+    Assert ((State).externalMachinePathVariable -eq $customTarget) 'The selected destination survives a legacy three-switch update'
     Assert ((Run '--configure-global-monitor true false false') -eq 0) 'The unified service can restart without recreating the installation'
     WaitFor {(Status).Running -and (Status).OriginsReady} 'Unified service did not restart'
     Assert ((Run '--remove-origin-tasks') -eq 0) 'Uninstall maintenance removes the SCM service and privileged collectors'
@@ -179,7 +192,8 @@ finally{
     if($recoverySnapshot){[IO.File]::WriteAllText((Join-Path $global 'machine/environment.json'),$recoverySnapshot)}
     $null=Run '--remove-origin-tasks'
     $machine.SetValue('Path',$oldPath,$oldPathKind)
-    if($null -eq $oldExternal){$machine.DeleteValue('EXTERNAL_PATH',$false)}else{$machine.SetValue('EXTERNAL_PATH',$oldExternal,$oldExternalKind)};$machine.Dispose()
+    if($null -eq $oldExternal){$machine.DeleteValue('EXTERNAL_PATH',$false)}else{$machine.SetValue('EXTERNAL_PATH',$oldExternal,$oldExternalKind)}
+    if($null -eq $oldCustom){$machine.DeleteValue($customTarget,$false)}else{$machine.SetValue($customTarget,$oldCustom,$oldCustomKind)};$machine.Dispose()
     if($null -ne $oldMarker){[IO.File]::WriteAllBytes($marker,$oldMarker)}elseif(Test-Path $marker){Remove-Item -LiteralPath $marker -Force}
     if($staging -and [IO.Path]::GetFullPath($staging).StartsWith((Join-Path $env:ProgramFiles 'PathMan-CI-'),[StringComparison]::OrdinalIgnoreCase)){Remove-Item -LiteralPath $staging -Recurse -Force}
 }

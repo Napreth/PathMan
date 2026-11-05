@@ -30,18 +30,25 @@ public partial class VariablesView : UserControl
     private string? preferredKey;
     private EditableRow? activeEditor;
     private long selectionRequest;
+    private Task<bool>? leavePending;
+    private bool discardPromptOpen;
+    private Window? editorWindow;
     public bool HasUnsavedChanges => dirty || editingSession?.IsReviewMode==true || activeEditor?.IsEditing == true;
     public bool HasInlineEditor => activeEditor?.IsEditing == true;
-    public bool IsBusy => busy || dragging || pathDragging || activeEditor?.IsEditing == true;
+    public bool IsBusy => busy || dragging || pathDragging || activeEditor?.IsEditing == true || leavePending is not null;
     public string LoadedRevision { get; private set; } = "";
     public VariablesView(PathmanLayout layout, EnvironmentWorkspaceStore store)
     {
         this.layout=layout; this.store=store; InitializeComponent(); ValuesList.ItemsSource=entries;
         PreviewKeyDown+=EditorKeyDown;
+        PreviewMouseDown+=FinishEditorOnClick;
         Loaded += async (_,_) => { if (userGroups.Count == 0) await ReloadAsync(); };
+        Loaded+=(_,_)=> {if(editorWindow is not null) editorWindow.Deactivated-=FinishEditorOnDeactivation;editorWindow=OwnerWindow;editorWindow.Deactivated+=FinishEditorOnDeactivation;};
+        Unloaded+=(_,_)=> {if(editorWindow is not null) editorWindow.Deactivated-=FinishEditorOnDeactivation;editorWindow=null;};
         Unloaded+=(_,_)=> {updating=true;temporaryCleanup=false;TemporaryCleanupButton.IsChecked=false;updating=false;};
     }
     private Window OwnerWindow => Window.GetWindow(this);
+    private EnvironmentWorkspace PlanningSettings()=>GlobalMonitoring.EffectiveOptions(store.Read());
     private static bool Expected(Exception error) => error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or System.Text.Json.JsonException or InvalidOperationException;
     private void Error(Exception error) { StatusText.Text=error.Message; MessageBox.Show(OwnerWindow,error.Message,L.Get("操作未完成"),MessageBoxButton.OK,MessageBoxImage.Error); }
     private static Dictionary<string,string> RuntimeValues() => Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
@@ -83,16 +90,31 @@ public partial class VariablesView : UserControl
     }
     public bool ConfirmLeave()
     {
-        if (activeEditor?.IsEditing == true) { _ = activeEditor.CommitAsync(); return false; }
+        if (activeEditor?.IsEditing == true || discardPromptOpen) return false;
         dirty=editingSession?.HasChanges==true;
         if (!dirty) return true;
-        if(new ConfirmDialog(OwnerWindow,L.Get("未保存的更改"),L.Get("有未保存的更改，是否放弃？"),L.Get("放弃")).ShowDialog()!=true) return false;
-        ShowSelection(selected); return true;
+        discardPromptOpen=true;
+        try
+        {
+            if(new ConfirmDialog(OwnerWindow,L.Get("未保存的更改"),L.Get("有未保存的更改，是否放弃？"),L.Get("放弃")).ShowDialog()!=true) return false;
+            ShowSelection(selected); return true;
+        }
+        finally {discardPromptOpen=false;}
     }
-    public async Task<bool> ConfirmLeaveAsync()
+    public Task<bool> ConfirmLeaveAsync()
     {
-        if(activeEditor?.IsEditing==true && !await activeEditor.CommitAsync()) return false;
-        return ConfirmLeave();
+        if(leavePending is not null) return leavePending;
+        if(busy) return Task.FromResult(false);
+        var completion=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        leavePending=completion.Task;
+        _=ConfirmAsync();return completion.Task;
+        async Task ConfirmAsync()
+        {
+            try {completion.TrySetResult((activeEditor?.IsEditing!=true || await activeEditor.CommitAsync()) && ConfirmLeave());}
+            catch(Exception error) when(Expected(error)) {Error(error);completion.TrySetResult(false);}
+            catch(Exception error) {completion.TrySetException(error);}
+            finally {leavePending=null;}
+        }
     }
     private async void Refresh(object sender,RoutedEventArgs e)
     { if (CleanupPanel.Visibility==Visibility.Visible) PreviewCleanup(sender,e); else if (await ConfirmLeaveAsync()) await ReloadAsync(); }
@@ -103,7 +125,9 @@ public partial class VariablesView : UserControl
         var key=node.Key;
         for(var retry=0;busy && retry<500;retry++) await Task.Delay(20);
         if(busy || !IsLoaded || request!=selectionRequest) return;
-        if (!await ConfirmLeaveAsync())
+        var accepted=await ConfirmLeaveAsync();
+        if(request!=selectionRequest || !IsLoaded) return;
+        if (!accepted)
         {
             updating=true; node.IsSelected=false; if (selected is not null) selected.IsSelected=true; updating=false; return;
         }
@@ -207,6 +231,7 @@ public partial class VariablesView : UserControl
     private static string? GroupNameError(string value) => string.IsNullOrWhiteSpace(value) || value.Length>80 ? L.Get("分组名不能为空，最长 80 个字符。") : null;
     private async void AddEntry(object sender,RoutedEventArgs e)
     {
+        if(busy || leavePending is not null) return;
         if (activeEditor?.IsEditing == true && !await activeEditor.CommitAsync()) return;
         if(editingSession is not {} session) return;
         var owner=NewPathOwner();
@@ -225,8 +250,9 @@ public partial class VariablesView : UserControl
         ValuesList.ScrollIntoView(entry); ValuesList.UpdateLayout();
         if (ValuesList.ItemContainerGenerator.ContainerFromItem(entry) is ListBoxItem item) FindVisual<EditableRow>(item)?.BeginEdit();
     }
-    private void BrowseEntry(object sender,RoutedEventArgs e)
+    private async void BrowseEntry(object sender,RoutedEventArgs e)
     {
+        if(busy || activeEditor?.IsEditing==true && !await activeEditor.CommitAsync()) return;
         var dialog=new Microsoft.Win32.OpenFolderDialog { Title=L.Get("选择目录") };
         if(dialog.ShowDialog(OwnerWindow)!=true) return;
         if(editingSession is not {} session) return;
@@ -296,9 +322,20 @@ public partial class VariablesView : UserControl
         if (e.Value.Contains(';') || e.Value.Contains('\0') || e.Value.Contains('\r') || e.Value.Contains('\n'))
         { e.Completion=Task.FromResult<string?>(L.Get("单个条目不能包含分号、空字符或换行；多个条目请切换到文本模式。")); return; }
         if(editingSession is not {} session) return;
-        session.Update(entry.ItemId,e.Value,e.WasChanged); RefreshPathEntries(entry.ItemId); SetDirty();
-        Dispatcher.BeginInvoke(()=>ValuesList.Focus(),DispatcherPriority.Input);
+        session.Update(entry.ItemId,e.Value,e.WasChanged);RefreshPathEntries(entry.ItemId);SetDirty();
     }
+    private void FinishEditorOnClick(object sender,MouseButtonEventArgs e)
+    {
+        if(updating || busy || leavePending is not null || activeEditor is not {IsEditing:true} editor || editor.IsInputTarget(e.OriginalSource as DependencyObject)) return;
+        if(EditableRow.FindParent<Button>(e.OriginalSource as DependencyObject) is {} button && (button==RevertButton || button==DeleteEntryButton)) return;
+        var version=editor.EditVersion;
+        Dispatcher.BeginInvoke(async()=>
+        {
+            if(!busy && leavePending is null && activeEditor==editor && editor.IsEditing && editor.EditVersion==version) await editor.CommitAsync();
+        },DispatcherPriority.Background);
+    }
+    private async void FinishEditorOnDeactivation(object? sender,EventArgs e)
+    {if(!busy && leavePending is null && activeEditor is {IsEditing:true} editor) await editor.CommitAsync();}
     private void EntryEditCanceled(object? sender, EventArgs e)
     {
         if (sender is EditableRow { DataContext: EnvironmentEntry { IsDraft: true } entry } && editingSession is {} session) {session.Remove(entry.ItemId); RefreshPathEntries();}

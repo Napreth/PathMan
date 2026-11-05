@@ -47,7 +47,7 @@ public partial class VariablesView
         if (busy || !await ConfirmLeaveAsync()) return;
         StatusText.Text="";
         await ReloadAsync();
-        cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables, RuntimeValues());
+        cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables, RuntimeValues(),PlanningSettings());
         ShowCleanupPlan(); CleanupStatus.Text="";
         EditorPanel.Visibility=Visibility.Collapsed; CleanupPanel.Visibility=Visibility.Visible;
     }
@@ -95,6 +95,6 @@ public partial class VariablesView
         { status=(applied.Count>0 ? L.Format("已清理{0}；其余未应用。",string.Join("、",applied)) : L.Get("未应用清理。")) + error.Message; }
         finally { busy=false; CleanupButton.IsEnabled=true; }
         await ReloadAsync();
-        cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues()); ShowCleanupPlan(); CleanupStatus.Text=status;
+        cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues(),PlanningSettings()); ShowCleanupPlan(); CleanupStatus.Text=status;
     }
 }

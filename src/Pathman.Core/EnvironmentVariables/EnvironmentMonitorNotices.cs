@@ -18,6 +18,9 @@ public static class EnvironmentMonitorNotices
     {
         var unknown=Text.IsTranslation(UnknownOriginMessage,state.MonitorMessage);
         var changed=false;
+        if(!unknown && state.MonitorMessage is not null && state.Changes.Any(item=>item.IsOwn && IsPath(item.Name) &&
+            (state.MonitorMessageTime is null || item.Time>=state.MonitorMessageTime)))
+        {state.MonitorMessage=null;state.MonitorMessageTime=null;changed=true;unknown=false;}
         // Older workspaces stored only a message, with no event identity.
         if(unknown && state.UnattributedPathChanges.Count==0)
         {

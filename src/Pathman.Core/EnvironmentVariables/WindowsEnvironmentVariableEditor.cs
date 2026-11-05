@@ -80,7 +80,7 @@ public static class WindowsEnvironmentVariableEditor
             var key = keys[guard.Scope];
             if (key.GetValue(guard.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) is not string value ||
                 value != guard.Value || (int)key.GetValueKind(guard.Name) != guard.Kind)
-                throw new IOException(L.Format("{0} 已被其他程序修改，请重新预览清理结果。",guard.Name));
+                throw new EnvironmentConflictException(L.Format("{0} 已被其他程序修改，请重新预览清理结果。",guard.Name));
         }
         foreach (var mutation in mutations)
         {
@@ -142,17 +142,19 @@ public static class WindowsEnvironmentVariableEditor
         var existing = existingName is null ? null : key.GetValue(existingName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
         if (mutation.Action == "create")
         {
-            if (existingName is not null) throw new IOException(L.Get("该作用域中已存在同名环境变量。"));
+            if (existingName is not null) throw new EnvironmentConflictException(L.Get("该作用域中已存在同名环境变量。"));
         }
         else
         {
             if (existingName is null || existing is not string text || text != mutation.ExpectedValue ||
                 mutation.ExpectedKind is not null && key.GetValueKind(existingName) != mutation.ExpectedKind)
-                throw new IOException(L.Get("此变量已被其他程序修改或删除，请刷新后重试。"));
+                throw new EnvironmentConflictException(L.Get("此变量已被其他程序修改或删除，请刷新后重试。"));
         }
     }
     private static void RecordOwnChange(EnvironmentWorkspace state, EnvironmentMutation mutation)
     {
+        state.PendingPathOrganizations.RemoveAll(plan=>plan.Scope==mutation.Scope &&
+            (mutation.Name.Equals("Path",StringComparison.OrdinalIgnoreCase) || plan.Preconditions.Any(guard=>guard.Scope==mutation.Scope && guard.Name.Equals(mutation.Name,StringComparison.OrdinalIgnoreCase))));
         var oldKey = EnvironmentWorkspace.Key(mutation.Scope, mutation.Name);
         state.Snapshot.RemoveAll(item => item.Scope == mutation.Scope && item.Name.Equals(mutation.Name, StringComparison.OrdinalIgnoreCase));
         state.ExternalVariables.Remove(oldKey);

@@ -53,6 +53,11 @@ public sealed class EnvironmentWorkspace
     public string? OriginTrackingMessage {get;set;}
     public bool GroupExternalUserVariables {get;set;}=true;
     public bool GroupExternalMachineVariables {get;set;}=true;
+    public string ExternalUserGroupId {get;set;}="external";
+    public string ExternalMachineGroupId {get;set;}="external";
+    public string ExternalUserPathVariable {get;set;}="EXTERNAL_USER_PATH";
+    public string ExternalMachinePathVariable {get;set;}="EXTERNAL_PATH";
+    public string ExternalGroupId(VariableScope scope)=>scope==VariableScope.User ? ExternalUserGroupId : ExternalMachineGroupId;
     public bool AutoArrangeUserPath {get;set;}
     public bool AutoArrangeMachinePath {get;set;}
     [JsonIgnore] public bool AnyPathOrganizationEnabled=>AutoArrangeUserPath || AutoArrangeMachinePath;

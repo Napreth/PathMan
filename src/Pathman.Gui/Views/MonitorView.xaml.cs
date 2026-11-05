@@ -47,7 +47,12 @@ public partial class MonitorView : UserControl
             GlobalRemoveDuplicates.IsChecked=settings.RemoveMachinePathDuplicates;GlobalMoveEntries.IsChecked=settings.MoveExternalMachinePathEntries;
             GlobalIgnoreSystemEditor.IsChecked=settings.IgnoreSystemEditorMachineChanges;GlobalIgnorePowerToys.IsChecked=settings.IgnorePowerToysMachineChanges;
             GlobalArrangeOptions.IsEnabled=unified && settings.AutoArrangeMachinePath;
+            RefreshTargets(state,settings);
             UserEditorExclusions.IsEnabled=MachineEditorExclusions.IsEnabled=state.TrackChangeOrigins;
+            var authorized=EnvironmentEditHost.IsAuthorized || EnvironmentEditHost.IsAdministrator;
+            SourceAuthorizationHint.Text=L.Get(state.OriginTrackingReady ? "已获得修改来源识别授权" : "启用时需要管理员授权，仅用于识别修改来源");
+            MachineAuthorizationHint.Text=L.Get(unified ? "由全局服务自动整理" : authorized ? "本次运行已获得系统变量写入授权" : "整理系统 PATH 前需要管理员授权");
+            ApplyPending.Content=L.Get(authorized ? "立即整理系统 PATH" : "授权并整理系统 PATH");
             RefreshNotice(state);
         }
         finally {updating=false;}
@@ -86,7 +91,8 @@ public partial class MonitorView : UserControl
     private void RefreshNotice(EnvironmentWorkspace state)
     {
         var pending=!new GlobalMonitoring(layout).IsEnabled && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
-        var message=GlobalMonitoring.GetUnavailableMessage() ?? state.OriginTrackingMessage ?? (pending ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
+        var authorized=EnvironmentEditHost.IsAuthorized || EnvironmentEditHost.IsAdministrator;
+        var message=targetError ?? GlobalMonitoring.GetUnavailableMessage() ?? state.OriginTrackingMessage ?? (pending && !authorized ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
         MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
     }
     private void CloseHistory(object sender,RoutedEventArgs e) {HistoryPage.Visibility=Visibility.Collapsed;SettingsPage.Visibility=Visibility.Visible;}
@@ -127,6 +133,8 @@ public partial class MonitorView : UserControl
         busy=true;SettingsPanel.IsEnabled=false;
         try
         {
+            if(ReferenceEquals(sender,AutoArrangeMachine) && AutoArrangeMachine.IsChecked==true && !new GlobalMonitoring(layout).IsEnabled)
+                await EnvironmentEditHost.EnsureAuthorizedAsync();
             if(ReferenceEquals(sender,TrackOrigins) && TrackOrigins.IsChecked==true)
                 if(!new GlobalMonitoring(layout).IsEnabled) await Task.Run(()=>new OriginTrackingTask(layout).EnsureRegistered());
             store.Update(state=>
@@ -153,7 +161,8 @@ public partial class MonitorView : UserControl
         var settings=new GlobalMonitorSettings(GlobalEnabled.IsChecked==true,GlobalOrigins.IsChecked==true,GlobalAutoArrange.IsChecked==true)
         {
             RemoveMachinePathDuplicates=GlobalRemoveDuplicates.IsChecked==true,MoveExternalMachinePathEntries=GlobalMoveEntries.IsChecked==true,
-            IgnoreSystemEditorMachineChanges=GlobalIgnoreSystemEditor.IsChecked==true,IgnorePowerToysMachineChanges=GlobalIgnorePowerToys.IsChecked==true
+            IgnoreSystemEditorMachineChanges=GlobalIgnoreSystemEditor.IsChecked==true,IgnorePowerToysMachineChanges=GlobalIgnorePowerToys.IsChecked==true,
+            ExternalMachinePathVariable=GlobalPathTarget.Text.Trim()
         };
         busy=true;SettingsPanel.IsEnabled=false;
         try {await Task.Run(()=>new GlobalMonitoring(layout).Configure(settings));busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);}
@@ -165,5 +174,5 @@ public partial class MonitorView : UserControl
         return WindowsUserContext.IsAdministratorAccount();
     }
     public void SetApplying(bool value) {busy=value;SettingsPanel.IsEnabled=!value;}
-    private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException;
+    private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or System.Security.SecurityException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException or OperationCanceledException or ArgumentException;
 }

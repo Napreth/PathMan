@@ -409,15 +409,6 @@
   <data name="将垫片目录只保留在用户 Path 的最后一行，避免别名遮蔽其他程序。" xml:space="preserve">
     <value>将垫片目录只保留在用户 Path 的最后一行，避免别名遮蔽其他程序。</value>
   </data>
-  <data name="将外部新环境变量归入‘外部变量’分类" xml:space="preserve">
-    <value>将外部新环境变量归入‘外部变量’分类</value>
-  </data>
-  <data name="将外部新用户环境变量归入‘外部变量’分类" xml:space="preserve">
-    <value>将外部新用户环境变量归入‘外部变量’分类</value>
-  </data>
-  <data name="将外部新系统环境变量归入‘外部变量’分类" xml:space="preserve">
-    <value>将外部新系统环境变量归入‘外部变量’分类</value>
-  </data>
   <data name="将外部添加的PATH项移至EXTERNAL_PATH" xml:space="preserve">
     <value>将外部添加的PATH项移至EXTERNAL_PATH</value>
   </data>
@@ -1226,9 +1217,6 @@
   <data name="PathMan v{0} 已发布！" xml:space="preserve"><value>PathMan v{0} 已发布！</value></data>
   <data name="点击查看新版本内容" xml:space="preserve"><value>点击查看新版本内容</value></data>
 <data name="启用命令行版本切换" xml:space="preserve"><value>启用命令行版本切换</value></data>
-<data name="软件路径引用" xml:space="preserve"><value>软件路径引用</value></data>
-<data name="已启用自动整理，但 PATH 未引用 SOFTWARE_PATH 或 SOFTWARE数字_PATH。" xml:space="preserve"><value>已启用自动整理，但 PATH 未引用 SOFTWARE_PATH 或 SOFTWARE数字_PATH。</value></data>
-<data name="在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。" xml:space="preserve"><value>在相应作用域的 PATH 中添加软件路径变量的纯引用，例如 %SOFTWARE_PATH%。</value></data>
 <data name="命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。" xml:space="preserve"><value>命令行版本切换未启用。请在 PathMan 的版本管理页面启用“启用命令行版本切换”。</value></data>
 <data name="前往版本管理" xml:space="preserve"><value>前往版本管理</value></data>
   <data name="此功能将在PATH中添加命令行目录" xml:space="preserve"><value>此功能将在PATH中添加命令行目录</value></data>
@@ -1245,4 +1233,24 @@
   <data name="全局服务只能从管理员保护的本地安装目录部署，请重新安装到安全目录。" xml:space="preserve"><value>全局服务只能从管理员保护的本地安装目录部署，请重新安装到安全目录。</value></data>
   <data name="无法查询全局监控服务状态。" xml:space="preserve"><value>无法查询全局监控服务状态。</value></data>
   <data name="全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。" xml:space="preserve"><value>全局监控已启用，但服务未运行。请由管理员检查或重新启用全局设置。</value></data>
+  <data name="请选择有效的路径变量，不能使用 PATH 或系统内置变量。" xml:space="preserve"><value>请选择有效的路径变量，不能使用 PATH 或系统内置变量。</value></data>
+  <data name="已获得修改来源识别授权" xml:space="preserve"><value>已获得修改来源识别授权</value></data>
+  <data name="启用时需要管理员授权，仅用于识别修改来源" xml:space="preserve"><value>启用时需要管理员授权，仅用于识别修改来源</value></data>
+  <data name="本次运行已获得系统变量写入授权" xml:space="preserve"><value>本次运行已获得系统变量写入授权</value></data>
+  <data name="整理系统 PATH 前需要管理员授权" xml:space="preserve"><value>整理系统 PATH 前需要管理员授权</value></data>
+  <data name="由全局服务自动整理" xml:space="preserve"><value>由全局服务自动整理</value></data>
+  <data name="立即整理系统 PATH" xml:space="preserve"><value>立即整理系统 PATH</value></data>
+  <data name="整理目标路径引用" xml:space="preserve"><value>整理目标路径引用</value></data>
+  <data name="整理目标 {0} 中已有路径，但 PATH 尚未引用它。" xml:space="preserve"><value>整理目标 {0} 中已有路径，但 PATH 尚未引用它。</value></data>
+  <data name="在相应作用域的 PATH 中添加 %{0}%。" xml:space="preserve"><value>在相应作用域的 PATH 中添加 %{0}%。</value></data>
+  <data name="将外部新环境变量归入" xml:space="preserve"><value>将外部新环境变量归入</value></data>
+  <data name="将外部添加的PATH项移至" xml:space="preserve"><value>将外部添加的PATH项移至</value></data>
+  <data name="用户变量归类目标" xml:space="preserve"><value>用户变量归类目标</value></data>
+  <data name="系统变量归类目标" xml:space="preserve"><value>系统变量归类目标</value></data>
+  <data name="用户PATH迁移目标" xml:space="preserve"><value>用户PATH迁移目标</value></data>
+  <data name="系统PATH迁移目标" xml:space="preserve"><value>系统PATH迁移目标</value></data>
+  <data name="全局系统PATH迁移目标" xml:space="preserve"><value>全局系统PATH迁移目标</value></data>
+  <data name="将外部新用户环境变量归入所选分类" xml:space="preserve"><value>将外部新用户环境变量归入所选分类</value></data>
+  <data name="将外部新系统环境变量归入所选分类" xml:space="preserve"><value>将外部新系统环境变量归入所选分类</value></data>
+  <data name="分类" xml:space="preserve"><value>分类</value></data>
 </root>

@@ -20,7 +20,7 @@ public partial class VariablesView
         if(editingSession is not {} session || !session.HasChanges && !session.IsReviewMode)
         {
             await ReloadAsync(external:true);
-            if(CleanupPanel.Visibility==Visibility.Visible) {cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues());ShowCleanupPlan();}
+            if(CleanupPanel.Visibility==Visibility.Visible) {cleanupPlan=EnvironmentPathCleanup.Analyze(allVariables,RuntimeValues(),PlanningSettings());ShowCleanupPlan();}
             return true;
         }
         busy=true;UpdateActions();
