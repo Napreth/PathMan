@@ -8,7 +8,23 @@ using Pathman.Core.EnvironmentVariables;
 
 namespace Pathman.Core;
 
-public sealed record GlobalMonitorSettings(bool Enabled=false,bool ProvideNonAdministratorOrigins=false,bool AutoArrangeMachinePath=false,string InstallationDirectory="");
+public sealed record GlobalMonitorSettings(bool Enabled=false,bool ProvideNonAdministratorOrigins=false,bool AutoArrangeMachinePath=false,string InstallationDirectory="")
+{
+    public bool RemoveMachinePathDuplicates {get;init;}=true;
+    public bool MoveExternalMachinePathEntries {get;init;}=true;
+    public bool IgnoreSystemEditorMachineChanges {get;init;}
+    public bool IgnorePowerToysMachineChanges {get;init;}
+    public bool ApplyMachineOptions(EnvironmentWorkspace state)
+    {
+        var changed=!state.MonitoringEnabled || !state.TrackChangeOrigins || state.AutoArrangeMachinePath!=AutoArrangeMachinePath ||
+            state.RemoveMachinePathDuplicates!=RemoveMachinePathDuplicates || state.MoveExternalMachinePathEntries!=MoveExternalMachinePathEntries ||
+            state.IgnoreSystemEditorMachineChanges!=IgnoreSystemEditorMachineChanges || state.IgnorePowerToysMachineChanges!=IgnorePowerToysMachineChanges;
+        state.MonitoringEnabled=true;state.TrackChangeOrigins=true;state.AutoArrangeMachinePath=AutoArrangeMachinePath;
+        state.RemoveMachinePathDuplicates=RemoveMachinePathDuplicates;state.MoveExternalMachinePathEntries=MoveExternalMachinePathEntries;
+        state.IgnoreSystemEditorMachineChanges=IgnoreSystemEditorMachineChanges;state.IgnorePowerToysMachineChanges=IgnorePowerToysMachineChanges;
+        return changed;
+    }
+}
 
 public sealed class GlobalMonitoring(PathmanLayout layout)
 {
@@ -30,26 +46,31 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         var settings=ReadSettings();
         return settings.InstallationDirectory.Equals(layout.InstallationDirectory,StringComparison.OrdinalIgnoreCase) ? settings : new();
     }
-    public static GlobalMonitorSettings ReadSettings()=>File.Exists(SettingsPath)
-        ? JsonSerializer.Deserialize<GlobalMonitorSettings>(File.ReadAllText(SettingsPath),EnvironmentWorkspaceStore.JsonOptions) ?? new() : new();
+    public static GlobalMonitorSettings ReadSettings()
+    {
+        if(!File.Exists(SettingsPath)) return new();
+        using var stream=File.Open(SettingsPath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
+        return JsonSerializer.Deserialize<GlobalMonitorSettings>(stream,EnvironmentWorkspaceStore.JsonOptions) ?? new();
+    }
     public bool IsEnabled=>ReadSettings().Enabled;
-    public void Configure(bool enabled,bool provideOrigins,bool organize)
+    public void Configure(GlobalMonitorSettings settings)
     {
         if(!IsAllUsers) throw new IOException(L.Get("全局监控仅支持为所有用户安装。"));
         var start=new ProcessStartInfo(layout.BackgroundExecutable) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};
-        foreach(var value in new[]{"--configure-global-monitor",enabled.ToString(),provideOrigins.ToString(),organize.ToString()}) start.ArgumentList.Add(value);
+        start.ArgumentList.Add("--configure-global-monitor");
+        foreach(var value in new[]{settings.Enabled,settings.ProvideNonAdministratorOrigins,settings.AutoArrangeMachinePath,settings.RemoveMachinePathDuplicates,settings.MoveExternalMachinePathEntries,settings.IgnoreSystemEditorMachineChanges,settings.IgnorePowerToysMachineChanges}) start.ArgumentList.Add(value.ToString());
         using var process=Process.Start(start) ?? throw new IOException(L.Get("无法配置全局监控服务。"));
         if(!process.WaitForExit(60000) || process.ExitCode!=0) throw new IOException(L.Get("无法配置全局监控服务。"));
     }
     private string ProtectedDirectory=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"PathMan Monitor");
-    public void ConfigureElevated(bool enabled,bool provideOrigins,bool organize)
+    public void ConfigureElevated(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates=null,bool? moveEntries=null,bool? ignoreSystemEditor=null,bool? ignorePowerToys=null)
     {
         DemandAdministrator();
         using var mutex=WindowsUserContext.WorkspaceMutex(@"Global\PathMan.GlobalMonitor.Configuration");
         try {if(!mutex.WaitOne(60000)) throw new IOException("Global configuration is busy.");}catch(AbandonedMutexException) { }
-        try {ConfigureLocked(enabled,provideOrigins,organize);}finally {mutex.ReleaseMutex();}
+        try {ConfigureLocked(enabled,provideOrigins,organize,removeDuplicates,moveEntries,ignoreSystemEditor,ignorePowerToys);}finally {mutex.ReleaseMutex();}
     }
-    private void ConfigureLocked(bool enabled,bool provideOrigins,bool organize)
+    private void ConfigureLocked(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates,bool? moveEntries,bool? ignoreSystemEditor,bool? ignorePowerToys)
     {
         if(!IsAllUsers) throw new IOException(L.Get("全局监控仅支持为所有用户安装。"));
         OriginTrackingTask.SecureDirectory(Path.GetDirectoryName(DataDirectory)!);
@@ -58,7 +79,9 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         SecureExistingData(DataDirectory);
         var previous=ReadSettings();
         if(previous.Enabled && !previous.InstallationDirectory.Equals(layout.InstallationDirectory,StringComparison.OrdinalIgnoreCase)) throw new IOException("Another installation owns global monitoring.");
-        var updated=new GlobalMonitorSettings(enabled,provideOrigins,organize,layout.InstallationDirectory);
+        var updated=previous with {Enabled=enabled,ProvideNonAdministratorOrigins=provideOrigins,AutoArrangeMachinePath=organize,InstallationDirectory=layout.InstallationDirectory,
+            RemoveMachinePathDuplicates=removeDuplicates ?? previous.RemoveMachinePathDuplicates,MoveExternalMachinePathEntries=moveEntries ?? previous.MoveExternalMachinePathEntries,
+            IgnoreSystemEditorMachineChanges=ignoreSystemEditor ?? previous.IgnoreSystemEditorMachineChanges,IgnorePowerToysMachineChanges=ignorePowerToys ?? previous.IgnorePowerToysMachineChanges};
         if(enabled)
         {
             var executable=Path.Combine(ProtectedDirectory,"PathMan.Service.exe");

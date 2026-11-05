@@ -1235,7 +1235,7 @@
   <data name="接收测试版更新" xml:space="preserve"><value>Receive prerelease updates</value></data>
   <data name="全局设置" xml:space="preserve"><value>Global settings</value></data>
   <data name="为所有用户开启统一设置" xml:space="preserve"><value>Enable unified settings for all users</value></data>
-  <data name="用户级的‘自动整理系统PATH环境变量’将不可用" xml:space="preserve"><value>The per-user option to automatically organize the system PATH will be unavailable</value></data>
+  <data name="用户级的“自动整理系统PATH环境变量”将不可用" xml:space="preserve"><value>The per-user “Automatically organize the system PATH” option will be unavailable</value></data>
   <data name="为非管理员用户提供精确修改来源" xml:space="preserve"><value>Provide precise change origins for non-administrator users</value></data>
   <data name="自动整理系统PATH环境变量" xml:space="preserve"><value>Automatically organize the system PATH</value></data>
   <data name="全局监控仅支持为所有用户安装。" xml:space="preserve"><value>Global monitoring requires an installation for all users.</value></data>

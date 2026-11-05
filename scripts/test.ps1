@@ -83,6 +83,7 @@ try {
     $layout=[Pathman.Core.PathmanLayout]::new($installation,$dataRoot)
     $manager=[Pathman.Core.Shims.ShimManager]::new($layout,$false)
     $background=[Pathman.Core.BackgroundProcess]::new($layout)
+    $unified=[Pathman.Core.GlobalMonitoring]::new($layout).IsEnabled
     $name = "p'w'sh-中文"
     $null = $manager.Add($name,$pwsh)
     $alias = Join-Path $dataRoot "shims/$name.exe"
@@ -147,13 +148,13 @@ try {
     Assert (!(Test-Path -LiteralPath (Join-Path $dataRoot "shims/$name.shim"))) 'Removing an alias left its manifest behind.'
     $missing = Invoke-Program $template @()
     Assert ($missing.Code -eq 13) 'A missing manifest should fail clearly.'
-    Assert-Rejected {$background.Start()}
+    if($unified){$background.Start()}else{Assert-Rejected {$background.Start()}}
     Assert (!$background.IsRunning) 'Disabled background must remain stopped.'
     $duplicate = Invoke-Program (Join-Path $installation 'internal/PathMan.Service.exe') @('--data-root', $dataRoot)
-    Assert ($duplicate.Code -eq 5) 'A direct disabled background launch must also be refused.'
+    Assert ($duplicate.Code -eq $(if($unified){0}else{5})) 'A direct launch must leave the personal background stopped when disabled or owned by the unified service.'
     $background.Stop()
     Assert (!$background.IsRunning) 'Background process did not stop.'
-    Assert-Rejected {$background.Start()}
+    if($unified){$background.Start()}else{Assert-Rejected {$background.Start()}}
     $background.Stop()
 
     if ([IO.Path]::GetPathRoot($testRoot) -ne [IO.Path]::GetPathRoot([IO.Path]::GetTempPath())) {

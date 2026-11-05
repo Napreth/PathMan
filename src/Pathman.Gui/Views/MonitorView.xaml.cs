@@ -40,9 +40,13 @@ public partial class MonitorView : UserControl
             StartupEnabled.IsEnabled&=!unified;
             TrackOrigins.IsEnabled&=!unified || settings.ProvideNonAdministratorOrigins || IsAdministratorAccount();
             AutoArrangeMachine.IsEnabled=!unified;MachineArrangeOptions.IsEnabled=state.AutoArrangeMachinePath && !unified;
+            MachineArrangeOptions.Visibility=unified ? Visibility.Collapsed : Visibility.Visible;
             GlobalSettings.Visibility=global.IsAllUsers ? Visibility.Visible : Visibility.Collapsed;
             GlobalEnabled.IsChecked=settings.Enabled;GlobalOrigins.IsChecked=settings.ProvideNonAdministratorOrigins;GlobalAutoArrange.IsChecked=settings.AutoArrangeMachinePath;
             GlobalOrigins.IsEnabled=GlobalAutoArrange.IsEnabled=settings.Enabled;
+            GlobalRemoveDuplicates.IsChecked=settings.RemoveMachinePathDuplicates;GlobalMoveEntries.IsChecked=settings.MoveExternalMachinePathEntries;
+            GlobalIgnoreSystemEditor.IsChecked=settings.IgnoreSystemEditorMachineChanges;GlobalIgnorePowerToys.IsChecked=settings.IgnorePowerToysMachineChanges;
+            GlobalArrangeOptions.IsEnabled=unified && settings.AutoArrangeMachinePath;
             UserEditorExclusions.IsEnabled=MachineEditorExclusions.IsEnabled=state.TrackChangeOrigins;
         }
         finally {updating=false;}
@@ -140,9 +144,13 @@ public partial class MonitorView : UserControl
     private async void ChangeGlobalOptions(object sender,RoutedEventArgs e)
     {
         if(updating || busy) return;
-        var enabled=GlobalEnabled.IsChecked==true;var origins=GlobalOrigins.IsChecked==true;var organize=GlobalAutoArrange.IsChecked==true;
+        var settings=new GlobalMonitorSettings(GlobalEnabled.IsChecked==true,GlobalOrigins.IsChecked==true,GlobalAutoArrange.IsChecked==true)
+        {
+            RemoveMachinePathDuplicates=GlobalRemoveDuplicates.IsChecked==true,MoveExternalMachinePathEntries=GlobalMoveEntries.IsChecked==true,
+            IgnoreSystemEditorMachineChanges=GlobalIgnoreSystemEditor.IsChecked==true,IgnorePowerToysMachineChanges=GlobalIgnorePowerToys.IsChecked==true
+        };
         busy=true;SettingsPanel.IsEnabled=false;
-        try {await Task.Run(()=>new GlobalMonitoring(layout).Configure(enabled,origins,organize));busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);}
+        try {await Task.Run(()=>new GlobalMonitoring(layout).Configure(settings));busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);}
         catch(Exception error) when(Expected(error)) {busy=false;Update(store.Read());ShowError(error);}
         finally {busy=false;SettingsPanel.IsEnabled=true;}
     }

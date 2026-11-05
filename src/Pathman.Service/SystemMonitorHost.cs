@@ -77,11 +77,7 @@ internal static class SystemMonitorHost
                 while(queued.TryDequeue(out var message)) pendingOrigins.Add(message);
                 pendingOrigins.RemoveAll(item=>item.Origin is null || item.Origin.Time<DateTime.UtcNow.AddSeconds(-5));
                 if(pendingOrigins.Count>8192) pendingOrigins.RemoveRange(0,pendingOrigins.Count-8192);
-                machineStore.InspectForService(state=>
-                {
-                    var changed=!state.MonitoringEnabled || state.AutoArrangeMachinePath!=settings.AutoArrangeMachinePath;
-                    state.MonitoringEnabled=true;state.AutoArrangeMachinePath=settings.AutoArrangeMachinePath;return changed;
-                });
+                machineStore.InspectForService(settings.ApplyMachineOptions);
                 L.SetLanguage("system");
                 var machineApplied=false;
                 var handoffPending=false;
@@ -143,12 +139,16 @@ internal static class SystemMonitorHost
     private static bool Expected(Exception error)=>error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Security.SecurityException or JsonException or InvalidOperationException;
     private sealed class Origins(bool ready,List<OriginMessage> values,string? sid) : IEnvironmentChangeOrigins
     {
+        private readonly Dictionary<string,IReadOnlyList<EnvironmentChangeOrigin>> captured=new(StringComparer.OrdinalIgnoreCase);
         public bool IsReady=>ready;
         public IReadOnlyList<EnvironmentChangeOrigin> Take(VariableScope scope,string name)
         {
+            var key=EnvironmentWorkspace.Key(scope,name);
+            // Recording the change and preparing its PATH plan need the same evidence.
+            if(captured.TryGetValue(key,out var existing)) return existing;
             var selected=values.Where(item=>(scope==VariableScope.Machine ? item.UserSid is null : item.UserSid==sid) && item.Origin is {} origin && origin.Scope==scope && origin.Name.Equals(name,StringComparison.OrdinalIgnoreCase)).ToArray();
             foreach(var item in selected) values.Remove(item);
-            return selected.Select(item=>item.Origin!).ToArray();
+            return captured[key]=selected.Select(item=>item.Origin!).ToArray();
         }
     }
     [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true,EntryPoint="StartServiceCtrlDispatcherW")] private static extern bool StartServiceCtrlDispatcher([In] Entry[] entries);

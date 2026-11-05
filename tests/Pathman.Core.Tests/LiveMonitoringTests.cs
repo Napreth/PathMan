@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
+using System.Text.Json;
 
 internal static class LiveMonitoringTests
 {
@@ -69,6 +70,24 @@ internal static class LiveMonitoringTests
         settings.TrackChangeOrigins=false;
         EnvironmentMonitor.PreparePlans(settings,baseline,incoming,true);
         assert(settings.PendingPathOrganizations.Count==1,"Saved exclusion preferences remain inactive when precise tracking is off");
+        var legacyGlobal=JsonSerializer.Deserialize<GlobalMonitorSettings>("{\"enabled\":true,\"autoArrangeMachinePath\":true}",EnvironmentWorkspaceStore.JsonOptions)!;
+        assert(legacyGlobal.RemoveMachinePathDuplicates && legacyGlobal.MoveExternalMachinePathEntries && !legacyGlobal.IgnoreSystemEditorMachineChanges && !legacyGlobal.IgnorePowerToysMachineChanges,"Existing global settings retain their deduplicate-and-move defaults when the four new options are absent");
+        var global=legacyGlobal with {RemoveMachinePathDuplicates=false,MoveExternalMachinePathEntries=false,IgnoreSystemEditorMachineChanges=true,IgnorePowerToysMachineChanges=true};
+        var restoredGlobal=JsonSerializer.Deserialize<GlobalMonitorSettings>(JsonSerializer.Serialize(global,EnvironmentWorkspaceStore.JsonOptions),EnvironmentWorkspaceStore.JsonOptions)!;
+        var globalState=new EnvironmentWorkspace {AutoArrangeUserPath=true,RemoveUserPathDuplicates=false,MoveExternalUserPathEntries=false};
+        restoredGlobal.ApplyMachineOptions(globalState);
+        assert(globalState.AutoArrangeMachinePath && !globalState.RemoveMachinePathDuplicates && !globalState.MoveExternalMachinePathEntries && globalState.IgnoreSystemEditorMachineChanges && globalState.IgnorePowerToysMachineChanges && globalState.TrackChangeOrigins && globalState.AutoArrangeUserPath && !globalState.RemoveUserPathDuplicates && !globalState.MoveExternalUserPathEntries,"All four global options survive persistence and affect only the machine policy");
+        restoredGlobal=restoredGlobal with {MoveExternalMachinePathEntries=true};restoredGlobal.ApplyMachineOptions(globalState);
+        VariableSnapshot[] machineBefore=[new(VariableScope.Machine,"Path",@"C:\old",(int)RegistryValueKind.String)];
+        EnvironmentVariableInfo[] machineAfter=[V("Path",@"C:\old;D:\new;D:\new",VariableScope.Machine)];
+        EnvironmentChangeOrigin MachineOrigin(string image)=>new(VariableScope.Machine,"Path",123,image,DateTime.UtcNow);
+        foreach(var image in new[]{"SystemPropertiesAdvanced.exe","PowerToys.EnvironmentVariables.exe"})
+        {
+            EnvironmentMonitor.PreparePlans(globalState,machineBefore,machineAfter,true,origins:new Origins(true,MachineOrigin(image)),managedScope:VariableScope.Machine);
+            assert(globalState.PendingPathOrganizations.Count==0,"Global exclusion must preserve machine PATH writes from "+image);
+        }
+        EnvironmentMonitor.PreparePlans(globalState,machineBefore,machineAfter,true,origins:new Origins(true,MachineOrigin("powershell.exe")),managedScope:VariableScope.Machine);
+        assert(globalState.PendingPathOrganizations.Single().MovedEntries==2 && globalState.PendingPathOrganizations.Single().RemovedDuplicates==0,"An allowed global writer follows the saved move-only policy even when both exclusions are enabled");
         Console.WriteLine("PASS: guarded live three-way drafts, colored review rows, external undo, deletion/duplicate identity, read-only snapshots, strict background startup, and process-accurate exclusion policies.");
     }
 }

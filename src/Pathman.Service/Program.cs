@@ -6,9 +6,11 @@ using Pathman.Service;
 // A normal user-session background process, with no SCM registration or elevation.
 if(args is ["--environment-changed"]) {WindowsEnvironmentVariableEditor.NotifyEnvironmentChanged();return 0;}
 if(args is ["--system-monitor"]) return SystemMonitorHost.Run();
-if(args is ["--configure-global-monitor",var enableText,var originsText,var organizeText] && bool.TryParse(enableText,out var globalEnabled) && bool.TryParse(originsText,out var globalOrigins) && bool.TryParse(organizeText,out var globalOrganize))
+if(args.Length is 4 or 8 && args[0]=="--configure-global-monitor")
 {
-    try {new GlobalMonitoring(PathmanLayout.Discover()).ConfigureElevated(globalEnabled,globalOrigins,globalOrganize);return 0;}
+    var flags=new bool[args.Length-1];
+    for(var index=0;index<flags.Length;index++) if(!bool.TryParse(args[index+1],out flags[index])) return 2;
+    try {new GlobalMonitoring(PathmanLayout.Discover()).ConfigureElevated(flags[0],flags[1],flags[2],flags.Length==7 ? flags[3] : null,flags.Length==7 ? flags[4] : null,flags.Length==7 ? flags[5] : null,flags.Length==7 ? flags[6] : null);return 0;}
     catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException) {Console.Error.WriteLine(error);return error is System.ComponentModel.Win32Exception windows ? windows.NativeErrorCode : 1;}
 }
 if(args.FirstOrDefault()=="--registry-origin-worker") return RegistryOriginTracker.RunWorker(args);

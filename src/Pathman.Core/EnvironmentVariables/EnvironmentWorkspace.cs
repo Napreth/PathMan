@@ -177,8 +177,14 @@ public sealed class EnvironmentWorkspaceStore
         .GetManifestResourceStream($"Pathman.Core.EnvironmentVariables.Defaults.{name}.json")!, JsonOptions)!;
     private EnvironmentWorkspace Load()
     {
-        var state = File.Exists(FilePath) ? JsonSerializer.Deserialize<EnvironmentWorkspace>(File.ReadAllText(FilePath), JsonOptions)
-            ?? throw new InvalidDataException(L.Get("环境变量配置为空。")) : ReadDefault<EnvironmentWorkspace>("groups");
+        EnvironmentWorkspace state;
+        if(File.Exists(FilePath))
+        {
+            // Global history readers do not hold the service's writer mutex.
+            using var stream=File.Open(FilePath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);
+            state=JsonSerializer.Deserialize<EnvironmentWorkspace>(stream,JsonOptions) ?? throw new InvalidDataException(L.Get("环境变量配置为空。"));
+        }
+        else state=ReadDefault<EnvironmentWorkspace>("groups");
         state.Preferences??=new();state.Preferences.Language??="system";state.Preferences.Theme??="system";
         foreach(var project in state.VersionProjects) project.Versions=new(project.Versions,StringComparer.OrdinalIgnoreCase);
         VersionCatalog.Validate(state.VersionProjects);

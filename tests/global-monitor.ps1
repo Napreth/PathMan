@@ -16,14 +16,20 @@ New-Item -ItemType Directory -Force -Path $ResultDirectory|Out-Null
 function Assert($condition,[string]$message){if(!$condition){throw $message};$checks.Add($message)}
 function WaitFor([scriptblock]$test,[string]$message){for($i=0;$i -lt 300;$i++){if(& $test){return};Start-Sleep -Milliseconds 100};throw $message}
 function Run([string]$arguments){$p=Start-Process $service -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'service.stderr.log');return $p.ExitCode}
-function State{Get-Content (Join-Path $global 'settings.json') -Raw|ConvertFrom-Json}
-function Status{if(Test-Path (Join-Path $global 'status.json')){Get-Content (Join-Path $global 'status.json') -Raw|ConvertFrom-Json}}
+function ReadJson([string]$path){
+    $stream=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+    $reader=[IO.StreamReader]::new($stream)
+    try{$reader.ReadToEnd()|ConvertFrom-Json}finally{$reader.Dispose()}
+}
+function State{ReadJson (Join-Path $global 'settings.json')}
+function Status{if(Test-Path (Join-Path $global 'status.json')){ReadJson (Join-Path $global 'status.json')}}
+function MachineState{ReadJson (Join-Path $global 'machine/environment.json')}
 try{
     '[PathMan]','Scope=CurrentUser'|Set-Content $marker
     Assert ((Run '--configure-global-monitor true true true') -ne 0) 'Per-user installations reject global service configuration'
     '[PathMan]','Scope=AllUsers'|Set-Content $marker
     $machine.SetValue('Path','C:\GlobalBase',[Microsoft.Win32.RegistryValueKind]::String);$machine.DeleteValue('EXTERNAL_PATH',$false)
-    Assert ((Run '--configure-global-monitor true true false') -eq 0) 'An all-users installation enables the unified SCM service'
+    Assert ((Run '--configure-global-monitor true true false true true false false') -eq 0) 'An all-users installation enables the unified SCM service'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Running' -and (Status).OriginsReady} 'Unified service or ETW collector did not become ready'
     Assert ((State).enabled -and (State).provideNonAdministratorOrigins -and !(State).autoArrangeMachinePath) 'Global switches persist independently in ProgramData'
     Assert ((Run '--data-root "C:\PathMan-Global-NoBackground"') -eq 0) 'Personal background launches exit while the unified service owns monitoring'
@@ -37,9 +43,55 @@ try{
     WaitFor {$machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew'} 'The service did not organize the system PATH'
     Assert ($machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq 'C:\GlobalBase;%EXTERNAL_PATH%') 'Exactly one global writer deduplicates and moves new machine PATH entries'
     Assert (@(Get-ChildItem (Join-Path $global 'machine/backups') -Filter '*.json').Count -gt 0) 'Global machine changes have protected original-value backups'
+    Assert ((Run '--configure-global-monitor true true true true false false false') -eq 0) 'Global duplicate removal can be enabled without moving entries'
+    WaitFor {(MachineState).removeMachinePathDuplicates -and !(MachineState).moveExternalMachinePathEntries} 'The service did not load its duplicate-only policy'
+    $duplicatePath='C:\GlobalBase;%EXTERNAL_PATH%;E:\GlobalDuplicate'
+    $machine.SetValue('Path',($duplicatePath+';E:\GlobalDuplicate'),[Microsoft.Win32.RegistryValueKind]::ExpandString)
+    WaitFor {$machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq $duplicatePath} 'Global duplicate removal did not run independently'
+    Assert ($machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew') 'Duplicate-only organization leaves new unique entries in PATH'
+    Assert ((Run '--configure-global-monitor true true true false true false false') -eq 0) 'Global moving can be enabled without duplicate removal'
+    WaitFor {!(MachineState).removeMachinePathDuplicates -and (MachineState).moveExternalMachinePathEntries} 'The service did not load its move-only policy'
+    $machine.SetValue('Path',($duplicatePath+';F:\GlobalMove;F:\GlobalMove'),[Microsoft.Win32.RegistryValueKind]::ExpandString)
+    WaitFor {$machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew;F:\GlobalMove;F:\GlobalMove'} 'Global move-only policy did not preserve duplicate additions'
+    Assert ($machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq $duplicatePath) 'Move-only organization preserves the existing PATH entries'
+    Assert ((Run '--configure-global-monitor true true true true true true true') -eq 0) 'Both global source exclusions can be configured'
+    WaitFor {(MachineState).ignoreSystemEditorMachineChanges -and (MachineState).ignorePowerToysMachineChanges} 'The service did not load its source exclusions'
+    $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+    if(!(Test-Path $csc)){$csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'}
+    $source=Join-Path $ResultDirectory 'registry-writer.cs'
+    @'
+using Microsoft.Win32;
+class Writer {
+    static void Main(string[] args) {
+        using(var key=Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",true))
+            key.SetValue("Path",args[0],RegistryValueKind.ExpandString);
+        System.Threading.Thread.Sleep(750);
+    }
+}
+'@ | Set-Content $source
+    foreach($name in 'SystemPropertiesAdvanced','PowerToys.EnvironmentVariables'){
+        $writer=Join-Path $ResultDirectory ($name+'.exe')
+        & $csc /nologo /target:exe ("/out:"+$writer) $source
+        if($LASTEXITCODE -ne 0){throw 'Cannot compile the registry writer fixture'}
+        $excludedPath=$duplicatePath+';H:\'+$name
+        $process=Start-Process $writer -ArgumentList ('"'+$excludedPath+'"') -WindowStyle Hidden -PassThru -Wait
+        Assert ($process.ExitCode -eq 0) ($name+' fixture writes the system PATH')
+        WaitFor {@((MachineState).snapshot|Where-Object {$_.name -eq 'Path' -and $_.value -eq $excludedPath}).Count -eq 1} 'The service did not observe the excluded change'
+        Start-Sleep -Seconds 2
+        Assert ($machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq $excludedPath) ('Global exclusion preserves the actual '+$name+' write')
+    }
+    $writer=Join-Path $ResultDirectory 'AllowedWriter.exe'
+    & $csc /nologo /target:exe ("/out:"+$writer) $source
+    if($LASTEXITCODE -ne 0){throw 'Cannot compile the allowed registry writer fixture'}
+    $allowedPath=$excludedPath+';G:\GlobalAllowed;G:\GlobalAllowed'
+    $process=Start-Process $writer -ArgumentList ('"'+$allowedPath+'"') -WindowStyle Hidden -PassThru -Wait
+    Assert ($process.ExitCode -eq 0) 'The allowed fixture writes PATH with a newly opened, traceable registry handle'
+    WaitFor {$machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew;F:\GlobalMove;F:\GlobalMove;G:\GlobalAllowed'} 'A known, allowed writer was blocked by the source exclusion policy'
+    Assert ($machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq $excludedPath) 'Allowed writers still organize PATH while both source exclusions are enabled'
     Assert ((Run '--configure-global-monitor false true true') -eq 0) 'The unified service can be disabled'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Stopped'} 'Unified service did not stop'
     Assert (!(State).enabled -and (State).autoArrangeMachinePath -and (State).provideNonAdministratorOrigins) 'Disabling unified monitoring retains its saved options'
+    Assert ((State).removeMachinePathDuplicates -and (State).moveExternalMachinePathEntries -and (State).ignoreSystemEditorMachineChanges -and (State).ignorePowerToysMachineChanges) 'All four global child options survive a legacy three-switch update'
     Assert ((Run '--configure-global-monitor true false false') -eq 0) 'The unified service can restart without recreating the installation'
     WaitFor {(Status).Running -and (Status).OriginsReady} 'Unified service did not restart'
     Assert ((Run '--remove-origin-tasks') -eq 0) 'Uninstall maintenance removes the SCM service and privileged collectors'
