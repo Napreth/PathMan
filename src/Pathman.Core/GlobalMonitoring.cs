@@ -137,15 +137,44 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
     }
     public static void Stop()
     {
-        var result=Sc("stop",ServiceName);
-        if(result is not (0 or 1060 or 1062)) throw new Win32Exception(result);
-        for(var retry=0;retry<150;retry++)
+        var manager=OpenSCManager(null,null,1);
+        if(manager==IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try
         {
-            var status=ScOutput("query",ServiceName);
-            if(status.Code==1060 || status.Output.Contains("STOPPED",StringComparison.Ordinal)) return;
-            Thread.Sleep(100);
+            var service=OpenService(manager,ServiceName,4);
+            if(service==IntPtr.Zero)
+            {
+                var error=Marshal.GetLastWin32Error();
+                if(error==1060) return;
+                throw new Win32Exception(error);
+            }
+            try
+            {
+                var elapsed=Stopwatch.StartNew();var requested=false;
+                while(true)
+                {
+                    if(!QueryServiceStatusEx(service,0,out var status,Marshal.SizeOf<ServiceStatus>(),out _)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if(status.State==1) return;
+                    if(elapsed.Elapsed>=TimeSpan.FromSeconds(30)) throw new IOException($"Global monitor did not stop (SCM state {status.State}).");
+                    // Pending services cannot accept STOP. A successful request must
+                    // also finish before deployment or service removal can continue.
+                    if(!requested && status.State is 4 or 7)
+                    {
+                        var result=Sc("stop",ServiceName);
+                        if(result==0) requested=true;
+                        else if(result is not (1060 or 1062))
+                        {
+                            if(result is not (1052 or 1061) ||
+                                !QueryServiceStatusEx(service,0,out status,Marshal.SizeOf<ServiceStatus>(),out _) || status.State is not (1 or 2 or 3 or 5 or 6))
+                                throw new Win32Exception(result);
+                        }
+                    }
+                    Thread.Sleep(100);
+                }
+            }
+            finally {CloseServiceHandle(service);}
         }
-        throw new IOException("Global monitor did not stop.");
+        finally {CloseServiceHandle(manager);}
     }
     public static string? GetUnavailableMessage()
     {
@@ -175,9 +204,9 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         finally {CloseServiceHandle(manager);}
     }
     [StructLayout(LayoutKind.Sequential)] private struct ServiceStatus {public uint Type,State,Accepted,Exit,Specific,Checkpoint,Wait,ProcessId,Flags;}
-    [DllImport("advapi32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr OpenSCManager(string? machine,string? database,uint access);
-    [DllImport("advapi32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr OpenService(IntPtr manager,string name,uint access);
-    [DllImport("advapi32.dll")] private static extern bool QueryServiceStatusEx(IntPtr service,int level,out ServiceStatus status,int size,out int needed);
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern IntPtr OpenSCManager(string? machine,string? database,uint access);
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern IntPtr OpenService(IntPtr manager,string name,uint access);
+    [DllImport("advapi32.dll",SetLastError=true)] private static extern bool QueryServiceStatusEx(IntPtr service,int level,out ServiceStatus status,int size,out int needed);
     [DllImport("advapi32.dll")] private static extern bool CloseServiceHandle(IntPtr handle);
     private static void WriteSettings(GlobalMonitorSettings settings)
     {

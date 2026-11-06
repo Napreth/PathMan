@@ -37,7 +37,23 @@ $recoverySnapshot=$null
 New-Item -ItemType Directory -Force -Path $ResultDirectory|Out-Null
 function Assert($condition,[string]$message){if(!$condition){throw $message};$checks.Add($message)}
 function WaitFor([scriptblock]$test,[string]$message){for($i=0;$i -lt 300;$i++){if(& $test){return};Start-Sleep -Milliseconds 100};throw $message}
-function Run([string]$arguments){$p=Start-Process $service -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'service.stderr.log');return $p.ExitCode}
+$script:commandNumber=0;$script:lastCommand=$null
+function Run([string]$arguments){
+    $script:commandNumber++
+    $prefix=Join-Path $ResultDirectory ('command-'+$script:commandNumber.ToString('D3'))
+    $start=[Diagnostics.ProcessStartInfo]::new($service);$start.Arguments=$arguments;$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    $p=[Diagnostics.Process]::Start($start)
+    try{
+        $output=$p.StandardOutput.ReadToEndAsync();$errorOutput=$p.StandardError.ReadToEndAsync()
+        if(!$p.WaitForExit(60000)){throw ('Service command timed out: '+$arguments)}
+        $errorText=$errorOutput.GetAwaiter().GetResult()
+        [IO.File]::WriteAllText($prefix+'.stdout.log',$output.GetAwaiter().GetResult());[IO.File]::WriteAllText($prefix+'.stderr.log',$errorText)
+        $script:lastCommand=@{Arguments=$arguments;ExitCode=$p.ExitCode;Error=$errorText}
+        $script:lastCommand|ConvertTo-Json -Compress|Add-Content (Join-Path $ResultDirectory 'commands.jsonl') -Encoding UTF8
+        if($p.ExitCode -ne 0){Write-Host ('Service command exited '+$p.ExitCode+': '+$arguments);if($errorText){Write-Host $errorText}}
+        return $p.ExitCode
+    }finally{$p.Dispose()}
+}
 function ReadJson([string]$path){
     $stream=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
     $reader=[IO.StreamReader]::new($stream)
@@ -98,7 +114,7 @@ try{
         }
     }
     $machine.SetValue('Path','C:\GlobalBase',[Microsoft.Win32.RegistryValueKind]::String);$machine.DeleteValue('EXTERNAL_PATH',$false)
-    Assert ((Run '--configure-global-monitor true true false true true false false') -eq 0) 'An all-users installation enables the unified SCM service'
+    Assert ((Run '--configure-global-monitor true true false true true false false EXTERNAL_PATH') -eq 0) 'An all-users installation enables the unified SCM service'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Running' -and (Status).OriginsReady} 'Unified service or ETW collector did not become ready'
     Assert ((Get-ItemProperty ('HKLM:\SYSTEM\CurrentControlSet\Services\PathMan.Monitor')).FailureActionsOnNonCrashFailures -eq 1) 'SCM recovery includes reported nonzero service stops'
     $oldProcess=(Get-CimInstance Win32_Service -Filter "Name='PathMan.Monitor'").ProcessId
@@ -181,13 +197,18 @@ class Writer {
     Assert (!(State).enabled -and (State).autoArrangeMachinePath -and (State).provideNonAdministratorOrigins) 'Disabling unified monitoring retains its saved options'
     Assert ((State).removeMachinePathDuplicates -and (State).moveExternalMachinePathEntries -and (State).ignoreSystemEditorMachineChanges -and (State).ignorePowerToysMachineChanges) 'All four global child options survive a legacy three-switch update'
     Assert ((State).externalMachinePathVariable -eq $customTarget) 'The selected destination survives a legacy three-switch update'
+    for($cycle=1;$cycle -le 4;$cycle++){
+        Assert ((Run '--configure-global-monitor true false false') -eq 0) ('Rapid lifecycle cycle '+$cycle+' starts the service')
+        Assert ((Run '--configure-global-monitor false false false') -eq 0) ('Rapid lifecycle cycle '+$cycle+' disables the service without waiting for readiness')
+        Assert ((Get-Service PathMan.Monitor).Status -eq 'Stopped') ('Rapid lifecycle cycle '+$cycle+' waits for SCM STOPPED')
+    }
     Assert ((Run '--configure-global-monitor true false false') -eq 0) 'The unified service can restart without recreating the installation'
     WaitFor {(Status).Running -and (Status).OriginsReady} 'Unified service did not restart'
     Assert ((Run '--remove-origin-tasks') -eq 0) 'Uninstall maintenance removes the SCM service and privileged collectors'
     Assert ($null -eq (Get-Service PathMan.Monitor -ErrorAction SilentlyContinue)) 'No SCM service remains after uninstall maintenance'
     @{Passed=$true;Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8
     Write-Host 'PASS: installation scope, SCM lifecycle, single-process origins, global PATH writes/backups, option persistence, restart and uninstall.'
-}catch{@{Passed=$false;Error=$_.Exception.Message;Trace=$_.ScriptStackTrace;Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8;throw}
+}catch{@{Passed=$false;Error=$_.Exception.Message;Trace=$_.ScriptStackTrace;Command=$script:lastCommand;ServiceState=(& "$env:WINDIR/System32/sc.exe" queryex PathMan.Monitor 2>&1|Out-String);Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8;throw}
 finally{
     if($recoverySnapshot){[IO.File]::WriteAllText((Join-Path $global 'machine/environment.json'),$recoverySnapshot)}
     $null=Run '--remove-origin-tasks'
