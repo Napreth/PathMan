@@ -10,6 +10,8 @@ using Microsoft.Win32;
 using Pathman.Core;
 using Pathman.Core.EnvironmentVariables;
 using Pathman.Core.Models;
+using Pathman.Core.Localization;
+using System.Text.Json;
 using Pathman.Gui;
 using Pathman.Gui.Controls;
 using Pathman.Gui.Dialogs;
@@ -29,6 +31,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         if(args.FirstOrDefault()=="--environment-session") return ElevatedEnvironmentSession.RunWorkerAsync(args).GetAwaiter().GetResult();
+        if(args.Contains("--zh-CN")) Text.SetLanguage("zh-CN");
         using var watchdog=new System.Threading.Timer(_=> {Console.Error.WriteLine("FAIL: GUI regression timed out.");Environment.Exit(2);},null,TimeSpan.FromSeconds(90),Timeout.InfiniteTimeSpan);
 #pragma warning disable WPF0001 // Match the production App.xaml Fluent theme.
         var app=new FixtureApplication {ShutdownMode=ShutdownMode.OnExplicitShutdown,ThemeMode=ThemeMode.System};
@@ -78,6 +81,11 @@ internal static class Program
         var layout=new PathmanLayout(Path.Combine(Root,"app"),Path.Combine(Root,"data"));
         var store=new EnvironmentWorkspaceStore(layout.DataDirectory);
         store.Update(state=> {state.MonitoringEnabled=true;state.AutoArrangeUserPath=true;state.AutoArrangeMachinePath=false;state.Groups.Add(new() {Id="custom",Name="Team tools",Scope=VariableScope.User});});
+        var persisted=store.Read();var reported=DateTime.Now;
+        persisted.MonitorMessage=Text.Get("系统 PATH 未整理：")+Text.Format("{0} 已被其他程序修改，请重新预览清理结果。","Path");persisted.MonitorMessageTime=reported;
+        persisted.Changes.Add(new(reported.AddSeconds(-1),VariableScope.Machine,"Path","set","before","after","PathMan"));
+        File.WriteAllText(store.FilePath,JsonSerializer.Serialize(persisted,EnvironmentWorkspaceStore.JsonOptions));
+        Directory.CreateDirectory(layout.InternalDirectory);File.WriteAllText(Path.Combine(layout.InternalDirectory,"install.ini"),"[PathMan]\nScope=AllUsers\n");
         var view=new VariablesView(layout,store);
         var window=new Window {Width=1200,Height=850,Content=view,Background=Brushes.WhiteSmoke,Foreground=Brushes.Black};window.Show();
         await Until(()=>!Field<bool>(view,"busy") && Field<IReadOnlyList<EnvironmentTreeNode>>(view,"userGroups").Count>0);
@@ -140,6 +148,8 @@ internal static class Program
         Assert(stage==2 && !view.HasInlineEditor && !view.IsBusy,"New variable during an edit must resolve discard first and allow the new dialog to close.");
 
         var monitor=new MonitorView(layout,store);window.Content=monitor;await Task.Delay(100);
+        Assert(store.ReadSnapshot().MonitorMessage is null && Named<Border>(monitor,"MonitorNotice").Visibility==Visibility.Collapsed,"An old saved conflict must be cleared on upgrade, including the one-second reporting race.");
+        Assert(Named<ComboBox>(monitor,"MachineExternalGroup").IsVisible && Named<ComboBox>(monitor,"MachinePathTarget").IsVisible && Named<ComboBox>(monitor,"GlobalPathTarget").IsVisible,"The system category, system destination and global destination must render as dropdown controls.");
         var category=Named<ComboBox>(monitor,"UserExternalGroup");category.SelectedValue="custom";
         Assert(store.Read().ExternalUserGroupId=="custom","The category dropdown must persist its selection.");
         Assert(Named<CheckBox>(monitor,"GroupExternalUser").IsChecked==true,"Selecting a category must preserve its parent toggle.");
@@ -156,6 +166,7 @@ internal static class Program
         target.Text="TEAM_TOOLS_PATH";Call(monitor,"PathTargetChanged",target,EventArgs.Empty);
         Assert(!Directory.EnumerateFiles(Root,"*.bak",SearchOption.AllDirectories).Any(),"GUI tests must not write environment backups.");
         Capture(window,"monitor");
+        Visual<ScrollViewer>(monitor)!.ScrollToVerticalOffset(650);await Task.Delay(50);Capture(window,"monitor-system");
         window.Close();
     }
     private static async Task Authorization()

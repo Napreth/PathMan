@@ -1,10 +1,17 @@
 using Pathman.Core.Localization;
 using Pathman.Core.Models;
+using System.Text.RegularExpressions;
 
 namespace Pathman.Core.EnvironmentVariables;
 
 public static class EnvironmentMonitorNotices
 {
+    // Older versions persisted optimistic-concurrency failures after a health
+    // repair had already succeeded. These are transient previews, not durable
+    // monitoring failures; the current monitor replans them without a warning.
+    private static readonly Regex[] ObsoleteConflicts=new[]{"系统 PATH 未整理：","自动整理未完成："}.SelectMany(Text.Translations)
+        .SelectMany(prefix=>Text.Translations("{0} 已被其他程序修改，请重新预览清理结果。").Select(format=>
+            new Regex("\\A"+Regex.Escape(prefix+format).Replace(Regex.Escape("{0}"),"[^\\0\\r\\n=]{1,255}")+"\\z",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant|RegexOptions.NonBacktracking))).ToArray();
     public const string UnknownOriginMessage="未能确认本次 PATH 修改来源，已保留外部更改，未自动整理。";
     public static void ReportUnknown(EnvironmentWorkspace state,VariableScope scope,string? before,string? after)
     {
@@ -18,6 +25,8 @@ public static class EnvironmentMonitorNotices
     {
         var unknown=Text.IsTranslation(UnknownOriginMessage,state.MonitorMessage);
         var changed=false;
+        if(state.MonitorMessage is {} message && ObsoleteConflicts.Any(pattern=>pattern.IsMatch(message)))
+        {state.MonitorMessage=null;state.MonitorMessageTime=null;changed=true;}
         if(!unknown && state.MonitorMessage is not null && state.Changes.Any(item=>item.IsOwn && IsPath(item.Name) &&
             (state.MonitorMessageTime is null || item.Time>=state.MonitorMessageTime)))
         {state.MonitorMessage=null;state.MonitorMessageTime=null;changed=true;unknown=false;}

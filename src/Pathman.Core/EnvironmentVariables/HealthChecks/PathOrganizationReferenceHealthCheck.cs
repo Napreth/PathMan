@@ -2,9 +2,9 @@ using Pathman.Core.Models;
 
 namespace Pathman.Core.EnvironmentVariables;
 
-public sealed class SoftwarePathReferenceHealthCheck : IEnvironmentHealthCheck
+public sealed class PathOrganizationReferenceHealthCheck : IEnvironmentHealthCheck
 {
-    public string Id=>"software-path-reference";
+    public string Id=>"path-organization-reference";
     public string Title=>L.Get("整理目标路径引用");
     public IEnumerable<EnvironmentHealthIssue> Check(EnvironmentHealthContext context)
     {

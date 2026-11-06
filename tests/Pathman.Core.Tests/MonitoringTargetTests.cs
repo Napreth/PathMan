@@ -12,8 +12,8 @@ internal static class MonitoringTargetTests
         var before=new VariableSnapshot(VariableScope.Machine,"Path",@"C:\base;%SOFTWARE_PATH%",2);
         var current=new[]{V("Path",@"C:\base;%SOFTWARE_PATH%;D:\VSCode;E:\new"),V("SOFTWARE_PATH",@"D:\VSCode")};
         var plan=ExternalPathOrganizer.Plan(VariableScope.Machine,before,current,settings);
-        assert(plan.RemovedDuplicates==1 && plan.MovedEntries==1 && plan.Mutations.Single(item=>item.Name=="TEAM_PATH").Value==@"E:\new","An updater's duplicate already covered by legacy SOFTWARE_PATH is removed while new paths use the selected target");
-        assert(plan.Mutations.All(item=>item.Name is not ("EXTERNAL_PATH" or "SOFTWARE_PATH")),"Selecting a target does not overwrite legacy or default destination variables");
+        assert(plan.RemovedDuplicates==1 && plan.MovedEntries==1 && plan.Mutations.Single(item=>item.Name=="TEAM_PATH").Value==@"E:\new","An updater's duplicate already covered by an ordinary referenced variable is removed while new paths use the selected target");
+        assert(plan.Mutations.All(item=>item.Name is not ("EXTERNAL_PATH" or "SOFTWARE_PATH")),"Selecting a target does not overwrite other variables");
         var changedTarget=settings.ExternalMachinePathVariable="OTHER_PATH";
         assert(plan.Policy!=ExternalPathOrganizer.Policy(settings,VariableScope.Machine),"A destination change invalidates plans prepared for the previous target");
         var cleanup=EnvironmentPathCleanup.Analyze([V("Path",@"C:\Windows;E:\new;%OTHER_PATH%"),V("OTHER_PATH",@"D:\kept")],new Dictionary<string,string>{{"SystemRoot",@"C:\Windows"}},settings);

@@ -7,11 +7,6 @@ public sealed record CommandLinePathPlan(IReadOnlyList<EnvironmentMutation> Muta
 
 public sealed class CommandLinePathSetting(PathmanLayout layout,VariableScope scope)
 {
-    public static bool IsSoftwareVariable(string name)
-    {
-        if(!name.StartsWith("SOFTWARE",StringComparison.OrdinalIgnoreCase) || !name.EndsWith("_PATH",StringComparison.OrdinalIgnoreCase)) return false;
-        return name.AsSpan(8,name.Length-13).IndexOfAnyExceptInRange('0','9')<0;
-    }
     public static string TargetVariable(EnvironmentWorkspace state,VariableScope scope)=>ExternalPathOrganizer.GroupName(scope,state);
     public CommandLinePathPlan Plan(bool enabled,EnvironmentWorkspace state,IReadOnlyList<EnvironmentVariableInfo> variables,IReadOnlyDictionary<string,string>? runtime=null)
     {
@@ -24,7 +19,7 @@ public sealed class CommandLinePathSetting(PathmanLayout layout,VariableScope sc
         bool Covers(string entry)=>resolver.Expand(entry,scope) is {IsResolved:true} value && value.Paths.Any(item=>
             string.Equals(EnvironmentPathResolver.Normalize(item),target,StringComparison.OrdinalIgnoreCase));
         var sources=(path is null ? [] : resolver.ReferencedVariables(path.RawValue,scope).Prepend(path))
-            .Concat(variables.Where(item=>item.Scope==scope && (IsSoftwareVariable(item.Name) || item.Name.Equals(TargetVariable(state,scope),StringComparison.OrdinalIgnoreCase)))).Where(item=>item.Scope==scope)
+            .Concat(variables.Where(item=>item.Scope==scope && item.Name.Equals(TargetVariable(state,scope),StringComparison.OrdinalIgnoreCase))).Where(item=>item.Scope==scope)
             .DistinctBy(item=>item.Name,StringComparer.OrdinalIgnoreCase).ToArray();
         var mutations=new List<EnvironmentMutation>();
         void Set(EnvironmentVariableInfo? existing,string name,string value)
@@ -48,8 +43,8 @@ public sealed class CommandLinePathSetting(PathmanLayout layout,VariableScope sc
             var direct=path?.Entries.Where(entry=>EnvironmentPathResolver.PureReference(entry) is null && Matches(entry)).ToArray() ?? [];
             if(path?.Entries.Any(Covers)==true && direct.Length==0) return new([],[]);
             var name=TargetVariable(state,scope);
-            var software=variables.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(name,StringComparison.OrdinalIgnoreCase));
-            if(software?.Entries.Any(Covers)!=true) Set(software,name,Append(software?.RawValue,layout.BinDirectory));
+            var destination=variables.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(name,StringComparison.OrdinalIgnoreCase));
+            if(destination?.Entries.Any(Covers)!=true) Set(destination,name,Append(destination?.RawValue,layout.BinDirectory));
             var entries=path?.Entries.Where(entry=>!direct.Contains(entry,StringComparer.Ordinal)).ToList() ?? [];
             if(!entries.Any(entry=>EnvironmentPathResolver.PureReference(entry)?.Equals(name,StringComparison.OrdinalIgnoreCase)==true)) entries.Add($"%{name}%");
             Set(path,path?.Name ?? "Path",string.Join(';',entries));

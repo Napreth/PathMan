@@ -46,7 +46,7 @@ internal static class PathCleanupTests
         var unresolved=EnvironmentPathCleanup.Analyze([U("Path",@"%A_PATH%;%MISSING%"),U("A_PATH","%B_PATH%"),U("B_PATH","%A_PATH%")],runtime);
         assert(!unresolved.HasChanges && EnvironmentHealth.Analyze([U("Path",@"%A_PATH%;%MISSING%"),U("A_PATH","%B_PATH%"),U("B_PATH","%A_PATH%")],runtime).Issues.Count>=2,"Cyclic and missing references must be retained and reported by health detection");
         var collision=EnvironmentPathCleanup.Analyze([M("Path",@"C:\tool;%SOFTWARE_PATH%")],runtime);
-        assert(collision.Scopes[0].TargetVariable=="EXTERNAL_PATH" && collision.Scopes[0].Mutations.Single(item=>item.Name=="Path").Value!.Contains("%SOFTWARE_PATH%"),"Cleanup uses the external target while retaining an unrelated unresolved legacy reference");
+        assert(collision.Scopes[0].TargetVariable=="EXTERNAL_PATH" && collision.Scopes[0].Mutations.Single(item=>item.Name=="Path").Value!.Contains("%SOFTWARE_PATH%"),"Cleanup uses the external target while retaining an unrelated unresolved reference");
         assert(EnvironmentPathResolver.PureReference(@"%SDK_PATH%\")=="SDK_PATH" && EnvironmentPathResolver.PureReference(@"%SDK_PATH%\bin")==null && EnvironmentPathResolver.PureReference("\"%SDK_PATH%\"")==null,"Pure reference parsing must allow trailing separators but no suffix or quotes");
         var purePreferred=EnvironmentPathCleanup.Analyze([U("Path",@"C:\Windows;%SystemRoot%")],runtime);
         assert(purePreferred.Scopes.Single().Mutations.Single().Value=="%SystemRoot%","Pure references must win over equivalent literal paths even if the literal occurs first");
