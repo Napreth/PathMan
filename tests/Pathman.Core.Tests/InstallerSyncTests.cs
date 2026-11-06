@@ -34,6 +34,22 @@ internal static class InstallerSyncTests
         Text.SetLanguage("en-US");
         assert(External(VariableScope.User,"a","b").IsExternal && new VariableChange(now,VariableScope.User,"Path","set","a","b","External program").IsExternal,"External journal entries remain visible across language changes");
         Text.SetLanguage("zh-CN");
+        foreach(var language in new[]{"zh-CN","en-US"})
+        {
+            Text.SetLanguage(language);
+            foreach(var prefix in new[]{"系统 PATH 未整理：","自动整理未完成："})
+            {
+                var stale=new EnvironmentWorkspace {
+                    Changes=[new(now.AddSeconds(-1),VariableScope.Machine,"Path","set","before","after","PathMan")],
+                    MonitorMessage=Text.Get(prefix)+Text.Format("{0} 已被其他程序修改，请重新预览清理结果。","Path"),MonitorMessageTime=now
+                };
+                assert(EnvironmentMonitorNotices.Reconcile(stale) && stale.MonitorMessage is null,"A persisted conflict reported just after the user's successful repair is retired in either language");
+                assert(!EnvironmentMonitorNotices.Reconcile(stale),"Conflict migration is idempotent");
+            }
+        }
+        Text.SetLanguage("zh-CN");
+        var permission=new EnvironmentWorkspace {MonitorMessage="系统 PATH 未整理：Access is denied.",MonitorMessageTime=now};
+        assert(!EnvironmentMonitorNotices.Reconcile(permission) && permission.MonitorMessage is not null,"Retiring stale previews must not hide an unresolved permission error");
         Console.WriteLine("PASS: monitor warning lifecycle, legacy migration, scope isolation and unchanged change evidence.");
     }
 }

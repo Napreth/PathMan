@@ -31,6 +31,8 @@ foreach(var (name,raw,list,entries) in cases)
 }
 PathCleanupTests.Run(Assert);
 MonitoringTests.Run(Assert);
+MonitoringTargetTests.Run(Assert);
+    MonitoringDestinationTests.Run(Assert);
 LiveMonitoringTests.Run(Assert);
 GlobalServiceTests.Run(Assert);
 InstallerSyncTests.Run(Assert);
@@ -72,7 +74,7 @@ try
     Assert(Category(V("SDK_PATH",@"C:\sdk",VariableScope.Machine),V("Path","%SDK_PATH%",VariableScope.User))=="other","Machine variable must not use a user-only PATH reference");
     store.Update(settings=> { for(var i=0;i<7;i++) settings.Groups.Add(new() {Id=$"custom-{i}",Name=$"分组 {i}",Scope=VariableScope.User}); settings.Assignments[EnvironmentWorkspace.Key(VariableScope.User,"JAVA_HOME")]="custom-6"; });
     state=store.Read();
-    Assert(state.Groups.Count==11 && state.VisibleGroups(VariableScope.User).Count()==10,"Group count must come from data, with only monitoring-disabled external groups hidden");
+    Assert(state.Groups.Count==10 && state.VisibleGroups(VariableScope.User).Count()==10,"Unneeded external categories are deferred while the other categories come from data");
     Assert(Category(V("JAVA_HOME",@"C:\Java"))=="custom-6","Manual assignments to arbitrary groups must persist");
     store.Update(settings=>settings.Groups.First(group=>group.Id=="custom-6").Name="我的工具");
     Assert(store.Read().Groups.Last().Name=="我的工具","Group renames must survive reload");
@@ -99,7 +101,7 @@ try
     RejectMove(()=>state.MoveVariable(VariableScope.User,"B","other","missing"),"Dropping outside a real group must be rejected");
     state.PinVariable(VariableScope.User,"A_PIN",false);
     Assert(state.OrderVariables([V("A_PIN","a"),V("Z_PIN","z")]).First().Name=="Z_PIN","Unpinning must return a variable to ordinary order");
-    state.MonitoringEnabled=true; state.PinGroup(VariableScope.User,"external",true); state.MonitoringEnabled=false;
+    state.MonitoringEnabled=true;state.ExternalVariables.Add("User:PIN_TEST");state.MaterializeExternalGroup();state.PinGroup(VariableScope.User,"external",true);state.MonitoringEnabled=false;
     state.MoveGroup(VariableScope.User,"custom-0",null); state.MonitoringEnabled=true;
     Assert(state.IsGroupPinned(VariableScope.User,"external"),"Reordering visible groups must preserve hidden monitored-group pinning");
     state.MonitoringEnabled=true;

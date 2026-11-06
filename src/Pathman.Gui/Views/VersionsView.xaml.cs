@@ -63,10 +63,10 @@ public partial class VersionsView : UserControl
         PreviewKeyDown+=VersionKeyDown;
         Loaded+=async(_,_)=>
         {
-            owner=Window.GetWindow(this);owner.PreviewMouseUp+=SaveAfterClick;owner.LostKeyboardFocus+=SaveAfterFocus;owner.Deactivated+=SaveAfterDeactivation;
+            owner=Window.GetWindow(this);owner.AddHandler(Mouse.PreviewMouseUpEvent,new MouseButtonEventHandler(SaveAfterClick),true);owner.LostKeyboardFocus+=SaveAfterFocus;owner.Deactivated+=SaveAfterDeactivation;
             await ReloadAsync();
         };
-        Unloaded+=(_,_)=> {if(owner is not null) {owner.PreviewMouseUp-=SaveAfterClick;owner.LostKeyboardFocus-=SaveAfterFocus;owner.Deactivated-=SaveAfterDeactivation;owner=null;}};
+        Unloaded+=(_,_)=> {if(owner is not null) {owner.RemoveHandler(Mouse.PreviewMouseUpEvent,new MouseButtonEventHandler(SaveAfterClick));owner.LostKeyboardFocus-=SaveAfterFocus;owner.Deactivated-=SaveAfterDeactivation;owner=null;}};
         UpdateActions();
     }
     private static bool Expected(Exception error)=>error is IOException or ArgumentException or InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Text.Json.JsonException or System.Security.SecurityException;
@@ -156,7 +156,7 @@ public partial class VersionsView : UserControl
     }
     private async Task ApplyCommandLinePathAsync(bool enabled)
     {
-        var plan=await Task.Run(()=>new CommandLinePathSetting(layout,installationScope).Plan(enabled,store.Read(),EnvironmentMonitor.ReadAll()));
+        var plan=await Task.Run(()=>new CommandLinePathSetting(layout,installationScope).Plan(enabled,GlobalMonitoring.EffectiveOptions(store.Read()),EnvironmentMonitor.ReadAll()));
         await EnvironmentEditHost.ApplyBatchAsync(plan.Mutations,plan.Preconditions,store,layout.DataDirectory);
     }
     public async Task<string?> SynchronizeCommandLinePathAsync()
@@ -171,7 +171,7 @@ public partial class VersionsView : UserControl
     public async Task<bool> ConfirmLeaveAsync()=>!IsBusy && await CommitActive() && !IsBusy;
     private static bool Defers(DependencyObject? source)=>EditableRow.FindParent<Button>(source)?.Tag as string=="defer";
     private void SaveAfterClick(object sender,MouseButtonEventArgs e)
-    {if(e.ClickCount==1 && !Defers(e.OriginalSource as DependencyObject) && activeEditor is {IsEditing:true} editor && !editor.IsInputTarget(e.OriginalSource as DependencyObject)) QueueSave(editor);}
+    {if(!Defers(e.OriginalSource as DependencyObject) && activeEditor is {IsEditing:true} editor && !editor.IsInputTarget(e.OriginalSource as DependencyObject)) QueueSave(editor);}
     private void SaveAfterFocus(object sender,KeyboardFocusChangedEventArgs e)
     {if(!Defers(e.NewFocus as DependencyObject) && Mouse.LeftButton==MouseButtonState.Released && activeEditor is {IsEditing:true} editor && editor.IsInputTarget(e.OldFocus as DependencyObject) && !editor.IsInputTarget(e.NewFocus as DependencyObject)) QueueSave(editor);}
     private void SaveAfterDeactivation(object? sender,EventArgs e) {if(activeEditor is {IsEditing:true} editor) QueueSave(editor);}

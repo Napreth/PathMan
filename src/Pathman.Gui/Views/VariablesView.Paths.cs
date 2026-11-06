@@ -34,15 +34,22 @@ public partial class VariablesView
         selectedId ??= old?.ItemId;
         var resolver=new EnvironmentPathResolver(session.CurrentVariables(),RuntimeValues());
         var previousUpdating=updating; updating=true;
-        entries.Clear();
+        var existing=entries.ToDictionary(entry=>entry.ViewKey);
+        var desired=new List<EnvironmentEntry>();
         foreach(var row in session.VisibleRows(expandedPathRows))
         {
             var links=EnvironmentPathResolver.ReferenceNames(row.Item.Value).Select(name=>new EnvironmentReferenceLink(name,resolver.Find(name,session.Root.Scope)?.Scope)).ToArray();
-            entries.Add(new(row.Item.Value,row.Item.IsDraft,links,row,pathDragging && row.ViewKey==pathDragSource?.ViewKey));
+            var placeholder=pathDragging && row.ViewKey==pathDragSource?.ViewKey;
+            if(existing.TryGetValue(row.ViewKey,out var entry)) {entry.Update(row,links,placeholder);desired.Add(entry);}
+            else desired.Add(new(row.Item.Value,row.Item.IsDraft,links,row,placeholder));
         }
+        var retained=desired.ToHashSet();
+        for(var index=entries.Count-1;index>=0;index--) if(!retained.Contains(entries[index])) entries.RemoveAt(index);
+        for(var index=0;index<desired.Count;index++)
+        {var oldIndex=entries.IndexOf(desired[index]);if(oldIndex<0) entries.Insert(index,desired[index]);else if(oldIndex!=index) entries.Move(oldIndex,index);}
         ValuesList.SelectedItem=entries.FirstOrDefault(item=>item.ViewKey==selectedKey) ?? entries.FirstOrDefault(item=>item.ItemId==selectedId);
         if(preserveSelection) foreach(var entry in entries.Where(item=>selectedKeys.Contains(item.ViewKey))) if(!ValuesList.SelectedItems.Contains(entry)) ValuesList.SelectedItems.Add(entry);
-        if(restoreFocus) ValuesList.Focus();
+        if(restoreFocus && activeEditor?.IsEditing!=true) ValuesList.Focus();
         updating=previousUpdating;
         dirty=session.HasChanges;
         UpdateActions();

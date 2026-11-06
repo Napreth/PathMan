@@ -4,7 +4,7 @@ using Pathman.Core.Models;
 namespace Pathman.Core.EnvironmentVariables;
 
 public sealed record PathCleanupScopePlan(VariableScope Scope, IReadOnlyList<EnvironmentMutation> Mutations,
-    IReadOnlyList<VariableSnapshot> Preconditions, int RemovedDuplicates, int MovedEntries, string? SoftwareVariable)
+    IReadOnlyList<VariableSnapshot> Preconditions, int RemovedDuplicates, int MovedEntries, string? TargetVariable)
 {public bool ChangesPathOrder {get;init;} public bool PathOrderResolved {get;init;}=true;}
 public sealed record EnvironmentPathCleanupPlan(IReadOnlyList<PathCleanupScopePlan> Scopes)
 {
@@ -18,12 +18,10 @@ public static class EnvironmentPathCleanup
     private static readonly string[] BuiltInPaths = EnvironmentWorkspaceStore.ReadDefault<WindowsPaths>("windows-paths").Paths;
 
     public static EnvironmentPathCleanupPlan Analyze(IReadOnlyList<EnvironmentVariableInfo> variables,
-        IReadOnlyDictionary<string, string>? runtime = null)
+        IReadOnlyDictionary<string, string>? runtime = null,EnvironmentWorkspace? settings=null)
     {
         var resolver = new EnvironmentPathResolver(variables, runtime);
         var plans = new List<PathCleanupScopePlan>();
-        var reserved = variables.Select(item => item.Name).Concat(runtime?.Keys ?? [])
-            .Concat(variables.SelectMany(item => EnvironmentPathResolver.ReferenceNames(item.RawValue))).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var scope in new[] { VariableScope.Machine, VariableScope.User })
         {
             var path = variables.FirstOrDefault(item => item.Scope == scope && item.Name.Equals("PATH", StringComparison.OrdinalIgnoreCase));
@@ -65,11 +63,22 @@ public static class EnvironmentPathCleanup
             string? softwareName = null;
             if (moved.Length > 0)
             {
-                var number = 0;
-                do { softwareName = number == 0 ? "SOFTWARE_PATH" : $"SOFTWARE{number}_PATH"; number++; } while (!reserved.Add(softwareName));
-                mutations.Add(new("create", scope, softwareName, string.Join(';', moved.Select(entry => entry.Raw))));
+                softwareName=ExternalPathOrganizer.GroupName(scope,settings);
+                var target=variables.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(softwareName,StringComparison.OrdinalIgnoreCase));
+                moved=moved.Where(entry=>!EnvironmentPathResolver.ReferenceNames(entry.Raw).Contains(softwareName,StringComparer.OrdinalIgnoreCase)).ToArray();
+                var value=string.Join(';',(target is null ? [] : target.Entries).Concat(moved.Select(entry=>entry.Raw)));
+                var candidate=variables.Where(item=>item!=target).Append(new EnvironmentVariableInfo(softwareName,value,scope)).ToArray();
+                if(moved.Length==0 || !new EnvironmentPathResolver(candidate,runtime).Expand(value,scope).IsResolved) {moved=[];softwareName=null;}
+                else
+                {
+                    mutations.Add(new(target is null ? "create" : "set",scope,softwareName,value,ExpectedValue:target?.RawValue,ExpectedKind:target?.Kind));
+                    if(target is not null) guards=guards.Concat(new[]{new VariableSnapshot(scope,target.Name,target.RawValue,(int)target.Kind)})
+                        .Concat(resolver.ReferencedVariables(target.RawValue,scope).Select(item=>new VariableSnapshot(item.Scope,item.Name,item.RawValue,(int)item.Kind))).DistinctBy(item=>EnvironmentWorkspace.Key(item.Scope,item.Name),StringComparer.OrdinalIgnoreCase).ToArray();
+                }
             }
-            var newPath = string.Join(';', retained.Except(moved).Select(entry => entry.Raw).Concat(softwareName is null ? [] : new[] { $"%{softwareName}%" }));
+            var remaining=retained.Except(moved).Select(entry=>entry.Raw).ToList();
+            if(softwareName is not null && !remaining.Any(entry=>EnvironmentPathResolver.PureReference(entry)?.Equals(softwareName,StringComparison.OrdinalIgnoreCase)==true)) remaining.Add($"%{softwareName}%");
+            var newPath = string.Join(';',remaining);
             if (newPath != path.RawValue) mutations.Add(new("set", scope, path.Name, newPath, ExpectedValue: path.RawValue, ExpectedKind: path.Kind));
             var updated=variables.Where(item=>!mutations.Any(change=>change.Scope==item.Scope && change.Name.Equals(item.Name,StringComparison.OrdinalIgnoreCase)))
                 .Concat(mutations.Select(change=>new EnvironmentVariableInfo(change.Name,change.Value ?? "",change.Scope))).ToArray();

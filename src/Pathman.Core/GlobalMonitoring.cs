@@ -15,14 +15,16 @@ public sealed record GlobalMonitorSettings(bool Enabled=false,bool ProvideNonAdm
     public bool MoveExternalMachinePathEntries {get;init;}=true;
     public bool IgnoreSystemEditorMachineChanges {get;init;}
     public bool IgnorePowerToysMachineChanges {get;init;}
+    public string ExternalMachinePathVariable {get;init;}="EXTERNAL_PATH";
     public bool ApplyMachineOptions(EnvironmentWorkspace state)
     {
         var changed=!state.MonitoringEnabled || !state.TrackChangeOrigins || state.AutoArrangeMachinePath!=AutoArrangeMachinePath ||
             state.RemoveMachinePathDuplicates!=RemoveMachinePathDuplicates || state.MoveExternalMachinePathEntries!=MoveExternalMachinePathEntries ||
-            state.IgnoreSystemEditorMachineChanges!=IgnoreSystemEditorMachineChanges || state.IgnorePowerToysMachineChanges!=IgnorePowerToysMachineChanges;
+            state.IgnoreSystemEditorMachineChanges!=IgnoreSystemEditorMachineChanges || state.IgnorePowerToysMachineChanges!=IgnorePowerToysMachineChanges || state.ExternalMachinePathVariable!=ExternalMachinePathVariable;
         state.MonitoringEnabled=true;state.TrackChangeOrigins=true;state.AutoArrangeMachinePath=AutoArrangeMachinePath;
         state.RemoveMachinePathDuplicates=RemoveMachinePathDuplicates;state.MoveExternalMachinePathEntries=MoveExternalMachinePathEntries;
         state.IgnoreSystemEditorMachineChanges=IgnoreSystemEditorMachineChanges;state.IgnorePowerToysMachineChanges=IgnorePowerToysMachineChanges;
+        state.ExternalMachinePathVariable=ExternalMachinePathVariable;
         return changed;
     }
 }
@@ -54,6 +56,12 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         return JsonSerializer.Deserialize<GlobalMonitorSettings>(stream,EnvironmentWorkspaceStore.JsonOptions) ?? new();
     }
     public bool IsEnabled=>ReadSettings().Enabled;
+    public static EnvironmentWorkspace EffectiveOptions(EnvironmentWorkspace state)
+    {
+        var global=ReadSettings();
+        if(global.Enabled) {state.AutoArrangeUserPath&=state.MonitoringEnabled;global.ApplyMachineOptions(state);}
+        return state;
+    }
     public void Configure(GlobalMonitorSettings settings)
     {
         if(!IsAllUsers) throw new IOException(L.Get("全局监控仅支持为所有用户安装。"));
@@ -61,20 +69,22 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         var start=new ProcessStartInfo(layout.BackgroundExecutable) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden};
         start.ArgumentList.Add("--configure-global-monitor");
         foreach(var value in new[]{settings.Enabled,settings.ProvideNonAdministratorOrigins,settings.AutoArrangeMachinePath,settings.RemoveMachinePathDuplicates,settings.MoveExternalMachinePathEntries,settings.IgnoreSystemEditorMachineChanges,settings.IgnorePowerToysMachineChanges}) start.ArgumentList.Add(value.ToString());
+        ExternalPathOrganizer.ValidateTarget(settings.ExternalMachinePathVariable);start.ArgumentList.Add(settings.ExternalMachinePathVariable.Trim());
         using var process=Process.Start(start) ?? throw new IOException(L.Get("无法配置全局监控服务。"));
         if(!process.WaitForExit(60000) || process.ExitCode!=0) throw new IOException(L.Get("无法配置全局监控服务。"));
     }
     private string ProtectedDirectory=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"PathMan Monitor");
-    public void ConfigureElevated(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates=null,bool? moveEntries=null,bool? ignoreSystemEditor=null,bool? ignorePowerToys=null)
+    public void ConfigureElevated(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates=null,bool? moveEntries=null,bool? ignoreSystemEditor=null,bool? ignorePowerToys=null,string? targetVariable=null)
     {
         DemandAdministrator();
         using var mutex=WindowsUserContext.WorkspaceMutex(@"Global\PathMan.GlobalMonitor.Configuration");
         try {if(!mutex.WaitOne(60000)) throw new IOException("Global configuration is busy.");}catch(AbandonedMutexException) { }
-        try {ConfigureLocked(enabled,provideOrigins,organize,removeDuplicates,moveEntries,ignoreSystemEditor,ignorePowerToys);}finally {mutex.ReleaseMutex();}
+        try {ConfigureLocked(enabled,provideOrigins,organize,removeDuplicates,moveEntries,ignoreSystemEditor,ignorePowerToys,targetVariable);}finally {mutex.ReleaseMutex();}
     }
-    private void ConfigureLocked(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates,bool? moveEntries,bool? ignoreSystemEditor,bool? ignorePowerToys)
+    private void ConfigureLocked(bool enabled,bool provideOrigins,bool organize,bool? removeDuplicates,bool? moveEntries,bool? ignoreSystemEditor,bool? ignorePowerToys,string? targetVariable)
     {
         if(!IsAllUsers) throw new IOException(L.Get("全局监控仅支持为所有用户安装。"));
+        if(targetVariable is not null) ExternalPathOrganizer.ValidateTarget(targetVariable);
         using var source=enabled ? PrivilegedServiceSource.Open(layout) : null;
         source?.ValidateDestination(ProtectedDirectory);
         OriginTrackingTask.SecureDirectory(Path.GetDirectoryName(DataDirectory)!);
@@ -85,7 +95,8 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         if(previous.Enabled && !previous.InstallationDirectory.Equals(layout.InstallationDirectory,StringComparison.OrdinalIgnoreCase)) throw new IOException("Another installation owns global monitoring.");
         var updated=previous with {Enabled=enabled,ProvideNonAdministratorOrigins=provideOrigins,AutoArrangeMachinePath=organize,InstallationDirectory=layout.InstallationDirectory,
             RemoveMachinePathDuplicates=removeDuplicates ?? previous.RemoveMachinePathDuplicates,MoveExternalMachinePathEntries=moveEntries ?? previous.MoveExternalMachinePathEntries,
-            IgnoreSystemEditorMachineChanges=ignoreSystemEditor ?? previous.IgnoreSystemEditorMachineChanges,IgnorePowerToysMachineChanges=ignorePowerToys ?? previous.IgnorePowerToysMachineChanges};
+            IgnoreSystemEditorMachineChanges=ignoreSystemEditor ?? previous.IgnoreSystemEditorMachineChanges,IgnorePowerToysMachineChanges=ignorePowerToys ?? previous.IgnorePowerToysMachineChanges,
+            ExternalMachinePathVariable=targetVariable?.Trim() ?? previous.ExternalMachinePathVariable};
         if(enabled)
         {
             var executable=Path.Combine(ProtectedDirectory,"PathMan.Service.exe");
@@ -126,15 +137,44 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
     }
     public static void Stop()
     {
-        var result=Sc("stop",ServiceName);
-        if(result is not (0 or 1060 or 1062)) throw new Win32Exception(result);
-        for(var retry=0;retry<150;retry++)
+        var manager=OpenSCManager(null,null,1);
+        if(manager==IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try
         {
-            var status=ScOutput("query",ServiceName);
-            if(status.Code==1060 || status.Output.Contains("STOPPED",StringComparison.Ordinal)) return;
-            Thread.Sleep(100);
+            var service=OpenService(manager,ServiceName,4);
+            if(service==IntPtr.Zero)
+            {
+                var error=Marshal.GetLastWin32Error();
+                if(error==1060) return;
+                throw new Win32Exception(error);
+            }
+            try
+            {
+                var elapsed=Stopwatch.StartNew();var requested=false;
+                while(true)
+                {
+                    if(!QueryServiceStatusEx(service,0,out var status,Marshal.SizeOf<ServiceStatus>(),out _)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if(status.State==1) return;
+                    if(elapsed.Elapsed>=TimeSpan.FromSeconds(30)) throw new IOException($"Global monitor did not stop (SCM state {status.State}).");
+                    // Pending services cannot accept STOP. A successful request must
+                    // also finish before deployment or service removal can continue.
+                    if(!requested && status.State is 4 or 7)
+                    {
+                        var result=Sc("stop",ServiceName);
+                        if(result==0) requested=true;
+                        else if(result is not (1060 or 1062))
+                        {
+                            if(result is not (1052 or 1061) ||
+                                !QueryServiceStatusEx(service,0,out status,Marshal.SizeOf<ServiceStatus>(),out _) || status.State is not (1 or 2 or 3 or 5 or 6))
+                                throw new Win32Exception(result);
+                        }
+                    }
+                    Thread.Sleep(100);
+                }
+            }
+            finally {CloseServiceHandle(service);}
         }
-        throw new IOException("Global monitor did not stop.");
+        finally {CloseServiceHandle(manager);}
     }
     public static string? GetUnavailableMessage()
     {
@@ -164,9 +204,9 @@ public sealed class GlobalMonitoring(PathmanLayout layout)
         finally {CloseServiceHandle(manager);}
     }
     [StructLayout(LayoutKind.Sequential)] private struct ServiceStatus {public uint Type,State,Accepted,Exit,Specific,Checkpoint,Wait,ProcessId,Flags;}
-    [DllImport("advapi32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr OpenSCManager(string? machine,string? database,uint access);
-    [DllImport("advapi32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr OpenService(IntPtr manager,string name,uint access);
-    [DllImport("advapi32.dll")] private static extern bool QueryServiceStatusEx(IntPtr service,int level,out ServiceStatus status,int size,out int needed);
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern IntPtr OpenSCManager(string? machine,string? database,uint access);
+    [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)] private static extern IntPtr OpenService(IntPtr manager,string name,uint access);
+    [DllImport("advapi32.dll",SetLastError=true)] private static extern bool QueryServiceStatusEx(IntPtr service,int level,out ServiceStatus status,int size,out int needed);
     [DllImport("advapi32.dll")] private static extern bool CloseServiceHandle(IntPtr handle);
     private static void WriteSettings(GlobalMonitorSettings settings)
     {

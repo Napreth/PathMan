@@ -6,12 +6,12 @@ using Pathman.Service;
 // A normal user-session background process, with no SCM registration or elevation.
 if(args is ["--environment-changed"]) {WindowsEnvironmentVariableEditor.NotifyEnvironmentChanged();return 0;}
 if(args is ["--system-monitor"]) return SystemMonitorHost.Run();
-if(args.Length is 4 or 8 && args[0]=="--configure-global-monitor")
+if(args.Length is 4 or 8 or 9 && args[0]=="--configure-global-monitor")
 {
-    var flags=new bool[args.Length-1];
+    var flags=new bool[args.Length==4 ? 3 : 7];
     for(var index=0;index<flags.Length;index++) if(!bool.TryParse(args[index+1],out flags[index])) return 2;
-    try {new GlobalMonitoring(PathmanLayout.Discover()).ConfigureElevated(flags[0],flags[1],flags[2],flags.Length==7 ? flags[3] : null,flags.Length==7 ? flags[4] : null,flags.Length==7 ? flags[5] : null,flags.Length==7 ? flags[6] : null);return 0;}
-    catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException) {Console.Error.WriteLine(error);return error is System.ComponentModel.Win32Exception windows ? windows.NativeErrorCode : 1;}
+    try {new GlobalMonitoring(PathmanLayout.Discover()).ConfigureElevated(flags[0],flags[1],flags[2],flags.Length==7 ? flags[3] : null,flags.Length==7 ? flags[4] : null,flags.Length==7 ? flags[5] : null,flags.Length==7 ? flags[6] : null,args.Length==9 ? args[8] : null);return 0;}
+    catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException or ArgumentException) {Console.Error.WriteLine(error);return error is System.ComponentModel.Win32Exception windows ? windows.NativeErrorCode : 1;}
 }
 if(args.FirstOrDefault()=="--registry-origin-worker") return RegistryOriginTracker.RunWorker(args);
 if(args.FirstOrDefault()=="--scheduled-origin-worker") return RegistryOriginTracker.RunScheduledWorker(args);

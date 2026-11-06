@@ -150,8 +150,14 @@ try {
     Assert ($missing.Code -eq 13) 'A missing manifest should fail clearly.'
     if($unified){$background.Start()}else{Assert-Rejected {$background.Start()}}
     Assert (!$background.IsRunning) 'Disabled background must remain stopped.'
+    $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
+    try{$owner=[Pathman.Core.BackgroundProcess]::OwnerMutex($identity.User.Value,$layout.InstallationDirectory,[Diagnostics.Process]::GetCurrentProcess().SessionId)}finally{$identity.Dispose()}
+    $ownerAcquired=$false
+    try{try{$ownerAcquired=$owner.WaitOne(0)}catch [Threading.AbandonedMutexException]{$ownerAcquired=$true}}
+    finally{if($ownerAcquired){$owner.ReleaseMutex()};$owner.Dispose()}
     $duplicate = Invoke-Program (Join-Path $installation 'internal/PathMan.Service.exe') @('--data-root', $dataRoot)
-    Assert ($duplicate.Code -eq $(if($unified){0}else{5})) 'A direct launch must leave the personal background stopped when disabled or owned by the unified service.'
+    $expectedBackgroundExit=if($unified -or !$ownerAcquired){0}else{5}
+    Assert ($duplicate.Code -eq $expectedBackgroundExit) "A direct launch must leave this installation's background stopped when disabled or another monitor owns the session. Exit=$($duplicate.Code), expected=$expectedBackgroundExit. $($duplicate.Error)"
     $background.Stop()
     Assert (!$background.IsRunning) 'Background process did not stop.'
     if($unified){$background.Start()}else{Assert-Rejected {$background.Start()}}

@@ -43,7 +43,8 @@ public static partial class EnvironmentVariableClassifier
         var groups = state.VisibleGroups(variable.Scope).ToArray();
         var key = EnvironmentWorkspace.Key(variable.Scope, variable.Name);
         if (state.Assignments.TryGetValue(key, out var assigned) && groups.Any(group => group.Id == assigned)) return assigned;
-        var external = groups.FirstOrDefault(group => group.Rule == "external" && state.MonitoringEnabled && state.ExternalVariables.Contains(key));
+        var external = state.MonitoringEnabled && state.ShouldGroupExternalVariables(variable.Scope) && state.ExternalVariables.Contains(key)
+            ? groups.FirstOrDefault(group=>group.Id==state.ExternalGroupId(variable.Scope)) ?? groups.FirstOrDefault(group=>group.Rule=="external") : null;
         if (external is not null) return external.Id;
         if (Defaults.DefaultOtherNames.Contains(variable.Name,StringComparer.OrdinalIgnoreCase)) return groups.First(group=>group.Rule=="fallback").Id;
         foreach (var group in state.Groups.Where(group => groups.Contains(group)))

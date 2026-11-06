@@ -23,6 +23,11 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableS
     });
     public bool Poll(IEnvironmentChangeOrigins? origins=null,IReadOnlyList<EnvironmentVariableInfo>? captured=null)
     {
+        if(!RefreshPlans(origins,captured)) return false;
+        return ApplyPlans(origins);
+    }
+    public bool RefreshPlans(IEnvironmentChangeOrigins? origins=null,IReadOnlyList<EnvironmentVariableInfo>? captured=null)
+    {
         var paused=false;
         store.Inspect(state=>
         {
@@ -33,7 +38,10 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableS
             var changed=Compare(state,current,origins);
             return PreparePlans(state,before,current,changed,runtime:runtime,origins:origins,managedScope:managedScope) || changed;
         });
-        if(paused) return false;
+        return !paused;
+    }
+    private bool ApplyPlans(IEnvironmentChangeOrigins? origins)
+    {
         var saved=store.Read();
         if(!saved.MonitoringEnabled || !saved.AnyPathOrganizationEnabled) return false;
         var applied=false;
@@ -50,11 +58,12 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableS
                 WindowsEnvironmentVariableEditor.ApplyBatch(plan.Mutations,plan.Preconditions,store,state=>
                 {
                     if(!state.MonitoringEnabled || ExternalPathOrganizer.Policy(state,plan.Scope)!=plan.Policy || !state.PendingPathOrganizations.Any(item=>item.Id==plan.Id))
-                        throw new IOException(L.Get("监控设置或待整理项目已改变，本次整理已跳过。"));
+                        throw new EnvironmentConflictException(L.Get("监控设置或待整理项目已改变，本次整理已跳过。"));
                 });
                 Complete(store,plan);
                 applied=true;
             }
+            catch(EnvironmentConflictException) { /* The next observation rebuilds the guarded plan. */ }
             catch(Exception error) when(error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
             {failedPlans.Add(plan.Id);ReportError(L.Get("自动整理未完成：")+error.Message);}
         }
@@ -85,7 +94,8 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableS
             }
             if(pending is null && (!changed || old?.Value==path?.RawValue)) continue;
             if(pending is not null && !changed && pending.Policy==ExternalPathOrganizer.Policy(state,scope) &&
-                pending.Mutations.All(mutation=>current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(mutation.Name,StringComparison.OrdinalIgnoreCase))?.RawValue==mutation.ExpectedValue)) continue;
+                pending.Mutations.All(mutation=>current.FirstOrDefault(item=>item.Scope==scope && item.Name.Equals(mutation.Name,StringComparison.OrdinalIgnoreCase))?.RawValue==mutation.ExpectedValue) &&
+                pending.Preconditions.All(guard=>current.Any(item=>item.Scope==guard.Scope && item.Name.Equals(guard.Name,StringComparison.OrdinalIgnoreCase) && item.RawValue==guard.Value && (int)item.Kind==guard.Kind))) continue;
             var plan=ExternalPathOrganizer.Plan(scope,pending is null ? old : pending.BeforePath,current,state,runtime) with {Origins=writers};
             state.PendingPathOrganizations.RemoveAll(item=>item.Scope==scope);
             if(plan.Mutations.Count>0) state.PendingPathOrganizations.Add(plan);
@@ -137,6 +147,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableS
         state.Snapshot = current.Select(Snapshot).ToList();
         state.Changes.InsertRange(0, changes);
         if (state.Changes.Count > 200) state.Changes.RemoveRange(200, state.Changes.Count - 200);
+        state.MaterializeExternalGroup();
         EnvironmentMonitorNotices.Reconcile(state);
         return true;
     }

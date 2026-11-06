@@ -1,0 +1,311 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using Pathman.Core;
+using Pathman.Core.EnvironmentVariables;
+using Pathman.Core.Models;
+using Pathman.Core.Localization;
+using System.Text.Json;
+using Pathman.Gui;
+using Pathman.Gui.Controls;
+using Pathman.Gui.Dialogs;
+using Pathman.Gui.Views;
+
+internal static class Program
+{
+    private sealed class FixtureApplication : Application
+    {
+        // Reuse the production resource dictionary without starting the real
+        // application, its monitor or its profile synchronization.
+        protected override void OnStartup(StartupEventArgs e) { }
+    }
+    private static int checks;
+    private static readonly string Root=Path.Combine(Path.GetTempPath(),"PathMan.Gui.Tests",Guid.NewGuid().ToString("N"));
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        if(args.FirstOrDefault()=="--environment-session") return ElevatedEnvironmentSession.RunWorkerAsync(args).GetAwaiter().GetResult();
+        if(args.Contains("--zh-CN")) Text.SetLanguage("zh-CN");
+        using var watchdog=new System.Threading.Timer(_=> {Console.Error.WriteLine("FAIL: GUI regression timed out.");Environment.Exit(2);},null,TimeSpan.FromSeconds(90),Timeout.InfiniteTimeSpan);
+#pragma warning disable WPF0001 // Match the production App.xaml Fluent theme.
+        var app=new FixtureApplication {ShutdownMode=ShutdownMode.OnExplicitShutdown,ThemeMode=ThemeMode.System};
+#pragma warning restore WPF0001
+        foreach(var name in new[]{"Settings","NavigationIcons"})
+            app.Resources.MergedDictionaries.Add(new ResourceDictionary {Source=new Uri($"pack://application:,,,/PathMan;component/Styles/{name}.xaml")});
+        var exit=1;
+        app.Dispatcher.BeginInvoke(async()=>
+        {
+            try {await Run(args.Contains("--test-creation"),args.Contains("--test-global-layout"));if(args.Contains("--test-authorization")) await Authorization();Console.WriteLine($"PASS: {checks} GUI checks: inline editing, new rows, shared discard dialogs, selection races and monitoring destinations.");exit=0;}
+            catch(Exception error) {Console.Error.WriteLine(error);}
+            finally
+            {
+                foreach(Window window in app.Windows.Cast<Window>().ToArray()) window.Close();
+                if(Directory.Exists(Root) && Path.GetFullPath(Root).StartsWith(Path.Combine(Path.GetTempPath(),"PathMan.Gui.Tests")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) Directory.Delete(Root,true);
+                Console.WriteLine("GUI fixture cleanup complete.");
+                app.Shutdown(exit);
+            }
+        });
+        return app.Run();
+    }
+    private static void Assert(bool condition,string message)
+    {if(!condition) throw new InvalidOperationException(message);checks++;}
+    private static T Named<T>(FrameworkElement parent,string name) where T:class => (T)parent.FindName(name);
+    private static T Field<T>(object target,string name)=>(T)target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(target)!;
+    private static void Set(object target,string name,object value)=>target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(target,value);
+    private static object? Call(object target,string name,params object?[] args)=>target.GetType().GetMethod(name,BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(target,args);
+    private static async Task Until(Func<bool> condition,string? message=null)
+    {for(var i=0;i<300;i++) {if(condition()) return;await Task.Delay(20);}throw new TimeoutException(message ?? "The GUI did not reach the expected state.");}
+    private static void MouseEvent(UIElement target,RoutedEvent routedEvent,bool handled=true)
+        =>target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=routedEvent,Handled=handled});
+    private static T? Visual<T>(DependencyObject root) where T:DependencyObject
+    {
+        if(root is T match) return match;
+        for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) if(Visual<T>(VisualTreeHelper.GetChild(root,i)) is {} child) return child;
+        return null;
+    }
+    private static EditableRow Row(ListBox list,int index)
+    {list.ScrollIntoView(list.Items[index]);list.UpdateLayout();return Visual<EditableRow>((DependencyObject)list.ItemContainerGenerator.ContainerFromIndex(index))!;}
+    private static void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static IEnumerable<T> Visuals<T>(DependencyObject root) where T:DependencyObject
+    {if(root is T match) yield return match;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) foreach(var child in Visuals<T>(VisualTreeHelper.GetChild(root,i))) yield return child;}
+    private static string ChoiceValue(object item)=>(string)item.GetType().GetProperty("Value")!.GetValue(item)!;
+    private static bool IsCreate(object item)=>(bool)item.GetType().GetProperty("IsCreate")!.GetValue(item)!;
+    private static async Task<Button> CreateButton(ComboBox choice)
+    {
+        choice.IsDropDownOpen=true;await Task.Delay(40);choice.UpdateLayout();
+        var container=(ComboBoxItem)choice.ItemContainerGenerator.ContainerFromIndex(choice.Items.Count-1);container.UpdateLayout();
+        return Visual<Button>(container)!;
+    }
+    private static DispatcherTimer DialogAction<T>(Action<T> action) where T:Window
+    {
+        var timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(50)};
+        timer.Tick+=(_,_)=> {if(Application.Current.Windows.OfType<T>().SingleOrDefault(window=>window.IsVisible) is {} dialog) {timer.Stop();action(dialog);}};
+        timer.Start();return timer;
+    }
+    private static void Capture(Window window,string name)
+    {
+        window.UpdateLayout();var bitmap=new RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,PixelFormats.Pbgra32);bitmap.Render(window);
+        var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var output=File.Create(Path.Combine(AppContext.BaseDirectory,name+".png"));encoder.Save(output);
+    }
+    private static async Task Run(bool testCreation,bool testGlobalLayout)
+    {
+        var layout=new PathmanLayout(Path.Combine(Root,"app"),Path.Combine(Root,"data"));
+        var store=new EnvironmentWorkspaceStore(layout.DataDirectory);
+        store.Update(state=> {state.MonitoringEnabled=true;state.AutoArrangeUserPath=true;state.AutoArrangeMachinePath=false;state.Groups.Add(new() {Id="custom",Name="Team tools",Scope=VariableScope.User});});
+        var persisted=store.Read();var reported=DateTime.Now;
+        persisted.MonitorMessage=Text.Get("系统 PATH 未整理：")+Text.Format("{0} 已被其他程序修改，请重新预览清理结果。","Path");persisted.MonitorMessageTime=reported;
+        persisted.Changes.Add(new(reported.AddSeconds(-1),VariableScope.Machine,"Path","set","before","after","PathMan"));
+        File.WriteAllText(store.FilePath,JsonSerializer.Serialize(persisted,EnvironmentWorkspaceStore.JsonOptions));
+        Directory.CreateDirectory(layout.InternalDirectory);File.WriteAllText(Path.Combine(layout.InternalDirectory,"install.ini"),"[PathMan]\nScope=AllUsers\n");
+        var view=new VariablesView(layout,store);
+        var frame=new Grid();frame.RowDefinitions.Add(new(){Height=GridLength.Auto});frame.RowDefinitions.Add(new());
+        var outside=new Border {Height=28,Background=Brushes.Transparent,Child=new TextBlock {Text="Window blank area",IsHitTestVisible=false}};frame.Children.Add(outside);
+        void Page(UserControl page) {if(frame.Children.Count>1) frame.Children.RemoveAt(1);Grid.SetRow(page,1);frame.Children.Add(page);}
+        Page(view);
+        var window=new Window {Width=1200,Height=850,Content=frame,Background=Brushes.WhiteSmoke,Foreground=Brushes.Black};window.Show();
+        await Until(()=>!Field<bool>(view,"busy") && Field<IReadOnlyList<EnvironmentTreeNode>>(view,"userGroups").Count>0);
+        // Inject isolated fixtures after loading. No test writes to real environment keys.
+        var variables=new[]{new EnvironmentVariableInfo("GUI_TEST_PATH",@"C:\one;D:\two",VariableScope.User,RegistryValueKind.String),new EnvironmentVariableInfo("GUI_SECOND","second",VariableScope.User,RegistryValueKind.String),new EnvironmentVariableInfo("GUI_THIRD","third",VariableScope.User,RegistryValueKind.String)};
+        var groups=EnvironmentTreeNode.Build(VariableScope.User,variables,store.Read(),new Dictionary<string,string>());
+        Set(view,"allVariables",variables);Set(view,"userGroups",groups);Set(view,"systemGroups",Array.Empty<EnvironmentTreeNode>());
+        Named<TreeView>(view,"UserVariablesTree").ItemsSource=groups;Named<TreeView>(view,"SystemVariablesTree").ItemsSource=Array.Empty<EnvironmentTreeNode>();
+        var nodes=groups.SelectMany(group=>group.Children).ToArray();
+        var root=nodes.Single(node=>node.Title=="GUI_TEST_PATH");Call(view,"ShowSelection",root);await Task.Delay(60);
+        var list=Named<ListBox>(view,"ValuesList");var save=Named<Button>(view,"SaveButton");
+        var first=Row(list,0);first.BeginEdit();first.EditingValue=@"C:\changed";
+        Assert(save.IsEnabled && save.FontWeight==FontWeights.SemiBold,"An active edit must highlight Save.");
+        // Actual button event while the original editor still owns keyboard focus.
+        Click(Named<Button>(view,"AddEntryButton"));
+        await Until(()=>list.Items.Count==3 && Row(list,2).IsEditing);
+        Assert(ReferenceEquals(first,Row(list,0)) && !first.IsEditing,"New must commit without replacing the original row control.");
+        Assert(((EnvironmentEntry)list.Items[0]).Value==@"C:\changed","New must preserve the previous edit.");
+        var draft=Row(list,2);draft.EditingValue=@"E:\new";
+        Named<TextBlock>(view,"VariableTitle").RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=Mouse.PreviewMouseDownEvent});
+        await Until(()=>!draft.IsEditing);
+        Assert(view.HasUnsavedChanges && !view.HasInlineEditor,"Clicking non-focusable space must end editing while keeping the unsaved draft.");
+        first=Row(list,0);first.BeginEdit();first.EditingValue=@"C:\outside";
+        MouseEvent(outside,Mouse.PreviewMouseDownEvent);
+        await Until(()=>!first.IsEditing,"A handled click outside VariablesView left the value editor open.");
+        Assert(((EnvironmentEntry)list.Items[0]).Value==@"C:\outside" && view.HasUnsavedChanges,"Window-level blank clicks must stage the value without discarding or writing the draft.");
+        first.BeginEdit();var input=Named<TextBox>(first,"Input");MouseEvent(input,Mouse.PreviewMouseDownEvent);
+        await Task.Delay(50);Assert(first.IsEditing,"Clicking inside the active input must retain editing.");
+        first.EditingValue=@"C:\invalid;D:\second";MouseEvent(outside,Mouse.PreviewMouseDownEvent);await Task.Delay(50);
+        Assert(first.IsEditing && ((EnvironmentEntry)list.Items[0]).Value==@"C:\outside","Invalid input must retain its editor and preserve the staged value.");first.CancelEdit();
+        Capture(window,"variables");
+
+        Task<bool>? nested=null;Exception? dialogError=null;
+        var timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(50)};
+        timer.Tick+=(_,_)=>
+        {
+            timer.Stop();var dialog=Application.Current.Windows.OfType<ConfirmDialog>().SingleOrDefault();
+            try
+            {
+                Assert(dialog is not null,"Unsaved edits must show the discard dialog.");
+                nested=view.ConfirmLeaveAsync();
+                Assert(Application.Current.Windows.OfType<ConfirmDialog>().Count()==1,"A repeated request must reuse the existing dialog.");
+                Assert(ReferenceEquals(nested,Field<Task<bool>>(view,"leavePending")),"A repeated request must share the pending decision.");
+            }
+            catch(Exception error) {dialogError=error;}
+            finally {if(dialog is not null) dialog.DialogResult=false;}
+        };
+        timer.Start();var decision=view.ConfirmLeaveAsync();
+        Assert(!await decision && nested is not null && !await nested,"Cancel must finish every caller without discarding edits.");
+        if(dialogError is not null) throw dialogError;
+        Assert(!view.IsBusy && view.HasUnsavedChanges,"Cancel must release the busy state.");
+
+        var second=nodes.Single(node=>node.Title=="GUI_SECOND");var third=nodes.Single(node=>node.Title=="GUI_THIRD");
+        var race=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(50)};
+        race.Tick+=(_,_)=> {race.Stop();Call(view,"SelectVariable",view,new RoutedPropertyChangedEventArgs<object>(root,third));Application.Current.Windows.OfType<ConfirmDialog>().Single().DialogResult=true;};
+        race.Start();Call(view,"SelectVariable",view,new RoutedPropertyChangedEventArgs<object>(root,second));
+        await Until(()=>Field<EnvironmentTreeNode>(view,"selected")==third);
+        Assert(!view.HasUnsavedChanges && !view.IsBusy,"The latest selection must win after a shared discard decision.");
+
+        Call(view,"ShowSelection",root);await Task.Delay(40);first=Row(list,0);first.BeginEdit();first.EditingValue=@"C:\new-variable";
+        var stage=0;var create=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(50)};
+        create.Tick+=(_,_)=>
+        {
+            if(Application.Current.Windows.OfType<ConfirmDialog>().SingleOrDefault(item=>item.IsVisible) is {} discard) {stage++;discard.DialogResult=true;}
+            else if(Application.Current.Windows.OfType<VariableDialog>().SingleOrDefault(item=>item.IsVisible) is {} prompt) {stage++;prompt.Close();create.Stop();}
+        };
+        create.Start();await (Task)Call(view,"NewVariable",VariableScope.User)!;
+        Assert(stage==2 && !view.HasInlineEditor && !view.IsBusy,"New variable during an edit must resolve discard first and allow the new dialog to close.");
+
+        var versionView=new VersionsView(layout,store);Page(versionView);await Task.Delay(100);
+        Click(Named<Button>(versionView,"NewProjectButton"));
+        var projectList=Named<ListBox>(versionView,"ProjectsList");await Until(()=>projectList.Items.Count>0 && Row(projectList,0).IsEditing);
+        var projectEditor=Row(projectList,0);projectEditor.EditingValue="WindowClickProject";MouseEvent(outside,Mouse.PreviewMouseUpEvent);
+        await Until(()=>!projectEditor.IsEditing && !versionView.IsBusy,"A handled outside click left the version project editor open.");
+        Assert(store.Read().VersionProjects.Any(project=>project.Name=="WindowClickProject"),"Version metadata must save when a handled window-level click ends editing.");
+        var aliasView=new AliasesView(layout,store);Page(aliasView);await Task.Delay(100);await Until(()=>!aliasView.IsBusy);
+        Field<DispatcherTimer>(aliasView,"statePoll").Stop();Set(aliasView,"enabled",true);
+        var aliasList=Named<ListBox>(aliasView,"Aliases");var aliasRows=Field<System.Collections.ObjectModel.ObservableCollection<AliasRow>>(aliasView,"rows");
+        var existingAlias=new AliasRow("Existing","unused") {CanEdit=true};aliasRows.Add(existingAlias);aliasList.SelectedItem=existingAlias;aliasList.UpdateLayout();
+        var aliasEditor=Row(aliasList,0);aliasEditor.BeginEdit();MouseEvent(outside,Mouse.PreviewMouseUpEvent);
+        await Until(()=>!aliasEditor.IsEditing,"A handled outside click left the alias editor open.");
+        Assert(!aliasView.HasInlineEditor,"An unchanged alias must also leave editing on a handled outside click.");
+        if(testCreation)
+        {
+            using var environment=Registry.CurrentUser.OpenSubKey("Environment",true)!;
+            var oldPath=environment.GetValue("Path",null,RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            var oldKind=oldPath is null ? RegistryValueKind.String : environment.GetValueKind("Path");
+            try
+            {
+                environment.SetValue("Path",string.IsNullOrEmpty(oldPath) ? layout.ShimsDirectory : oldPath+";"+layout.ShimsDirectory,oldKind);
+                File.WriteAllBytes(layout.ShimExecutable,[0x4D,0x5A]);Call(aliasView,"CheckEnabled");
+                Click(Named<Button>(aliasView,"NewAliasButton"));await Until(()=>aliasView.HasInlineEditor);
+                var draftAlias=Field<EditableRow>(aliasView,"activeEditor");draftAlias.EditingValue="OutsideAlias";
+                MouseEvent(outside,Mouse.PreviewMouseUpEvent);
+                await Until(()=>!aliasView.IsBusy && aliasRows.Any(alias=>alias.Name=="OutsideAlias"));await Task.Delay(100);
+                Assert(!aliasView.HasInlineEditor,"Saving a new alias name by clicking outside must not reopen its target editor.");
+                Click(Named<Button>(aliasView,"NewAliasButton"));await Until(()=>aliasView.HasInlineEditor);
+                var explicitAlias=Field<EditableRow>(aliasView,"activeEditor");explicitAlias.EditingValue="EnterAlias";await explicitAlias.CommitAsync();
+                await Until(()=>explicitAlias.IsEditingDetail,"Explicit alias-name confirmation no longer advances to the target.");
+                Assert(explicitAlias.IsEditing,"Explicit Enter-style confirmation should retain the normal name-to-target workflow.");explicitAlias.CancelEdit();
+            }
+            finally {if(oldPath is null) environment.DeleteValue("Path",false);else environment.SetValue("Path",oldPath,oldKind);}
+        }
+        var monitor=new MonitorView(layout,store);Page(monitor);await Task.Delay(100);
+        Assert(store.ReadSnapshot().MonitorMessage is null && Named<Border>(monitor,"MonitorNotice").Visibility==Visibility.Collapsed,"An old saved conflict must be cleared on upgrade, including the one-second reporting race.");
+        Assert(Named<ComboBox>(monitor,"MachineExternalGroup").IsVisible && Named<ComboBox>(monitor,"MachinePathTarget").IsVisible,"The system category and system destination must render as dropdown controls.");
+        Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Collapsed && !Named<ComboBox>(monitor,"GlobalPathTarget").IsVisible,"All four global arrangement options must be hidden while unified monitoring is disabled.");
+        var category=Named<ComboBox>(monitor,"UserExternalGroup");category.SelectedValue="custom";
+        Assert(store.Read().ExternalUserGroupId=="custom","The category dropdown must persist its selection.");
+        Assert(Named<CheckBox>(monitor,"GroupExternalUser").IsChecked==true,"Selecting a category must preserve its parent toggle.");
+        var target=Named<ComboBox>(monitor,"UserPathTarget");
+        Assert(!target.IsEditable && ChoiceValue(target.Items[0])=="EXTERNAL_USER_PATH" && IsCreate(target.Items[^1]),"Path choices must start with the default and end with a create action without free text input.");
+        Assert(ChoiceValue(category.Items[0])=="external" && IsCreate(category.Items[^1]),"Category choices must start with the virtual default and end with a create action.");
+        var originalDefault=Environment.GetEnvironmentVariable("EXTERNAL_USER_PATH",EnvironmentVariableTarget.User);
+        category.SelectedValue="external";target.SelectedValue="EXTERNAL_USER_PATH";
+        Assert(store.Read().Groups.All(group=>group.Id!="external") && Environment.GetEnvironmentVariable("EXTERNAL_USER_PATH",EnvironmentVariableTarget.User)==originalDefault,"Selecting defaults must not create the default category or write the default variable.");
+        category.SelectedValue="custom";
+        var beforeCancel=JsonSerializer.SerializeToNode(store.Read())!.AsObject();beforeCancel.Remove(nameof(EnvironmentWorkspace.Revision));
+        var cancel=DialogAction<TextDialog>(dialog=>dialog.Close());
+        Click(await CreateButton(category));await Until(()=>!Field<bool>(monitor,"busy"));cancel.Stop();
+        var afterCancel=JsonSerializer.SerializeToNode(store.Read())!.AsObject();afterCancel.Remove(nameof(EnvironmentWorkspace.Revision));
+        var differences=beforeCancel.Where(item=>!System.Text.Json.Nodes.JsonNode.DeepEquals(item.Value,afterCancel[item.Key])).Select(item=>item.Key).ToArray();
+        Assert((string)category.SelectedValue=="custom" && differences.Length==0,$"Cancelling a new category must preserve selection and settings. Selected={category.SelectedValue}, changed={string.Join(',',differences)}");
+        var addedCategory="Menu category";var createCategory=DialogAction<TextDialog>(dialog=>
+        {Visual<TextBox>(dialog)!.Text=addedCategory;Click(Visuals<Button>(dialog).Single(button=>button.Content?.ToString()==Text.Get("确定")));});
+        Click(await CreateButton(category));await Until(()=>!Field<bool>(monitor,"busy"));createCategory.Stop();
+        var createdGroup=store.Read().Groups.Single(group=>group.Name==addedCategory);
+        Assert(createdGroup.Scope==VariableScope.User && (string)category.SelectedValue==createdGroup.Id,"A new category must be scoped, saved and selected.");
+        var cancelPath=DialogAction<VariableDialog>(dialog=>dialog.Close());var previousPath=store.Read().ExternalUserPathVariable;
+        Click(await CreateButton(target));await Until(()=>!Field<bool>(monitor,"busy"));cancelPath.Stop();
+        Assert((string)target.SelectedValue==previousPath && store.Read().ExternalUserPathVariable==previousPath,"Cancelling a new path variable must preserve the previous destination.");
+        if(testCreation)
+        {
+            var name="PATHMAN_MENU_TEST_"+Guid.NewGuid().ToString("N")+"_PATH";
+            try
+            {
+                var createPath=DialogAction<VariableDialog>(dialog=>
+                {Field<TextBox>(dialog,"name").Text=name;Click(Visuals<Button>(dialog).Single(button=>button.Content?.ToString()==Text.Get("确定")));});
+                Click(await CreateButton(target));await Until(()=>!Field<bool>(monitor,"busy"));createPath.Stop();
+                using var key=Registry.CurrentUser.OpenSubKey("Environment");
+                Assert(key?.GetValue(name) as string=="" && store.Read().Assignments["User:"+name]=="paths" && (string)target.SelectedValue==name,"New path creation must save an empty variable in the path category and select it.");
+                Assert(target.Items.Cast<object>().Any(item=>ChoiceValue(item)==name),"An explicitly created empty path variable must remain a valid menu choice.");
+            }
+            finally
+            {
+                using(var key=Registry.CurrentUser.OpenSubKey("Environment",true)) key?.DeleteValue(name,false);
+                store.Update(saved=>saved.ExternalUserPathVariable="EXTERNAL_USER_PATH");monitor.Update(store.Read());Call(monitor,"ForceRefreshTargets");
+            }
+        }
+        category.SelectedValue="custom";
+        var move=Named<CheckBox>(monitor,"MoveUserEntries");target.IsDropDownOpen=true;await Task.Delay(30);target.IsDropDownOpen=false;
+        Assert(move.IsChecked==true,"Opening a destination dropdown must preserve the migration toggle.");
+        var template=(Grid)category.ItemTemplate.LoadContent();template.DataContext=category.SelectedItem;var label=(TextBlock)template.FindName("TargetLabel");await Task.Delay(20);
+        Assert(label.Text=="“Team tools”","Category labels must display Chinese double quotes.");
+        if(testGlobalLayout)
+        {
+            var file=GlobalMonitoring.SettingsPath;var directory=Path.GetDirectoryName(file)!;
+            var existed=Directory.Exists(directory);var original=File.Exists(file) ? File.ReadAllBytes(file) : null;
+            if(GlobalMonitoring.ReadSettings().Enabled) throw new InvalidOperationException("Global layout tests require an inactive global service.");
+            try
+            {
+                Directory.CreateDirectory(directory);
+                void GlobalState(bool enabled,bool arrange)
+                {File.WriteAllText(file,JsonSerializer.Serialize(new GlobalMonitorSettings(enabled,false,arrange),EnvironmentWorkspaceStore.JsonOptions));monitor.Update(store.Read());}
+                GlobalState(true,true);
+                Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Visible && Named<StackPanel>(monitor,"MachineArrangeOptions").Visibility==Visibility.Collapsed,"Unified monitoring must show its four options and hide the personal machine options.");
+                GlobalState(true,false);
+                Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Visible && !Named<StackPanel>(monitor,"GlobalArrangeOptions").IsEnabled,"Disabling automatic organization must retain the visible global options as disabled.");
+                GlobalState(false,false);
+                Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Collapsed && Named<StackPanel>(monitor,"MachineArrangeOptions").Visibility==Visibility.Visible,"Disabling unified monitoring must hide the global four options and restore the personal options.");
+            }
+            finally
+            {
+                if(original is not null) File.WriteAllBytes(file,original);else File.Delete(file);
+                if(!existed && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
+                monitor.Update(store.Read());
+            }
+        }
+        Assert(!Directory.EnumerateFiles(Root,"*.bak",SearchOption.AllDirectories).Any(),"GUI tests must not write environment backups.");
+        Capture(window,"monitor");
+        Visual<ScrollViewer>(monitor)!.ScrollToVerticalOffset(650);await Task.Delay(50);Capture(window,"monitor-system");
+        window.Close();
+    }
+    private static async Task Authorization()
+    {
+        using var session=await ElevatedEnvironmentSession.StartAsync();
+        for(var attempt=0;attempt<2;attempt++)
+        {
+            try
+            {
+                // An impossible precondition must fail before any mutation. Exercise
+                // the real authenticated worker twice to verify conflict propagation
+                // and connection reuse without modifying environment keys.
+                await session.ApplyAsync([new("create",VariableScope.Machine,"PATHMAN_GUI_"+Guid.NewGuid().ToString("N"),"unused")],
+                    [new(VariableScope.Machine,"Path","impossible-"+Guid.NewGuid().ToString("N"),(int)RegistryValueKind.String)]);
+                throw new InvalidOperationException("A stale precondition was accepted.");
+            }
+            catch(EnvironmentConflictException) {Assert(session.IsAlive,"A registry conflict must retain the authorized session.");}
+        }
+    }
+}

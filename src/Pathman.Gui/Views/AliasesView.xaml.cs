@@ -20,6 +20,7 @@ public partial class AliasesView : UserControl
     private readonly ObservableCollection<AliasRow> rows=[];
     private bool updating,busy,enabled,browsing;
     private int autoSaveEpoch;
+    private (EditableRow Editor,int Version,int Epoch)? outsideCommit;
     private EditableRow? activeEditor;
     private AliasRow? advanceToTarget;
     private Window? owner;
@@ -32,12 +33,12 @@ public partial class AliasesView : UserControl
         this.layout=layout;this.store=store;manager=new(layout,ensureUserPath:false);InitializeComponent();Aliases.ItemsSource=rows;
         PreviewKeyDown+=AliasKeyDown;
         Loaded+=(_,_)=> {
-            owner=Window.GetWindow(this);owner.PreviewMouseUp+=SaveAfterClick;owner.LostKeyboardFocus+=SaveAfterKeyboardFocus;owner.Deactivated+=SaveAfterDeactivation;
+            owner=Window.GetWindow(this);owner.AddHandler(Mouse.PreviewMouseUpEvent,new MouseButtonEventHandler(SaveAfterClick),true);owner.LostKeyboardFocus+=SaveAfterKeyboardFocus;owner.Deactivated+=SaveAfterDeactivation;
             statePoll.Start();Refresh(this,new());
         };
         Unloaded+=(_,_)=> {
             statePoll.Stop();
-            if(owner is not null) {owner.PreviewMouseUp-=SaveAfterClick;owner.LostKeyboardFocus-=SaveAfterKeyboardFocus;owner.Deactivated-=SaveAfterDeactivation;owner=null;}
+            if(owner is not null) {owner.RemoveHandler(Mouse.PreviewMouseUpEvent,new MouseButtonEventHandler(SaveAfterClick));owner.LostKeyboardFocus-=SaveAfterKeyboardFocus;owner.Deactivated-=SaveAfterDeactivation;owner=null;}
         };
         statePoll.Tick+=(_,_)=> {
             if(IsBusy) return;
@@ -71,21 +72,27 @@ public partial class AliasesView : UserControl
     {return activeEditor?.IsEditing!=true || await activeEditor.CommitAsync();}
     private bool DefersAutoSave(DependencyObject? source)=>EditableRow.FindParent<Button>(source) is {} button && (button==BrowseAliasButton || button==DeleteAliasButton);
     private void SaveAfterClick(object sender,MouseButtonEventArgs e)
-    {if(!DefersAutoSave(e.OriginalSource as DependencyObject) && activeEditor is {IsEditing:true} editor && !editor.IsInputTarget(e.OriginalSource as DependencyObject)) QueueAutoSave(editor);}
+    {
+        if(DefersAutoSave(e.OriginalSource as DependencyObject) || activeEditor is {IsEditing:true} current && current.IsInputTarget(e.OriginalSource as DependencyObject)) return;
+        autoSaveEpoch++;advanceToTarget=null;
+        if(activeEditor is {IsEditing:true} editor) QueueAutoSave(editor);
+    }
     private void SaveAfterKeyboardFocus(object sender,KeyboardFocusChangedEventArgs e)
     {
         if(!DefersAutoSave(e.NewFocus as DependencyObject) && Mouse.LeftButton==MouseButtonState.Released && Mouse.RightButton==MouseButtonState.Released && activeEditor is {IsEditing:true} editor && (editor.IsInputTarget(e.OldFocus as DependencyObject) || DefersAutoSave(e.OldFocus as DependencyObject)) && !editor.IsInputTarget(e.NewFocus as DependencyObject)) QueueAutoSave(editor);
     }
     private void SaveAfterDeactivation(object? sender,EventArgs e)
-    {if(activeEditor is {IsEditing:true} editor) QueueAutoSave(editor);}
+    {autoSaveEpoch++;advanceToTarget=null;if(activeEditor is {IsEditing:true} editor) QueueAutoSave(editor);}
     private void QueueAutoSave(EditableRow editor)
     {
         if(browsing) return;
         var version=editor.EditVersion;var epoch=autoSaveEpoch;
+        outsideCommit=(editor,version,epoch);
         // Let the clicked action run first, so saving cannot disable its button
         // between mouse-down and mouse-up. Do not commit a newly opened field.
         Dispatcher.BeginInvoke(async()=> {
-            if(!browsing && autoSaveEpoch==epoch && enabled && activeEditor==editor && editor.IsEditing && editor.EditVersion==version) await editor.CommitAsync();
+            try {if(!browsing && autoSaveEpoch==epoch && enabled && activeEditor==editor && editor.IsEditing && editor.EditVersion==version) await editor.CommitAsync();}
+            finally {if(outsideCommit==(editor,version,epoch)) outsideCommit=null;}
         },DispatcherPriority.Background);
     }
     public async Task<bool> ConfirmLeaveAsync()
@@ -162,7 +169,9 @@ public partial class AliasesView : UserControl
             if(control.DataContext is AliasRow row && advanceToTarget==row)
             {
                 advanceToTarget=null;
-                Dispatcher.BeginInvoke(()=> {if(IsVisible && rows.Contains(row) && Aliases.SelectedItem==row && activeEditor is null && enabled) RowControl(row)?.BeginEdit(detail:true);},DispatcherPriority.Loaded);
+                var epoch=autoSaveEpoch;
+                if(outsideCommit is not {} outside || outside.Editor!=control || outside.Version!=control.EditVersion)
+                    Dispatcher.BeginInvoke(()=> {if(epoch==autoSaveEpoch && IsVisible && rows.Contains(row) && Aliases.SelectedItem==row && activeEditor is null && enabled) RowControl(row)?.BeginEdit(detail:true);},DispatcherPriority.Loaded);
             }
         }
     }

@@ -95,6 +95,9 @@ jobs:
         if: matrix.arch == 'x64'
         shell: pwsh -NoProfile -ExecutionPolicy Bypass -File {0}
         run: ./tests/shell-switch.ps1
+      - name: Test editing and monitoring controls
+        if: matrix.arch == 'x64'
+        run: dotnet run --project tests/Pathman.Gui.Tests -c Release -- --test-global-layout --test-creation
       - name: Build baseline installers
         if: ${{ !env.ACT }}
         run: ./build.ps1 -Arch $env:PATHMAN_ARCH -VersionName '0.0.0' -VersionNumber '0.0.0' -ReleaseType official
@@ -134,6 +137,8 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: acceptance-${{ matrix.arch }}
-          path: artifacts/installer-acceptance/**/results.json
+          path: |
+            artifacts/installer-acceptance/**/results.json
+            artifacts/global-monitor/**
           if-no-files-found: ignore
           retention-days: 14

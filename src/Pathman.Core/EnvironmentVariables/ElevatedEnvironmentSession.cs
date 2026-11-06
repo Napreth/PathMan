@@ -15,8 +15,9 @@ using Pathman.Core.EnvironmentVariables;
 namespace Pathman.Core.EnvironmentVariables;
 
 internal sealed record EnvironmentSessionRequest(EnvironmentMutation[] Mutations,VariableSnapshot[] Preconditions);
-internal sealed record EnvironmentSessionResult(string? Error);
-public sealed class EnvironmentOperationException(string message) : IOException(message);
+internal sealed record EnvironmentSessionResult(string? Error,bool Conflict=false);
+public class EnvironmentOperationException(string message) : IOException(message);
+public sealed class EnvironmentConflictException(string message) : EnvironmentOperationException(message);
 public sealed class ElevatedEnvironmentSession : IDisposable
 {
     private readonly NamedPipeServerStream pipe;
@@ -61,7 +62,7 @@ public sealed class ElevatedEnvironmentSession : IDisposable
         {
             await WriteAsync(pipe,new EnvironmentSessionRequest(mutations.ToArray(),preconditions.ToArray()),timeout.Token);
             var result=await ReadAsync<EnvironmentSessionResult>(pipe,timeout.Token);
-            if(result.Error is not null) throw new EnvironmentOperationException(result.Error);
+            if(result.Error is not null) throw result.Conflict ? new EnvironmentConflictException(result.Error) : new EnvironmentOperationException(result.Error);
         }
         catch(OperationCanceledException error) {throw new IOException(L.Get("管理员连接超时，请刷新确认写入结果后重试。"),error);}
         catch(EndOfStreamException error) {throw new IOException(L.Get("管理员连接已断开，请刷新确认写入结果后重试。"),error);}
@@ -85,17 +86,19 @@ public sealed class ElevatedEnvironmentSession : IDisposable
             var parentExit=parent.WaitForExitAsync();
             while(!parent.HasExited)
             {
-                using var idle=new CancellationTokenSource(TimeSpan.FromMinutes(15));
+                // Authorization belongs to this GUI process and ends with its pipe
+                // or lifetime, rather than expiring silently during a long edit.
+                using var idle=new CancellationTokenSource();
                 var reading=ReadAsync<EnvironmentSessionRequest>(client,idle.Token);
                 if(await Task.WhenAny(reading,parentExit)!=reading)
                 {idle.Cancel();try {await reading;}catch(OperationCanceledException){}return 0;}
                 EnvironmentSessionRequest request;
                 try {request=await reading;}catch(OperationCanceledException){return 0;}
-                string? error=null;
+                string? error=null;var conflict=false;
                 try {WindowsEnvironmentVariableEditor.ApplyMachineRegistry(request.Mutations,request.Preconditions);}
                 catch(Exception failure) when(failure is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
-                {error=failure.Message;}
-                await WriteAsync(client,new EnvironmentSessionResult(error),idle.Token);
+                {error=failure.Message;conflict=failure is EnvironmentConflictException;}
+                await WriteAsync(client,new EnvironmentSessionResult(error,conflict),idle.Token);
             }
             return 0;
         }

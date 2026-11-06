@@ -18,9 +18,9 @@ internal static class PathCleanupTests
         var plan=EnvironmentPathCleanup.Analyze(input,runtime);
         var machine=plan.Scopes.Single(scope=>scope.Scope==VariableScope.Machine);
         var user=plan.Scopes.Single(scope=>scope.Scope==VariableScope.User);
-        assert(machine.SoftwareVariable=="SOFTWARE2_PATH" && machine.RemovedDuplicates==3,"Cleanup must deduplicate after expansion and reserve names in both scopes");
+        assert(machine.TargetVariable=="EXTERNAL_PATH" && machine.RemovedDuplicates==3,"Cleanup deduplicates after expansion and uses the common external target without renaming legacy variables");
         assert(machine.Mutations.Single(change=>change.Action=="create").Value==@"C:\apps;%JAVA_HOME%\bin;C:\Windows\Custom","Only software entries and non-pure references must be migrated, preserving their text");
-        assert(machine.Mutations.Single(change=>change.Action=="set").Value==@"%SystemRoot%\system32;C:\WINDOWS;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH;%DEVELOP_PATH%\;%SOFTWARE2_PATH%","Windows component paths and pure references must stay in system PATH");
+        assert(machine.Mutations.Single(change=>change.Action=="set").Value==@"%SystemRoot%\system32;C:\WINDOWS;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH;%DEVELOP_PATH%\;%EXTERNAL_PATH%","Windows component paths and pure references must stay in system PATH");
         assert(user.MovedEntries==0 && user.Mutations.Count==1 && user.Mutations[0].Value==@"C:\one;%DEVELOP_PATH%;%JAVA_HOME%\bin","User cleanup must deduplicate without creating a software variable");
         assert(EnvironmentHealth.Analyze([M("Path","%DEVELOP_PATH%"),M("DEVELOP_PATH",@"C:\dev;C:\shared")],runtime).Issues.Count==0,"Nonoverlapping references must not create health warnings");
         var updated=input.ToList();
@@ -46,7 +46,7 @@ internal static class PathCleanupTests
         var unresolved=EnvironmentPathCleanup.Analyze([U("Path",@"%A_PATH%;%MISSING%"),U("A_PATH","%B_PATH%"),U("B_PATH","%A_PATH%")],runtime);
         assert(!unresolved.HasChanges && EnvironmentHealth.Analyze([U("Path",@"%A_PATH%;%MISSING%"),U("A_PATH","%B_PATH%"),U("B_PATH","%A_PATH%")],runtime).Issues.Count>=2,"Cyclic and missing references must be retained and reported by health detection");
         var collision=EnvironmentPathCleanup.Analyze([M("Path",@"C:\tool;%SOFTWARE_PATH%")],runtime);
-        assert(collision.Scopes[0].SoftwareVariable=="SOFTWARE1_PATH","Creating a software variable must not accidentally bind an existing unresolved reference");
+        assert(collision.Scopes[0].TargetVariable=="EXTERNAL_PATH" && collision.Scopes[0].Mutations.Single(item=>item.Name=="Path").Value!.Contains("%SOFTWARE_PATH%"),"Cleanup uses the external target while retaining an unrelated unresolved reference");
         assert(EnvironmentPathResolver.PureReference(@"%SDK_PATH%\")=="SDK_PATH" && EnvironmentPathResolver.PureReference(@"%SDK_PATH%\bin")==null && EnvironmentPathResolver.PureReference("\"%SDK_PATH%\"")==null,"Pure reference parsing must allow trailing separators but no suffix or quotes");
         var purePreferred=EnvironmentPathCleanup.Analyze([U("Path",@"C:\Windows;%SystemRoot%")],runtime);
         assert(purePreferred.Scopes.Single().Mutations.Single().Value=="%SystemRoot%","Pure references must win over equivalent literal paths even if the literal occurs first");

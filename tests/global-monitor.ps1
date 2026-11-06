@@ -28,13 +28,32 @@ $machine=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentCont
 $oldPath=$machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames);$oldPathKind=$machine.GetValueKind('Path')
 $oldExternal=$machine.GetValue('EXTERNAL_PATH',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 $oldExternalKind=if($null -ne $oldExternal){$machine.GetValueKind('EXTERNAL_PATH')}else{$null}
+$customTarget='PATHMAN_TEST_GLOBAL_PATH'
+$oldCustom=$machine.GetValue($customTarget,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$oldCustomKind=if($null -ne $oldCustom){$machine.GetValueKind($customTarget)}else{$null}
 $global=Join-Path $env:ProgramData 'PathMan/monitor'
 $checks=[Collections.Generic.List[string]]::new()
 $recoverySnapshot=$null
 New-Item -ItemType Directory -Force -Path $ResultDirectory|Out-Null
 function Assert($condition,[string]$message){if(!$condition){throw $message};$checks.Add($message)}
 function WaitFor([scriptblock]$test,[string]$message){for($i=0;$i -lt 300;$i++){if(& $test){return};Start-Sleep -Milliseconds 100};throw $message}
-function Run([string]$arguments){$p=Start-Process $service -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'service.stderr.log');return $p.ExitCode}
+$script:commandNumber=0;$script:lastCommand=$null
+function Run([string]$arguments){
+    $script:commandNumber++
+    $prefix=Join-Path $ResultDirectory ('command-'+$script:commandNumber.ToString('D3'))
+    $start=[Diagnostics.ProcessStartInfo]::new($service);$start.Arguments=$arguments;$start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    $p=[Diagnostics.Process]::Start($start)
+    try{
+        $output=$p.StandardOutput.ReadToEndAsync();$errorOutput=$p.StandardError.ReadToEndAsync()
+        if(!$p.WaitForExit(60000)){throw ('Service command timed out: '+$arguments)}
+        $errorText=$errorOutput.GetAwaiter().GetResult()
+        [IO.File]::WriteAllText($prefix+'.stdout.log',$output.GetAwaiter().GetResult());[IO.File]::WriteAllText($prefix+'.stderr.log',$errorText)
+        $script:lastCommand=@{Arguments=$arguments;ExitCode=$p.ExitCode;Error=$errorText}
+        $script:lastCommand|ConvertTo-Json -Compress|Add-Content (Join-Path $ResultDirectory 'commands.jsonl') -Encoding UTF8
+        if($p.ExitCode -ne 0){Write-Host ('Service command exited '+$p.ExitCode+': '+$arguments);if($errorText){Write-Host $errorText}}
+        return $p.ExitCode
+    }finally{$p.Dispose()}
+}
 function ReadJson([string]$path){
     $stream=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
     $reader=[IO.StreamReader]::new($stream)
@@ -95,7 +114,7 @@ try{
         }
     }
     $machine.SetValue('Path','C:\GlobalBase',[Microsoft.Win32.RegistryValueKind]::String);$machine.DeleteValue('EXTERNAL_PATH',$false)
-    Assert ((Run '--configure-global-monitor true true false true true false false') -eq 0) 'An all-users installation enables the unified SCM service'
+    Assert ((Run '--configure-global-monitor true true false true true false false EXTERNAL_PATH') -eq 0) 'An all-users installation enables the unified SCM service'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Running' -and (Status).OriginsReady} 'Unified service or ETW collector did not become ready'
     Assert ((Get-ItemProperty ('HKLM:\SYSTEM\CurrentControlSet\Services\PathMan.Monitor')).FailureActionsOnNonCrashFailures -eq 1) 'SCM recovery includes reported nonzero service stops'
     $oldProcess=(Get-CimInstance Win32_Service -Filter "Name='PathMan.Monitor'").ProcessId
@@ -150,7 +169,7 @@ class Writer {
         & $csc /nologo /target:exe ("/out:"+$writer) $source
         if($LASTEXITCODE -ne 0){throw 'Cannot compile the registry writer fixture'}
         $excludedPath=$duplicatePath+';H:\'+$name
-        $process=Start-Process $writer -ArgumentList ('"'+$excludedPath+'"') -WindowStyle Hidden -PassThru -Wait
+        $process=Start-Process $writer -ArgumentList ('"'+$excludedPath+'"') -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'writer.stderr.log')
         Assert ($process.ExitCode -eq 0) ($name+' fixture writes the system PATH')
         WaitFor {@((MachineState).snapshot|Where-Object {$_.name -eq 'Path' -and $_.value -eq $excludedPath}).Count -eq 1} 'The service did not observe the excluded change'
         Start-Sleep -Seconds 2
@@ -160,26 +179,42 @@ class Writer {
     & $csc /nologo /target:exe ("/out:"+$writer) $source
     if($LASTEXITCODE -ne 0){throw 'Cannot compile the allowed registry writer fixture'}
     $allowedPath=$excludedPath+';G:\GlobalAllowed;G:\GlobalAllowed'
-    $process=Start-Process $writer -ArgumentList ('"'+$allowedPath+'"') -WindowStyle Hidden -PassThru -Wait
+    $process=Start-Process $writer -ArgumentList ('"'+$allowedPath+'"') -WindowStyle Hidden -PassThru -Wait -RedirectStandardError (Join-Path $ResultDirectory 'writer.stderr.log')
     Assert ($process.ExitCode -eq 0) 'The allowed fixture writes PATH with a newly opened, traceable registry handle'
     WaitFor {$machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew;F:\GlobalMove;F:\GlobalMove;G:\GlobalAllowed'} 'A known, allowed writer was blocked by the source exclusion policy'
     Assert ($machine.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -eq $excludedPath) 'Allowed writers still organize PATH while both source exclusions are enabled'
+    $machine.DeleteValue($customTarget,$false)
+    Assert ((Run ('--configure-global-monitor true true true true true false false '+$customTarget)) -eq 0) 'The global service accepts a custom PATH migration target'
+    WaitFor {(MachineState).externalMachinePathVariable -eq $customTarget} 'The service did not load its custom destination'
+    $machine.SetValue('Path',($excludedPath+';I:\CustomTarget'),[Microsoft.Win32.RegistryValueKind]::ExpandString)
+    WaitFor {$machine.GetValue($customTarget) -eq 'I:\CustomTarget'} 'The service did not migrate additions to the selected variable'
+    Assert ($machine.GetValue('EXTERNAL_PATH') -eq 'D:\GlobalNew;F:\GlobalMove;F:\GlobalMove;G:\GlobalAllowed') 'Selecting a new destination preserves the previous target contents'
+    Assert ((Run '--configure-global-monitor true true true true true false false Path') -ne 0) 'The privileged service rejects PATH as its own migration destination'
+    Assert ((State).externalMachinePathVariable -eq $customTarget) 'Rejected destinations leave the saved policy unchanged'
+    Assert ((Run '--configure-global-monitor true true true true true true true') -eq 0) 'The previous seven-switch interface retains the selected destination'
     Assert ((Run '--configure-global-monitor false true true') -eq 0) 'The unified service can be disabled'
     WaitFor {(Get-Service PathMan.Monitor).Status -eq 'Stopped'} 'Unified service did not stop'
     Assert (!(State).enabled -and (State).autoArrangeMachinePath -and (State).provideNonAdministratorOrigins) 'Disabling unified monitoring retains its saved options'
     Assert ((State).removeMachinePathDuplicates -and (State).moveExternalMachinePathEntries -and (State).ignoreSystemEditorMachineChanges -and (State).ignorePowerToysMachineChanges) 'All four global child options survive a legacy three-switch update'
+    Assert ((State).externalMachinePathVariable -eq $customTarget) 'The selected destination survives a legacy three-switch update'
+    for($cycle=1;$cycle -le 4;$cycle++){
+        Assert ((Run '--configure-global-monitor true false false') -eq 0) ('Rapid lifecycle cycle '+$cycle+' starts the service')
+        Assert ((Run '--configure-global-monitor false false false') -eq 0) ('Rapid lifecycle cycle '+$cycle+' disables the service without waiting for readiness')
+        Assert ((Get-Service PathMan.Monitor).Status -eq 'Stopped') ('Rapid lifecycle cycle '+$cycle+' waits for SCM STOPPED')
+    }
     Assert ((Run '--configure-global-monitor true false false') -eq 0) 'The unified service can restart without recreating the installation'
     WaitFor {(Status).Running -and (Status).OriginsReady} 'Unified service did not restart'
     Assert ((Run '--remove-origin-tasks') -eq 0) 'Uninstall maintenance removes the SCM service and privileged collectors'
     Assert ($null -eq (Get-Service PathMan.Monitor -ErrorAction SilentlyContinue)) 'No SCM service remains after uninstall maintenance'
     @{Passed=$true;Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8
     Write-Host 'PASS: installation scope, SCM lifecycle, single-process origins, global PATH writes/backups, option persistence, restart and uninstall.'
-}catch{@{Passed=$false;Error=$_.Exception.Message;Trace=$_.ScriptStackTrace;Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8;throw}
+}catch{@{Passed=$false;Error=$_.Exception.Message;Trace=$_.ScriptStackTrace;Command=$script:lastCommand;ServiceState=(& "$env:WINDIR/System32/sc.exe" queryex PathMan.Monitor 2>&1|Out-String);Checks=$checks.ToArray()}|ConvertTo-Json -Depth 8|Set-Content (Join-Path $ResultDirectory 'results.json') -Encoding UTF8;throw}
 finally{
     if($recoverySnapshot){[IO.File]::WriteAllText((Join-Path $global 'machine/environment.json'),$recoverySnapshot)}
     $null=Run '--remove-origin-tasks'
     $machine.SetValue('Path',$oldPath,$oldPathKind)
-    if($null -eq $oldExternal){$machine.DeleteValue('EXTERNAL_PATH',$false)}else{$machine.SetValue('EXTERNAL_PATH',$oldExternal,$oldExternalKind)};$machine.Dispose()
+    if($null -eq $oldExternal){$machine.DeleteValue('EXTERNAL_PATH',$false)}else{$machine.SetValue('EXTERNAL_PATH',$oldExternal,$oldExternalKind)}
+    if($null -eq $oldCustom){$machine.DeleteValue($customTarget,$false)}else{$machine.SetValue($customTarget,$oldCustom,$oldCustomKind)};$machine.Dispose()
     if($null -ne $oldMarker){[IO.File]::WriteAllBytes($marker,$oldMarker)}elseif(Test-Path $marker){Remove-Item -LiteralPath $marker -Force}
     if($staging -and [IO.Path]::GetFullPath($staging).StartsWith((Join-Path $env:ProgramFiles 'PathMan-CI-'),[StringComparison]::OrdinalIgnoreCase)){Remove-Item -LiteralPath $staging -Recurse -Force}
 }
