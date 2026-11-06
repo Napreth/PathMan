@@ -112,6 +112,7 @@ internal static class MonitoringTests
         defaults.MonitoringEnabled=true;defaults.GroupExternalUserVariables=false;defaults.ExternalVariables.Add("User:NEW_VAR");
         assert(defaults.VisibleGroups(VariableScope.User).All(item=>item.Rule!="external") && EnvironmentVariableClassifier.Classify(V("NEW_VAR","added"),[V("NEW_VAR","added")],defaults,runtime)=="other","The grouping setting is independent from background recording");
         defaults.ExternalVariables.Add("Machine:NEW_VAR");
+        defaults.MaterializeExternalGroup();
         assert(defaults.VisibleGroups(VariableScope.Machine).Any(item=>item.Rule=="external") && EnvironmentVariableClassifier.Classify(V("NEW_VAR","added",VariableScope.Machine),[V("NEW_VAR","added",VariableScope.Machine)],defaults,runtime)=="external","Disabling user classification must leave system external classification enabled");
 
         var unchanged=PathOrderComparison.Compare(@"C:\a;D:\b;C:\a",@"C:\a;D:\b",VariableScope.User,[],[],runtime);

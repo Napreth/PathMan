@@ -147,6 +147,7 @@ public sealed class EnvironmentMonitor(EnvironmentWorkspaceStore store,VariableS
         state.Snapshot = current.Select(Snapshot).ToList();
         state.Changes.InsertRange(0, changes);
         if (state.Changes.Count > 200) state.Changes.RemoveRange(200, state.Changes.Count - 200);
+        state.MaterializeExternalGroup();
         EnvironmentMonitorNotices.Reconcile(state);
         return true;
     }

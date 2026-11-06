@@ -1253,4 +1253,12 @@
   <data name="将外部新用户环境变量归入所选分类" xml:space="preserve"><value>将外部新用户环境变量归入所选分类</value></data>
   <data name="将外部新系统环境变量归入所选分类" xml:space="preserve"><value>将外部新系统环境变量归入所选分类</value></data>
   <data name="分类" xml:space="preserve"><value>分类</value></data>
+  <data name="新建分类…" xml:space="preserve"><value>新建分类…</value></data>
+  <data name="新建路径变量…" xml:space="preserve"><value>新建路径变量…</value></data>
+  <data name="新建分类" xml:space="preserve"><value>新建分类</value></data>
+  <data name="已存在同名分类。" xml:space="preserve"><value>已存在同名分类。</value></data>
+  <data name="新建用户路径变量" xml:space="preserve"><value>新建用户路径变量</value></data>
+  <data name="新建系统路径变量" xml:space="preserve"><value>新建系统路径变量</value></data>
+  <data name="整理目标“{0}”不在路径变量分类中，请重新选择。" xml:space="preserve"><value>整理目标“{0}”不在路径变量分类中，请重新选择。</value></data>
+  <data name="变量已存在。" xml:space="preserve"><value>变量已存在。</value></data>
 </root>

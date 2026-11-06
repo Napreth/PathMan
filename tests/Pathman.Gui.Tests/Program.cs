@@ -41,7 +41,7 @@ internal static class Program
         var exit=1;
         app.Dispatcher.BeginInvoke(async()=>
         {
-            try {await Run();if(args.Contains("--test-authorization")) await Authorization();Console.WriteLine($"PASS: {checks} GUI checks: inline editing, new rows, shared discard dialogs, selection races and monitoring destinations.");exit=0;}
+            try {await Run(args.Contains("--test-creation"),args.Contains("--test-global-layout"));if(args.Contains("--test-authorization")) await Authorization();Console.WriteLine($"PASS: {checks} GUI checks: inline editing, new rows, shared discard dialogs, selection races and monitoring destinations.");exit=0;}
             catch(Exception error) {Console.Error.WriteLine(error);}
             finally
             {
@@ -70,13 +70,29 @@ internal static class Program
     private static EditableRow Row(ListBox list,int index)
     {list.ScrollIntoView(list.Items[index]);list.UpdateLayout();return Visual<EditableRow>((DependencyObject)list.ItemContainerGenerator.ContainerFromIndex(index))!;}
     private static void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static IEnumerable<T> Visuals<T>(DependencyObject root) where T:DependencyObject
+    {if(root is T match) yield return match;for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) foreach(var child in Visuals<T>(VisualTreeHelper.GetChild(root,i))) yield return child;}
+    private static string ChoiceValue(object item)=>(string)item.GetType().GetProperty("Value")!.GetValue(item)!;
+    private static bool IsCreate(object item)=>(bool)item.GetType().GetProperty("IsCreate")!.GetValue(item)!;
+    private static async Task<Button> CreateButton(ComboBox choice)
+    {
+        choice.IsDropDownOpen=true;await Task.Delay(40);choice.UpdateLayout();
+        var container=(ComboBoxItem)choice.ItemContainerGenerator.ContainerFromIndex(choice.Items.Count-1);container.UpdateLayout();
+        return Visual<Button>(container)!;
+    }
+    private static DispatcherTimer DialogAction<T>(Action<T> action) where T:Window
+    {
+        var timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(50)};
+        timer.Tick+=(_,_)=> {if(Application.Current.Windows.OfType<T>().SingleOrDefault(window=>window.IsVisible) is {} dialog) {timer.Stop();action(dialog);}};
+        timer.Start();return timer;
+    }
     private static void Capture(Window window,string name)
     {
         window.UpdateLayout();var bitmap=new RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,PixelFormats.Pbgra32);bitmap.Render(window);
         var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var output=File.Create(Path.Combine(AppContext.BaseDirectory,name+".png"));encoder.Save(output);
     }
-    private static async Task Run()
+    private static async Task Run(bool testCreation,bool testGlobalLayout)
     {
         var layout=new PathmanLayout(Path.Combine(Root,"app"),Path.Combine(Root,"data"));
         var store=new EnvironmentWorkspaceStore(layout.DataDirectory);
@@ -149,21 +165,79 @@ internal static class Program
 
         var monitor=new MonitorView(layout,store);window.Content=monitor;await Task.Delay(100);
         Assert(store.ReadSnapshot().MonitorMessage is null && Named<Border>(monitor,"MonitorNotice").Visibility==Visibility.Collapsed,"An old saved conflict must be cleared on upgrade, including the one-second reporting race.");
-        Assert(Named<ComboBox>(monitor,"MachineExternalGroup").IsVisible && Named<ComboBox>(monitor,"MachinePathTarget").IsVisible && Named<ComboBox>(monitor,"GlobalPathTarget").IsVisible,"The system category, system destination and global destination must render as dropdown controls.");
+        Assert(Named<ComboBox>(monitor,"MachineExternalGroup").IsVisible && Named<ComboBox>(monitor,"MachinePathTarget").IsVisible,"The system category and system destination must render as dropdown controls.");
+        Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Collapsed && !Named<ComboBox>(monitor,"GlobalPathTarget").IsVisible,"All four global arrangement options must be hidden while unified monitoring is disabled.");
         var category=Named<ComboBox>(monitor,"UserExternalGroup");category.SelectedValue="custom";
         Assert(store.Read().ExternalUserGroupId=="custom","The category dropdown must persist its selection.");
         Assert(Named<CheckBox>(monitor,"GroupExternalUser").IsChecked==true,"Selecting a category must preserve its parent toggle.");
-        var target=Named<ComboBox>(monitor,"UserPathTarget");target.Text="TEAM_TOOLS_PATH";
-        var input=(TextBox)target.Template.FindName("PART_EditableTextBox",target);input.Focus();
-        Named<CheckBox>(monitor,"GroupExternalUser").Focus();await Task.Delay(60);
-        Assert(store.Read().ExternalUserPathVariable=="TEAM_TOOLS_PATH","Leaving a typed destination must persist its full name, including underscores.");
+        var target=Named<ComboBox>(monitor,"UserPathTarget");
+        Assert(!target.IsEditable && ChoiceValue(target.Items[0])=="EXTERNAL_USER_PATH" && IsCreate(target.Items[^1]),"Path choices must start with the default and end with a create action without free text input.");
+        Assert(ChoiceValue(category.Items[0])=="external" && IsCreate(category.Items[^1]),"Category choices must start with the virtual default and end with a create action.");
+        var originalDefault=Environment.GetEnvironmentVariable("EXTERNAL_USER_PATH",EnvironmentVariableTarget.User);
+        category.SelectedValue="external";target.SelectedValue="EXTERNAL_USER_PATH";
+        Assert(store.Read().Groups.All(group=>group.Id!="external") && Environment.GetEnvironmentVariable("EXTERNAL_USER_PATH",EnvironmentVariableTarget.User)==originalDefault,"Selecting defaults must not create the default category or write the default variable.");
+        category.SelectedValue="custom";
+        var beforeCancel=JsonSerializer.SerializeToNode(store.Read())!.AsObject();beforeCancel.Remove(nameof(EnvironmentWorkspace.Revision));
+        var cancel=DialogAction<TextDialog>(dialog=>dialog.Close());
+        Click(await CreateButton(category));await Until(()=>!Field<bool>(monitor,"busy"));cancel.Stop();
+        var afterCancel=JsonSerializer.SerializeToNode(store.Read())!.AsObject();afterCancel.Remove(nameof(EnvironmentWorkspace.Revision));
+        var differences=beforeCancel.Where(item=>!System.Text.Json.Nodes.JsonNode.DeepEquals(item.Value,afterCancel[item.Key])).Select(item=>item.Key).ToArray();
+        Assert((string)category.SelectedValue=="custom" && differences.Length==0,$"Cancelling a new category must preserve selection and settings. Selected={category.SelectedValue}, changed={string.Join(',',differences)}");
+        var addedCategory="Menu category";var createCategory=DialogAction<TextDialog>(dialog=>
+        {Visual<TextBox>(dialog)!.Text=addedCategory;Click(Visuals<Button>(dialog).Single(button=>button.Content?.ToString()==Text.Get("确定")));});
+        Click(await CreateButton(category));await Until(()=>!Field<bool>(monitor,"busy"));createCategory.Stop();
+        var createdGroup=store.Read().Groups.Single(group=>group.Name==addedCategory);
+        Assert(createdGroup.Scope==VariableScope.User && (string)category.SelectedValue==createdGroup.Id,"A new category must be scoped, saved and selected.");
+        var cancelPath=DialogAction<VariableDialog>(dialog=>dialog.Close());var previousPath=store.Read().ExternalUserPathVariable;
+        Click(await CreateButton(target));await Until(()=>!Field<bool>(monitor,"busy"));cancelPath.Stop();
+        Assert((string)target.SelectedValue==previousPath && store.Read().ExternalUserPathVariable==previousPath,"Cancelling a new path variable must preserve the previous destination.");
+        if(testCreation)
+        {
+            var name="PATHMAN_MENU_TEST_"+Guid.NewGuid().ToString("N")+"_PATH";
+            try
+            {
+                var createPath=DialogAction<VariableDialog>(dialog=>
+                {Field<TextBox>(dialog,"name").Text=name;Click(Visuals<Button>(dialog).Single(button=>button.Content?.ToString()==Text.Get("确定")));});
+                Click(await CreateButton(target));await Until(()=>!Field<bool>(monitor,"busy"));createPath.Stop();
+                using var key=Registry.CurrentUser.OpenSubKey("Environment");
+                Assert(key?.GetValue(name) as string=="" && store.Read().Assignments["User:"+name]=="paths" && (string)target.SelectedValue==name,"New path creation must save an empty variable in the path category and select it.");
+                Assert(target.Items.Cast<object>().Any(item=>ChoiceValue(item)==name),"An explicitly created empty path variable must remain a valid menu choice.");
+            }
+            finally
+            {
+                using(var key=Registry.CurrentUser.OpenSubKey("Environment",true)) key?.DeleteValue(name,false);
+                store.Update(saved=>saved.ExternalUserPathVariable="EXTERNAL_USER_PATH");monitor.Update(store.Read());Call(monitor,"ForceRefreshTargets");
+            }
+        }
+        category.SelectedValue="custom";
         var move=Named<CheckBox>(monitor,"MoveUserEntries");target.IsDropDownOpen=true;await Task.Delay(30);target.IsDropDownOpen=false;
         Assert(move.IsChecked==true,"Opening a destination dropdown must preserve the migration toggle.");
-        var label=(TextBlock)category.ItemTemplate.LoadContent();label.DataContext=category.SelectedItem;await Task.Delay(20);
+        var template=(Grid)category.ItemTemplate.LoadContent();template.DataContext=category.SelectedItem;var label=(TextBlock)template.FindName("TargetLabel");await Task.Delay(20);
         Assert(label.Text=="“Team tools”","Category labels must display Chinese double quotes.");
-        target.Text="Path";Call(monitor,"PathTargetChanged",target,EventArgs.Empty);
-        Assert(store.Read().ExternalUserPathVariable=="TEAM_TOOLS_PATH" && Named<Border>(monitor,"MonitorNotice").Visibility==Visibility.Visible,"An invalid destination must show feedback and preserve the saved target.");
-        target.Text="TEAM_TOOLS_PATH";Call(monitor,"PathTargetChanged",target,EventArgs.Empty);
+        if(testGlobalLayout)
+        {
+            var file=GlobalMonitoring.SettingsPath;var directory=Path.GetDirectoryName(file)!;
+            var existed=Directory.Exists(directory);var original=File.Exists(file) ? File.ReadAllBytes(file) : null;
+            if(GlobalMonitoring.ReadSettings().Enabled) throw new InvalidOperationException("Global layout tests require an inactive global service.");
+            try
+            {
+                Directory.CreateDirectory(directory);
+                void GlobalState(bool enabled,bool arrange)
+                {File.WriteAllText(file,JsonSerializer.Serialize(new GlobalMonitorSettings(enabled,false,arrange),EnvironmentWorkspaceStore.JsonOptions));monitor.Update(store.Read());}
+                GlobalState(true,true);
+                Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Visible && Named<StackPanel>(monitor,"MachineArrangeOptions").Visibility==Visibility.Collapsed,"Unified monitoring must show its four options and hide the personal machine options.");
+                GlobalState(true,false);
+                Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Visible && !Named<StackPanel>(monitor,"GlobalArrangeOptions").IsEnabled,"Disabling automatic organization must retain the visible global options as disabled.");
+                GlobalState(false,false);
+                Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Collapsed && Named<StackPanel>(monitor,"MachineArrangeOptions").Visibility==Visibility.Visible,"Disabling unified monitoring must hide the global four options and restore the personal options.");
+            }
+            finally
+            {
+                if(original is not null) File.WriteAllBytes(file,original);else File.Delete(file);
+                if(!existed && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
+                monitor.Update(store.Read());
+            }
+        }
         Assert(!Directory.EnumerateFiles(Root,"*.bak",SearchOption.AllDirectories).Any(),"GUI tests must not write environment backups.");
         Capture(window,"monitor");
         Visual<ScrollViewer>(monitor)!.ScrollToVerticalOffset(650);await Task.Delay(50);Capture(window,"monitor-system");

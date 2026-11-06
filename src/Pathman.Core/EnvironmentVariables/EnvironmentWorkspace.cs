@@ -57,7 +57,24 @@ public sealed class EnvironmentWorkspace
     public string ExternalMachineGroupId {get;set;}="external";
     public string ExternalUserPathVariable {get;set;}="EXTERNAL_USER_PATH";
     public string ExternalMachinePathVariable {get;set;}="EXTERNAL_PATH";
-    public string ExternalGroupId(VariableScope scope)=>scope==VariableScope.User ? ExternalUserGroupId : ExternalMachineGroupId;
+    public string ExternalGroupId(VariableScope scope)
+    {
+        var id=scope==VariableScope.User ? ExternalUserGroupId : ExternalMachineGroupId;
+        return Groups.Any(group=>group.Id==id && (group.Scope is null || group.Scope==scope)) ? id : MonitoringDestinations.ExternalGroupId;
+    }
+    internal bool MaterializeExternalGroup()
+    {
+        if(!MonitoringEnabled || Groups.Any(group=>group.Id==MonitoringDestinations.ExternalGroupId)) return false;
+        foreach(var scope in new[]{VariableScope.User,VariableScope.Machine})
+        {
+            if(!ShouldGroupExternalVariables(scope) || ExternalGroupId(scope)!=MonitoringDestinations.ExternalGroupId) continue;
+            var visible=VisibleGroups(scope).Select(group=>group.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if(!ExternalVariables.Any(key=>key.StartsWith(scope+":",StringComparison.OrdinalIgnoreCase) &&
+                (!Assignments.TryGetValue(key,out var assigned) || !visible.Contains(assigned)))) continue;
+            Groups.Add(MonitoringDestinations.DefaultExternalGroup());return true;
+        }
+        return false;
+    }
     public bool AutoArrangeUserPath {get;set;}
     public bool AutoArrangeMachinePath {get;set;}
     [JsonIgnore] public bool AnyPathOrganizationEnabled=>AutoArrangeUserPath || AutoArrangeMachinePath;
@@ -221,16 +238,16 @@ public sealed class EnvironmentWorkspaceStore
     }
     public EnvironmentWorkspace Read() => Locked(()=>
     {
-        var state=Load();if(EnvironmentMonitorNotices.Reconcile(state)) Save(state);return state;
+        var state=Load();var changed=state.MaterializeExternalGroup();changed|=EnvironmentMonitorNotices.Reconcile(state);if(changed) Save(state);return state;
     });
     public EnvironmentWorkspace ReadSnapshot()=>Load();
     public void Update(Action<EnvironmentWorkspace> change) => Locked(() =>
     {
-        var state = Load(); change(state); EnvironmentMonitorNotices.Reconcile(state); Save(state); return true;
+        var state = Load(); change(state); state.MaterializeExternalGroup();EnvironmentMonitorNotices.Reconcile(state); Save(state); return true;
     });
     internal void Inspect(Func<EnvironmentWorkspace, bool> change) => Locked(() =>
     {
-        var state = Load(); var reconciled=EnvironmentMonitorNotices.Reconcile(state); if (change(state) || reconciled) Save(state); return true;
+        var state = Load(); var reconciled=EnvironmentMonitorNotices.Reconcile(state);var changed=change(state);changed|=state.MaterializeExternalGroup();if(changed || reconciled) Save(state);return true;
     });
     public void InspectForService(Func<EnvironmentWorkspace,bool> change)=>Inspect(change);
     private void Save(EnvironmentWorkspace state)

@@ -47,6 +47,7 @@ public partial class MonitorView : UserControl
             GlobalRemoveDuplicates.IsChecked=settings.RemoveMachinePathDuplicates;GlobalMoveEntries.IsChecked=settings.MoveExternalMachinePathEntries;
             GlobalIgnoreSystemEditor.IsChecked=settings.IgnoreSystemEditorMachineChanges;GlobalIgnorePowerToys.IsChecked=settings.IgnorePowerToysMachineChanges;
             GlobalArrangeOptions.IsEnabled=unified && settings.AutoArrangeMachinePath;
+            GlobalArrangeOptions.Visibility=unified ? Visibility.Visible : Visibility.Collapsed;
             RefreshTargets(state,settings);
             UserEditorExclusions.IsEnabled=MachineEditorExclusions.IsEnabled=state.TrackChangeOrigins;
             var authorized=EnvironmentEditHost.IsAuthorized || EnvironmentEditHost.IsAdministrator;
@@ -92,7 +93,7 @@ public partial class MonitorView : UserControl
     {
         var pending=!new GlobalMonitoring(layout).IsEnabled && state.MonitoringEnabled && state.AutoArrangeMachinePath && state.PendingPathOrganizations.Any(item=>item.Scope==VariableScope.Machine);
         var authorized=EnvironmentEditHost.IsAuthorized || EnvironmentEditHost.IsAdministrator;
-        var message=targetError ?? GlobalMonitoring.GetUnavailableMessage() ?? state.OriginTrackingMessage ?? (pending && !authorized ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
+        var message=targetError ?? unavailableTarget ?? GlobalMonitoring.GetUnavailableMessage() ?? state.OriginTrackingMessage ?? (pending && !authorized ? L.Get("系统 PATH 有待整理的外部新增项，需要管理员授权。") : state.MonitorMessage);
         MonitorStatus.Text=message ?? "";MonitorNotice.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
     }
     private void CloseHistory(object sender,RoutedEventArgs e) {HistoryPage.Visibility=Visibility.Collapsed;SettingsPage.Visibility=Visibility.Visible;}
@@ -162,7 +163,7 @@ public partial class MonitorView : UserControl
         {
             RemoveMachinePathDuplicates=GlobalRemoveDuplicates.IsChecked==true,MoveExternalMachinePathEntries=GlobalMoveEntries.IsChecked==true,
             IgnoreSystemEditorMachineChanges=GlobalIgnoreSystemEditor.IsChecked==true,IgnorePowerToysMachineChanges=GlobalIgnorePowerToys.IsChecked==true,
-            ExternalMachinePathVariable=GlobalPathTarget.Text.Trim()
+            ExternalMachinePathVariable=GlobalPathTarget.SelectedValue as string ?? GlobalMonitoring.ReadSettings().ExternalMachinePathVariable
         };
         busy=true;SettingsPanel.IsEnabled=false;
         try {await Task.Run(()=>new GlobalMonitoring(layout).Configure(settings));busy=false;Update(store.Read());OptionsChanged?.Invoke(this,EventArgs.Empty);}
