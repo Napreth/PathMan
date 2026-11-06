@@ -41,13 +41,23 @@ public partial class VariablesView : UserControl
     {
         this.layout=layout; this.store=store; InitializeComponent(); ValuesList.ItemsSource=entries;
         PreviewKeyDown+=EditorKeyDown;
-        PreviewMouseDown+=FinishEditorOnClick;
         Loaded += async (_,_) => { if (userGroups.Count == 0) await ReloadAsync(); };
-        Loaded+=(_,_)=> {if(editorWindow is not null) editorWindow.Deactivated-=FinishEditorOnDeactivation;editorWindow=OwnerWindow;editorWindow.Deactivated+=FinishEditorOnDeactivation;};
-        Unloaded+=(_,_)=> {if(editorWindow is not null) editorWindow.Deactivated-=FinishEditorOnDeactivation;editorWindow=null;};
+        Loaded+=(_,_)=>
+        {
+            DetachEditorWindow();editorWindow=OwnerWindow;
+            editorWindow.AddHandler(Mouse.PreviewMouseDownEvent,new MouseButtonEventHandler(FinishEditorOnClick),true);
+            editorWindow.Deactivated+=FinishEditorOnDeactivation;
+        };
+        Unloaded+=(_,_)=>DetachEditorWindow();
         Unloaded+=(_,_)=> {updating=true;temporaryCleanup=false;TemporaryCleanupButton.IsChecked=false;updating=false;};
     }
     private Window OwnerWindow => Window.GetWindow(this);
+    private void DetachEditorWindow()
+    {
+        if(editorWindow is null) return;
+        editorWindow.RemoveHandler(Mouse.PreviewMouseDownEvent,new MouseButtonEventHandler(FinishEditorOnClick));
+        editorWindow.Deactivated-=FinishEditorOnDeactivation;editorWindow=null;
+    }
     private EnvironmentWorkspace PlanningSettings()=>GlobalMonitoring.EffectiveOptions(store.Read());
     private static bool Expected(Exception error) => error is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or System.Text.Json.JsonException or InvalidOperationException;
     private void Error(Exception error) { StatusText.Text=error.Message; MessageBox.Show(OwnerWindow,error.Message,L.Get("操作未完成"),MessageBoxButton.OK,MessageBoxImage.Error); }

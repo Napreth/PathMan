@@ -59,8 +59,10 @@ internal static class Program
     private static T Field<T>(object target,string name)=>(T)target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(target)!;
     private static void Set(object target,string name,object value)=>target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(target,value);
     private static object? Call(object target,string name,params object?[] args)=>target.GetType().GetMethod(name,BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(target,args);
-    private static async Task Until(Func<bool> condition)
-    {for(var i=0;i<300;i++) {if(condition()) return;await Task.Delay(20);}throw new TimeoutException("The GUI did not reach the expected state.");}
+    private static async Task Until(Func<bool> condition,string? message=null)
+    {for(var i=0;i<300;i++) {if(condition()) return;await Task.Delay(20);}throw new TimeoutException(message ?? "The GUI did not reach the expected state.");}
+    private static void MouseEvent(UIElement target,RoutedEvent routedEvent,bool handled=true)
+        =>target.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=routedEvent,Handled=handled});
     private static T? Visual<T>(DependencyObject root) where T:DependencyObject
     {
         if(root is T match) return match;
@@ -103,7 +105,11 @@ internal static class Program
         File.WriteAllText(store.FilePath,JsonSerializer.Serialize(persisted,EnvironmentWorkspaceStore.JsonOptions));
         Directory.CreateDirectory(layout.InternalDirectory);File.WriteAllText(Path.Combine(layout.InternalDirectory,"install.ini"),"[PathMan]\nScope=AllUsers\n");
         var view=new VariablesView(layout,store);
-        var window=new Window {Width=1200,Height=850,Content=view,Background=Brushes.WhiteSmoke,Foreground=Brushes.Black};window.Show();
+        var frame=new Grid();frame.RowDefinitions.Add(new(){Height=GridLength.Auto});frame.RowDefinitions.Add(new());
+        var outside=new Border {Height=28,Background=Brushes.Transparent,Child=new TextBlock {Text="Window blank area",IsHitTestVisible=false}};frame.Children.Add(outside);
+        void Page(UserControl page) {if(frame.Children.Count>1) frame.Children.RemoveAt(1);Grid.SetRow(page,1);frame.Children.Add(page);}
+        Page(view);
+        var window=new Window {Width=1200,Height=850,Content=frame,Background=Brushes.WhiteSmoke,Foreground=Brushes.Black};window.Show();
         await Until(()=>!Field<bool>(view,"busy") && Field<IReadOnlyList<EnvironmentTreeNode>>(view,"userGroups").Count>0);
         // Inject isolated fixtures after loading. No test writes to real environment keys.
         var variables=new[]{new EnvironmentVariableInfo("GUI_TEST_PATH",@"C:\one;D:\two",VariableScope.User,RegistryValueKind.String),new EnvironmentVariableInfo("GUI_SECOND","second",VariableScope.User,RegistryValueKind.String),new EnvironmentVariableInfo("GUI_THIRD","third",VariableScope.User,RegistryValueKind.String)};
@@ -124,6 +130,14 @@ internal static class Program
         Named<TextBlock>(view,"VariableTitle").RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=Mouse.PreviewMouseDownEvent});
         await Until(()=>!draft.IsEditing);
         Assert(view.HasUnsavedChanges && !view.HasInlineEditor,"Clicking non-focusable space must end editing while keeping the unsaved draft.");
+        first=Row(list,0);first.BeginEdit();first.EditingValue=@"C:\outside";
+        MouseEvent(outside,Mouse.PreviewMouseDownEvent);
+        await Until(()=>!first.IsEditing,"A handled click outside VariablesView left the value editor open.");
+        Assert(((EnvironmentEntry)list.Items[0]).Value==@"C:\outside" && view.HasUnsavedChanges,"Window-level blank clicks must stage the value without discarding or writing the draft.");
+        first.BeginEdit();var input=Named<TextBox>(first,"Input");MouseEvent(input,Mouse.PreviewMouseDownEvent);
+        await Task.Delay(50);Assert(first.IsEditing,"Clicking inside the active input must retain editing.");
+        first.EditingValue=@"C:\invalid;D:\second";MouseEvent(outside,Mouse.PreviewMouseDownEvent);await Task.Delay(50);
+        Assert(first.IsEditing && ((EnvironmentEntry)list.Items[0]).Value==@"C:\outside","Invalid input must retain its editor and preserve the staged value.");first.CancelEdit();
         Capture(window,"variables");
 
         Task<bool>? nested=null;Exception? dialogError=null;
@@ -163,7 +177,41 @@ internal static class Program
         create.Start();await (Task)Call(view,"NewVariable",VariableScope.User)!;
         Assert(stage==2 && !view.HasInlineEditor && !view.IsBusy,"New variable during an edit must resolve discard first and allow the new dialog to close.");
 
-        var monitor=new MonitorView(layout,store);window.Content=monitor;await Task.Delay(100);
+        var versionView=new VersionsView(layout,store);Page(versionView);await Task.Delay(100);
+        Click(Named<Button>(versionView,"NewProjectButton"));
+        var projectList=Named<ListBox>(versionView,"ProjectsList");await Until(()=>projectList.Items.Count>0 && Row(projectList,0).IsEditing);
+        var projectEditor=Row(projectList,0);projectEditor.EditingValue="WindowClickProject";MouseEvent(outside,Mouse.PreviewMouseUpEvent);
+        await Until(()=>!projectEditor.IsEditing && !versionView.IsBusy,"A handled outside click left the version project editor open.");
+        Assert(store.Read().VersionProjects.Any(project=>project.Name=="WindowClickProject"),"Version metadata must save when a handled window-level click ends editing.");
+        var aliasView=new AliasesView(layout,store);Page(aliasView);await Task.Delay(100);await Until(()=>!aliasView.IsBusy);
+        Field<DispatcherTimer>(aliasView,"statePoll").Stop();Set(aliasView,"enabled",true);
+        var aliasList=Named<ListBox>(aliasView,"Aliases");var aliasRows=Field<System.Collections.ObjectModel.ObservableCollection<AliasRow>>(aliasView,"rows");
+        var existingAlias=new AliasRow("Existing","unused") {CanEdit=true};aliasRows.Add(existingAlias);aliasList.SelectedItem=existingAlias;aliasList.UpdateLayout();
+        var aliasEditor=Row(aliasList,0);aliasEditor.BeginEdit();MouseEvent(outside,Mouse.PreviewMouseUpEvent);
+        await Until(()=>!aliasEditor.IsEditing,"A handled outside click left the alias editor open.");
+        Assert(!aliasView.HasInlineEditor,"An unchanged alias must also leave editing on a handled outside click.");
+        if(testCreation)
+        {
+            using var environment=Registry.CurrentUser.OpenSubKey("Environment",true)!;
+            var oldPath=environment.GetValue("Path",null,RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            var oldKind=oldPath is null ? RegistryValueKind.String : environment.GetValueKind("Path");
+            try
+            {
+                environment.SetValue("Path",string.IsNullOrEmpty(oldPath) ? layout.ShimsDirectory : oldPath+";"+layout.ShimsDirectory,oldKind);
+                File.WriteAllBytes(layout.ShimExecutable,[0x4D,0x5A]);Call(aliasView,"CheckEnabled");
+                Click(Named<Button>(aliasView,"NewAliasButton"));await Until(()=>aliasView.HasInlineEditor);
+                var draftAlias=Field<EditableRow>(aliasView,"activeEditor");draftAlias.EditingValue="OutsideAlias";
+                MouseEvent(outside,Mouse.PreviewMouseUpEvent);
+                await Until(()=>!aliasView.IsBusy && aliasRows.Any(alias=>alias.Name=="OutsideAlias"));await Task.Delay(100);
+                Assert(!aliasView.HasInlineEditor,"Saving a new alias name by clicking outside must not reopen its target editor.");
+                Click(Named<Button>(aliasView,"NewAliasButton"));await Until(()=>aliasView.HasInlineEditor);
+                var explicitAlias=Field<EditableRow>(aliasView,"activeEditor");explicitAlias.EditingValue="EnterAlias";await explicitAlias.CommitAsync();
+                await Until(()=>explicitAlias.IsEditingDetail,"Explicit alias-name confirmation no longer advances to the target.");
+                Assert(explicitAlias.IsEditing,"Explicit Enter-style confirmation should retain the normal name-to-target workflow.");explicitAlias.CancelEdit();
+            }
+            finally {if(oldPath is null) environment.DeleteValue("Path",false);else environment.SetValue("Path",oldPath,oldKind);}
+        }
+        var monitor=new MonitorView(layout,store);Page(monitor);await Task.Delay(100);
         Assert(store.ReadSnapshot().MonitorMessage is null && Named<Border>(monitor,"MonitorNotice").Visibility==Visibility.Collapsed,"An old saved conflict must be cleared on upgrade, including the one-second reporting race.");
         Assert(Named<ComboBox>(monitor,"MachineExternalGroup").IsVisible && Named<ComboBox>(monitor,"MachinePathTarget").IsVisible,"The system category and system destination must render as dropdown controls.");
         Assert(Named<StackPanel>(monitor,"GlobalArrangeOptions").Visibility==Visibility.Collapsed && !Named<ComboBox>(monitor,"GlobalPathTarget").IsVisible,"All four global arrangement options must be hidden while unified monitoring is disabled.");
